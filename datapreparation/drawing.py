@@ -75,13 +75,13 @@ def draw_objects_objectDescription(objects, description_list):
 
     for d_obj in description_list:
         if d_obj.direction is None:
-            target_center = (objects_dict[d_obj.id].center - np.array((min_x,min_y)))*scale
+            target_center = (objects_dict[d_obj.id].center[0:2] - np.array((min_x,min_y)))*scale
 
     for d_obj in description_list:
         if d_obj.direction is None:
             continue
         obj3d = objects_dict[d_obj.id]
-        source_center = (objects_dict[d_obj.id].center - np.array((min_x,min_y)))*scale
+        source_center = (objects_dict[d_obj.id].center[0:2] - np.array((min_x,min_y)))*scale
         cv2.arrowedLine(img, (int(target_center[0]), int(target_center[1])), (int(source_center[0]), int(source_center[1])), (128,128,0), thickness=3 )
 
 

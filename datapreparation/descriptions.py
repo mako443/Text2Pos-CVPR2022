@@ -77,13 +77,13 @@ def describe_object(scene_objects, idx, max_mentioned_objects=5, max_dist=25):
     target = scene_objects[idx]
     description.append(DescriptionObject.from_object3d(target, None)) # Direction=None means the object is the target
 
-    #Add the closest other objects
+    #Add the closest other objects (currently only 2D)
     object_distances = []
     for obj in scene_objects:
         if obj.id==target.id:
             object_distances.append(np.inf*np.ones(2))
         else:
-            object_distances.append(target.center - obj.center)
+            object_distances.append(target.center[0:2] - obj.center[0:2])
     object_distances = np.linalg.norm(object_distances, axis=1)
     
     closest_indices = np.argsort(object_distances)[0:max_mentioned_objects]
@@ -96,10 +96,13 @@ def describe_object(scene_objects, idx, max_mentioned_objects=5, max_dist=25):
 
         description.append(DescriptionObject.from_object3d(scene_objects[closest_index], direction))
 
+    # Describe the target
     text = ""
     target = description[0]
     assert target.direction is None
     text += f'It is a {target.color_text} {target.label}'
+
+    # Describe its surroundings
     for i, obj in enumerate(description):
         if i==0: continue
         if i==1:
