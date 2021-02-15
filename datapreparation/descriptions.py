@@ -68,7 +68,7 @@ Descriptions for objects
 '''
 Describes an object based on the closest ones next to it
 CARE: the objects are not necessarily visible from e/o positions
-Directions: +y <=> north, +x <=> west
+Directions: +y <=> north, +x <=> east ✓ pptk-checked
 '''
 def describe_object(scene_objects, idx, max_mentioned_objects=5, max_dist=25):
     description = []
@@ -91,8 +91,8 @@ def describe_object(scene_objects, idx, max_mentioned_objects=5, max_dist=25):
         diff = target.center - scene_objects[closest_index].center
         if abs(diff[0])>=abs(diff[1]) and diff[0]>=0: direction='east'
         if abs(diff[0])>=abs(diff[1]) and diff[0]<=0: direction='west'
-        if abs(diff[0])<=abs(diff[1]) and diff[1]>=0: direction='south'
-        if abs(diff[0])<=abs(diff[1]) and diff[1]<=0: direction='north'
+        if abs(diff[0])<=abs(diff[1]) and diff[1]>=0: direction='north'
+        if abs(diff[0])<=abs(diff[1]) and diff[1]<=0: direction='south'
 
         description.append(DescriptionObject.from_object3d(scene_objects[closest_index], direction))
 

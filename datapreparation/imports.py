@@ -32,7 +32,7 @@ class Object3D:
 
     @property
     def center(self):
-        return 1/2*(np.min(self.points_w[:, 0:2], axis=0) + np.max(self.points_w[:, 0:2], axis=0))
+        return 1/2*(np.min(self.points_w, axis=0) + np.max(self.points_w, axis=0))
 
     def __repr__(self):
         return f'Object3D: {self.label} at {self.center}'
@@ -43,6 +43,14 @@ class Object3D:
         rect = cv2.minAreaRect(points.astype(np.float32))
         box = np.int0(cv2.boxPoints(rect))       
         return box 
+
+    #Bounding box as [x, y,z , wx, wh, wz]
+    @property
+    def aligned_bbox(self):
+        mins = np.min(self.points_w, axis=0)
+        maxs = np.max(self.points_w, axis=0)
+        return np.hstack((mins, maxs-mins))
+
 
 class ViewObject:
     @classmethod
