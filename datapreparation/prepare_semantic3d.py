@@ -9,7 +9,8 @@ from datapreparation.drawing import draw_objects_poses, draw_objects_poses_viewO
 from datapreparation.descriptions import describe_pose, get_text_description, describe_object
 
 import sys
-sys.path.append('/home/imanox/Documents/Text2Image/Semantic3D-Net')
+# sys.path.append('/home/imanox/Documents/Text2Image/Semantic3D-Net')
+sys.path.append('/usr/stud/kolmet/thesis/semantic3d')
 from semantic.imports import ClusteredObject as ClusteredObject_S3D, ViewObject as ViewObject_S3D, COLORS, COLOR_NAMES
 from graphics.imports import CLASSES_COLORS, Pose as Pose_S3D
 
@@ -72,13 +73,14 @@ if __name__ == "__main__":
     descriptions, texts = describe_objects(objects)
 
     pickle.dump(objects,      open(osp.join(output_dir,'train', scene_name, 'objects.pkl'), 'wb'))
-    pickle.dump(descriptions, open(osp.join(output_dir,'train', scene_name, 'pose_descriptions.pkl'), 'wb'))
-    pickle.dump(texts,        open(osp.join(output_dir,'train', scene_name, 'pose_description_texts.pkl'), 'wb'))
+    pickle.dump(descriptions, open(osp.join(output_dir,'train', scene_name, 'list_object_descriptions.pkl'), 'wb'))
+    pickle.dump(texts,        open(osp.join(output_dir,'train', scene_name, 'text_object_descriptions.pkl'), 'wb'))
+    print(f'Saves {len(objects)} objects, {len(descriptions)} descriptions and {len(texts)} texts to {osp.join(output_dir,"train", scene_name)}')
 
     idx = np.random.randint(len(descriptions))
     print(texts[idx])
-    img = draw_objects_objectDescription(objects, descriptions[idx])
-    cv2.imshow("",img); cv2.waitKey()
+    img = cv2.flip(draw_objects_objectDescription(objects, descriptions[idx]), 0)
+    cv2.imwrite("object_description.jpg", img)
 
     quit()
 
