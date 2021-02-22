@@ -1,109 +1,99 @@
-import numpy as np
-import cv2
-import pickle
 import os
 import os.path as osp
-from torch.utils.data import Dataset
+import sys
+import time
+import h5py
+import json
+import pickle
+import numpy as np
+from torch.utils.data import Dataset, DataLoader
 
-from datapreparation.imports import Object3D, Pose, DescriptionObject
-from datapreparation.drawing import draw_objects_poses, draw_objects_poses_descriptions
+from datapreparation.imports import Object3D, DescriptionObject
 
-# import sys
-# sys.path.append('/home/imanox/Documents/Text2Image/Semantic3D-Net')
-# import semantic.imports
-# from graphics.imports import CLASSES_COLORS, Pose, CORNERS
-# from drawing.utils import plot_objects
+class Semantic3dObjectReferanceDataset(Dataset):
+    def __init__(self, path_numpy, path_scenes, num_distractors='all'):
+        self.path_numpy = path_numpy
+        self.path_scenes = path_scenes
+        self.num_distractors = num_distractors
+    
+        self.scene_name = 'sg27_station5_intensity_rgb'
 
-'''
-TODO:
-- pad/choice for equal lengths
-- Norm positions for multiple scenes
-'''
-class Semantic3dObjectData(Dataset):
-    def __init__(self, root, scene_name, description_length=12):
-        self.root = root
-        self.scene_name= scene_name
-        self.description_length = 8
+        #Load objects
+        self.scene_objects     = pickle.load(open(osp.join(self.path_scenes,'train',self.scene_name,'objects.pkl'), 'rb'))
+        self.list_descriptions = pickle.load(open(osp.join(self.path_scenes,'train',self.scene_name,'list_object_descriptions.pkl'), 'rb'))
+        self.text_descriptions = pickle.load(open(osp.join(self.path_scenes,'train',self.scene_name,'text_object_descriptions.pkl'), 'rb'))
+        assert len(self.list_descriptions)==len(self.text_descriptions)
+
+        print(self)
+
+    def __getitem__(self, idx):
+        text_descr = self.text_descriptions[idx]
+        list_descr = self.list_descriptions[idx]
+
+        mentioned_ids = [obj.id for obj in list_descr] #Including the target
+        target_idx, target_id, target_class = [(i, obj.id, obj.label) for (i, obj) in enumerate(list_descr) if obj.is_target][0] 
+
+        mentioned_objects = [obj for obj in self.scene_objects if obj.id in mentioned_ids] #Including target
+
         
-        self.objects = pickle.load(open(osp.join(root, 'train', scene_name, 'objects.pkl'), 'rb'))
-        self.poses = pickle.load(open(osp.join(root, 'train', scene_name, 'poses.pkl'), 'rb'))
-        self.pose_descriptions = pickle.load(open(osp.join(root, 'train', scene_name, 'descriptions.pkl'), 'rb'))
-        self.keys = sorted(list(self.pose_descriptions.keys()))
+        #Gather the distractor objects
+        if self.num_distractors == 'all':
+            distractor_objects = [obj for obj in self.scene_objects if obj.id not in mentioned_ids]
+        elif self.num_distractors > 0:
+            distractor_objects = np.random.choice([obj for obj in self.scene_objects if obj.id not in mentioned_ids], size=self.num_distractors, replace=False)
+        else:
+            distractor_objects = []
 
-        self.object_positions = []
-        for obj in self.objects:
-            self.object_positions.append(0.5*(np.max(obj.points_w[:,0:2], axis=0) + np.min(obj.points_w[:,0:2], axis=0)))
-        self.object_positions = np.array(self.object_positions)
-        self.object_classes = [o.label for o in self.objects]
-        self.object_ids = [o.id for o in self.objects]
+        mentioned_objects_classes = [obj.label for obj in mentioned_objects]
+        mentioned_objects_positions = np.array([obj.center[0:2] for obj in mentioned_objects])
+        distractor_objects_classes = [obj.label for obj in distractor_objects]
+        distractor_objects_positions = np.array([obj.center[0:2] for obj in distractor_objects])
 
-        print(str(self))
+        return { 
+            'target_idx': target_idx,
+            'mentioned_objects_classes': mentioned_objects_classes,
+            'mentioned_objects_positions': mentioned_objects_positions,
+            'distractor_objects_classes': distractor_objects_classes,
+            'distractor_objects_positions': distractor_objects_positions,
+            'text_descriptions': text_descr,
+            'target_classes': target_class
+        }
 
-    def __str__(self):
-        return f'Semantic3dObjectData: {self.scene_name} with {len(self.objects)} objects from, {len(self.poses)} poses'
+    # Gather lists in outer list, stack arrays along new dim. Batch comes as list of dicts.
+    def collate_fn(batch):
+        data = {}
+        for k, v in batch[0].items():
+            if isinstance(v, list) or isinstance(v, str):
+                data[k] = [batch[i][k] for i in range(len(batch))]
+            elif isinstance(v, np.ndarray):
+                data[k] = np.stack([batch[i][k] for i in range(len(batch))])
+            elif isinstance(v, int):
+                data[k] = [batch[i][k] for i in range(len(batch))]
+            else:
+                raise Exception('Not implemented'+str(type(v)))
+        return data
 
-    def plot_scene(self):
-        return draw_objects_poses(self.objects, self.poses, draw_arrows=False), 0
-
-    def plot_pose(self, idx):
-        k = self.keys[idx]
-        return draw_objects_poses_descriptions(self.objects, (self.poses[k],), (self.pose_descriptions[k], ))
-
-    def __getitem__(self, index):
-        key = self.keys[index]     
-
-        description = self.pose_descriptions[key]
-        #Select object if too many...
-        if len(description)>self.description_length:
-            description_objects = list(np.random.choice(description, size=self.description_length, replace=False))
-            description_directions = [d.direction for d in description_objects]   
-            description_classes = [d.label for d in description_objects]   
-            pads = 0
-        #... or pad if too few
-        elif len(description)<self.description_length:
-            pads = self.description_length-len(description)
-            description_objects = description
-            description_directions = [d.direction for d in description_objects] + ['<pad>' for _ in range(pads)]
-            description_classes = [d.label for d in description_objects] + ['<pad>' for _ in range(pads)]
-
-        angle = self.poses[key].phi
-        match_indices = [self.object_ids.index(d.id) for d in description_objects]   
-
-        return {'object_positions': self.object_positions,
-                'object_classes': self.object_classes,
-                'description_directions': description_directions,
-                'description_classes': description_classes,
-                'angles': angle,
-                'match_indices': match_indices,
-                'description_lengths': len(description)}
 
     def __len__(self):
-        return 8
-        return len(self.keys)
+        return len(self.list_descriptions)
 
-    #TODO: refer to specific names
-    def collate_fn(samples):
-        collated = {}
-        for key in samples[0].keys():
-            if type(samples[0][key])==list:
-                collated[key] = [sample[key] for sample in samples]
-            elif type(samples[0][key]) in (int, np.float64): #Angles and description-lengths
-                collated[key] = np.array([sample[key] for sample in samples])
-            elif type(samples[0][key])==np.ndarray:
-                collated[key] = [sample[key] for sample in samples]
-            else:
-                raise Exception('Unexpected type in dataset! '+str(type(samples[0][key])))
+    def __repr__(self):
+        return f'Semantic3dObjectReferanceDataset: {len(self.scene_objects)} objects and {len(self.text_descriptions)} text descriptions.'
 
-        return collated        
-
+    def get_known_classes(self):
+        classes = [obj.label for obj in self.scene_objects]
+        return list(np.unique(classes))
+    
+    def get_known_words(self):
+        words = []
+        for d in self.text_descriptions:
+            words.extend(d.replace('.','').replace(',','').lower().split())
+        return list(np.unique(words))
+        
 
 if __name__ == "__main__":
-    dataset = Semantic3dObjectData('./data/semantic3d', 'sg27_station5_intensity_rgb')
-    idx = 0
-    key = dataset.keys[idx]
-    description = dataset.pose_descriptions[key]
-    for d in description: print(d)
+    dataset = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=0)
+    dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
+    data = dataset[0]
+    batch = next(iter(dataloader))
 
-    img = cv2.flip(dataset.plot_pose(idx), 0)
-    cv2.imshow("", img); cv2.waitKey()
-    

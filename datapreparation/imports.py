@@ -102,6 +102,8 @@ class DescriptionObject:
         color_dists = np.linalg.norm(COLORS - o3d.color, axis=1)
         d.color_text = COLOR_NAMES[np.argmin(color_dists)]
 
+        d.is_target = direction is None
+
         return d
 
     def __str__(self):
