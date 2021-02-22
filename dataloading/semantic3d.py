@@ -49,15 +49,25 @@ class Semantic3dObjectReferanceDataset(Dataset):
         distractor_objects_classes = [obj.label for obj in distractor_objects]
         distractor_objects_positions = np.array([obj.center[0:2] for obj in distractor_objects])
 
-        return { 
+        #Always stacks mentioned then distractors
+        return {
             'target_idx': target_idx,
-            'mentioned_objects_classes': mentioned_objects_classes,
-            'mentioned_objects_positions': mentioned_objects_positions,
-            'distractor_objects_classes': distractor_objects_classes,
-            'distractor_objects_positions': distractor_objects_positions,
+            'objects_classes': mentioned_objects_classes + distractor_objects_classes,
+            'objects_positions': np.vstack((mentioned_objects_positions, distractor_objects_positions)),
             'text_descriptions': text_descr,
-            'target_classes': target_class
+            'target_classes': target_class,
+            'description_lengths': len(list_descr)
         }
+
+        # return { 
+        #     'target_idx': target_idx,
+        #     'mentioned_objects_classes': mentioned_objects_classes,
+        #     'mentioned_objects_positions': mentioned_objects_positions,
+        #     'distractor_objects_classes': distractor_objects_classes,
+        #     'distractor_objects_positions': distractor_objects_positions,
+        #     'text_descriptions': text_descr,
+        #     'target_classes': target_class
+        # }
 
     # Gather lists in outer list, stack arrays along new dim. Batch comes as list of dicts.
     def collate_fn(batch):
@@ -92,7 +102,7 @@ class Semantic3dObjectReferanceDataset(Dataset):
         
 
 if __name__ == "__main__":
-    dataset = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=0)
+    dataset = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=1)
     dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
     data = dataset[0]
     batch = next(iter(dataloader))

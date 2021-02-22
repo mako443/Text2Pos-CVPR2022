@@ -50,7 +50,7 @@ class TransformerMatch1(torch.nn.Module):
                     nn.init.xavier_uniform_(p)        
 
         #Text encoding
-        self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=embedding_dim)
+        self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=embedding_dim, bidirectional=False)
 
         # TODO: One MLP for all or separate after each TF layer?
         #self.mlp_ref_type = get_mlp([2*embedding_dim, 256, 128, 64, 32, 3]) #TODO: num aux.-classes (2 or 3), optimize MLP
@@ -89,6 +89,7 @@ class TransformerMatch1(torch.nn.Module):
 
         _,(h,c) = self.lstm(description_inputs, (h,c))
         description_encodings = torch.squeeze(h, dim=0) # [B, DIM]
+        # description_encodings = torch.mean(h, dim=0)
         description_encodings = torch.unsqueeze(description_encodings, dim=1) # [B, 1, DIM]
 
         # description_encodings = F.relu(description_encodings) #TODO: do this or not?

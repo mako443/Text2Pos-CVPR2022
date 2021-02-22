@@ -9,38 +9,27 @@ from torch.utils.data import Dataset, DataLoader
 from models.transformer import TransformerMatch1, get_mlp
 from dataloading.semantic3d import Semantic3dObjectReferanceDataset
 
-dataset = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d')
+dataset = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors='all')
 dataloader = DataLoader(dataset, batch_size=8, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
-
-# batch = next(iter(dataloader))
-# model = TransformerMatch1(dataset.get_known_classes(), dataset.get_known_words(), embedding_dim=32, num_layers=2)
-# features, obj_ref_predictions = model(batch['mentioned_objects_classes'], batch['mentioned_objects_positions'], batch['text_descriptions']) #[B, num_obj]
-# criterion = nn.BCEWithLogitsLoss() # TODO: weights?
-
-# loss = []
-# for i in range(obj_ref_predictions.size(0)):
-#     targets = torch.zeros(obj_ref_predictions.size(1))
-#     targets[batch['target_idx'][i]] = 1
-#     loss.append(criterion(obj_ref_predictions[i], targets))
-# loss = torch.mean(torch.stack(loss))
-
-# quit()
+data0 = dataset[0]
 
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 torch.autograd.set_detect_anomaly(True)
 
-ALPHA_REF, ALPHA_TARGET_CLASS, ALPHA_OBJECT_CLASS = 2.0, 1.0, 1.0
+ALPHA_REF, ALPHA_TARGET_CLASS, ALPHA_OBJECT_CLASS = 2.0, 5.0, 1.0
 
 loss_dict = {}
 ref_acc_dict = {}
 targetclass_acc_dict = {}
 objclass_acc_dict = {}
-for lr in np.logspace(-2.5,-4,5)[0:3]:
+for lr in np.logspace(-2.5,-4,5)[3:]:
     model = TransformerMatch1(dataset.get_known_classes(), dataset.get_known_words(), embedding_dim=300, num_layers=3)
     model = model.cuda()
 
     optimizer = optim.Adam(model.parameters(), lr=lr)
-    criterion_ref = nn.BCEWithLogitsLoss(weight=torch.tensor([5,1,1,1,1,1], dtype=torch.float, device=DEVICE)) # OPTION: weights?
+    criterion_ref_weights = torch.ones(len(data0['objects_classes']), dtype=torch.float, device=DEVICE) #Balance the weight of one ref-target vs. #mentioned + #distractor -1 other objects
+    criterion_ref_weights[0] = len(data0['objects_classes'])-1
+    criterion_ref = nn.BCEWithLogitsLoss(weight=criterion_ref_weights) # OPTION: weights?
     criterion_target_class = nn.CrossEntropyLoss(weight=torch.tensor([1,1,1,1,1,1], dtype=torch.float, device=DEVICE)) # OPTION: weights?
     criterion_object_class = nn.CrossEntropyLoss()
 
@@ -59,18 +48,19 @@ for lr in np.logspace(-2.5,-4,5)[0:3]:
         for i_batch, batch in enumerate(dataloader):
             optimizer.zero_grad()
             
-            features, obj_ref_pred, target_class_pred, obj_class_pred = model(batch['mentioned_objects_classes'], batch['mentioned_objects_positions'], batch['text_descriptions']) #[B, num_obj]
+            features, obj_ref_pred, target_class_pred, obj_class_pred = model(batch['objects_classes'], batch['objects_positions'], batch['text_descriptions']) #[B, num_obj]
 
             all_preds = []
             known_classes = list(model.known_classes.keys())
 
-            #Obj-ref and obj-class loss
+            #Obj-ref and obj-class loss, TODO: vectorize
             loss_ref = []
             loss_obj_class = []
             for i in range(obj_ref_pred.size(0)):
                 #Obj-ref
                 targets = torch.zeros(obj_ref_pred.size(1))
                 targets[batch['target_idx'][i]] = 1
+                assert batch['target_idx'][i] == 0
                 loss_ref.append(criterion_ref(obj_ref_pred[i], targets.to(obj_ref_pred)))
                 
                 preds = obj_ref_pred[i].cpu().detach().numpy()
@@ -78,7 +68,7 @@ for lr in np.logspace(-2.5,-4,5)[0:3]:
                 epoch_ref_accs.append(np.argmax(preds) == batch['target_idx'][i])
 
                 #Obj-class
-                targets = torch.tensor([known_classes.index(c) for c in batch['mentioned_objects_classes'][i]], dtype=torch.long, device=DEVICE)
+                targets = torch.tensor([known_classes.index(c) for c in batch['objects_classes'][i]], dtype=torch.long, device=DEVICE)
                 loss_obj_class.append(criterion_object_class(obj_class_pred[i], targets))
 
                 preds = obj_class_pred[i].cpu().detach().numpy()
