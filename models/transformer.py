@@ -6,6 +6,9 @@ import torch.nn.functional as F
 import numpy as np
 import os
 import pickle
+from easydict import EasyDict
+
+from models.modules import get_mlp, LanguageEncoder
 
 '''
 Matching Modules
@@ -15,15 +18,6 @@ TODO:
 - encode obj color
 - encode position or full bboxes?
 '''
-
-def get_mlp(dims):
-    # mlp = nn.Sequential(*[nn.Linear(dims[i], dims[i+1]) for i in range(len(dims)-1)])
-    mlp = []
-    for i in range(len(dims)-1):
-        mlp.append(nn.Linear(dims[i], dims[i+1]))
-        if i<len(dims)-2:
-            mlp.append(nn.ReLU())
-    return nn.Sequential(*mlp)
 
 class TransformerMatch1(torch.nn.Module):
     def __init__(self, known_classes, known_words, embedding_dim, num_layers):
@@ -36,10 +30,7 @@ class TransformerMatch1(torch.nn.Module):
 
         self.pos_embedding = get_mlp([2,4,8,16,embedding_dim]) #TODO: optimize these layers
 
-        # TODO: switch to Glove?
-        self.known_words = {c: (i+1) for i,c in enumerate(known_words)}
-        self.known_words['<unk>'] = 0        
-        self.word_embedding = nn.Embedding(len(self.known_words), embedding_dim, padding_idx=0)
+        self.language_encoder = LanguageEncoder(known_words, embedding_dim, bi_dir=True)
 
         #Self attention layers
         self.encoder_layers = nn.ModuleList([nn.TransformerEncoderLayer(embedding_dim + embedding_dim, nhead=8, dim_feedforward=2048)])
@@ -50,7 +41,7 @@ class TransformerMatch1(torch.nn.Module):
                     nn.init.xavier_uniform_(p)        
 
         #Text encoding
-        self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=embedding_dim, bidirectional=False)
+        self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=embedding_dim, bidirectional=True)
 
         # TODO: One MLP for all or separate after each TF layer?
         #self.mlp_ref_type = get_mlp([2*embedding_dim, 256, 128, 64, 32, 3]) #TODO: num aux.-classes (2 or 3), optimize MLP
@@ -60,6 +51,8 @@ class TransformerMatch1(torch.nn.Module):
 
         self.mlp_object_class = get_mlp([2*embedding_dim, embedding_dim, 16, len(self.known_classes)])
 
+        self.mlp_object_offset = get_mlp([2*embedding_dim, embedding_dim, 64, 2])
+
     #TODO: if objects are the same, feed them in once or as full batch? -> Probably as batch for separate aux.-losses
     '''
     Objects as [obj1, obj2, ...], assumed to be the same for all descriptions
@@ -67,29 +60,11 @@ class TransformerMatch1(torch.nn.Module):
     ## Object referance types [B, num_obj ∈ {0,1,2}: ground-truth whether each object is unrelated, mentioned, or the target. Used for aux.-loss.
     '''
     def forward(self, object_classes, object_positions, descriptions):
-        '''
-        Encode the descriptions
-        '''
-        word_indices = [ [self.known_words.get(word, 0) for word in description.replace('.', '').replace(',', '').lower().split()] for description in descriptions]
-        description_lengths = [len(w) for w in word_indices]
-        batch_size, max_length = len(word_indices), max(description_lengths)
-        padded_indices = np.zeros((batch_size,max_length), np.int)
-
-        for i,caption_length in enumerate(description_lengths):
-            padded_indices[i,:caption_length] = word_indices[i]
-        
-        padded_indices = torch.from_numpy(padded_indices)
-        padded_indices = padded_indices.to(self.device) #Possibly move to cuda
-
-        embedded_words = self.word_embedding(padded_indices)
-        description_inputs = nn.utils.rnn.pack_padded_sequence(embedded_words, torch.tensor(description_lengths), batch_first=True, enforce_sorted=False)   
-
-        h=torch.zeros(1,batch_size,self.word_embedding.embedding_dim).to(self.device)
-        c=torch.zeros(1,batch_size,self.word_embedding.embedding_dim).to(self.device)
-
-        _,(h,c) = self.lstm(description_inputs, (h,c))
-        description_encodings = torch.squeeze(h, dim=0) # [B, DIM]
-        # description_encodings = torch.mean(h, dim=0)
+        # '''
+        # Encode the descriptions
+        # '''
+        batch_size = len(descriptions)
+        description_encodings = self.language_encoder(descriptions) # [B, DIM]
         description_encodings = torch.unsqueeze(description_encodings, dim=1) # [B, 1, DIM]
 
         # description_encodings = F.relu(description_encodings) #TODO: do this or not?
@@ -126,15 +101,24 @@ class TransformerMatch1(torch.nn.Module):
         '''
         Make predictions
         '''
-        obj_ref_predictions = self.mlp_ref_type(features) # [num_obj, B, 1]
-        # obj_ref_predictions = torch.transpose(torch.squeeze(obj_ref_predictions, dim=-1), 0, 1) # [num_obj, B, 1] -> [B, num_obj]
-        obj_ref_predictions = torch.squeeze(obj_ref_predictions, dim=-1)
+        obj_ref_pred = self.mlp_ref_type(features) # [num_obj, B, 1]
+        # obj_ref_pred = torch.transpose(torch.squeeze(obj_ref_pred, dim=-1), 0, 1) # [num_obj, B, 1] -> [B, num_obj]
+        obj_ref_pred = torch.squeeze(obj_ref_pred, dim=-1)
 
         target_class_pred = torch.squeeze(self.mlp_target_class(description_encodings), dim=1)
 
         obj_class_pred = self.mlp_object_class(features)
 
-        return features, obj_ref_predictions, target_class_pred, obj_class_pred
+        obj_offset_pred = self.mlp_object_offset(features)
+
+        model_output = EasyDict()
+        model_output.features = features
+        model_output.obj_ref_pred = obj_ref_pred
+        model_output.target_class_pred = target_class_pred
+        model_output.obj_class_pred = obj_class_pred
+        model_output.obj_offset_pred = obj_offset_pred
+
+        return model_output
 
 
     @property

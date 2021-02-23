@@ -11,10 +11,11 @@ from torch.utils.data import Dataset, DataLoader
 from datapreparation.imports import Object3D, DescriptionObject
 
 class Semantic3dObjectReferanceDataset(Dataset):
-    def __init__(self, path_numpy, path_scenes, num_distractors='all'):
+    def __init__(self, path_numpy, path_scenes, num_distractors='all', split=None):
         self.path_numpy = path_numpy
         self.path_scenes = path_scenes
         self.num_distractors = num_distractors
+        self.split = split
     
         self.scene_name = 'sg27_station5_intensity_rgb'
 
@@ -23,6 +24,14 @@ class Semantic3dObjectReferanceDataset(Dataset):
         self.list_descriptions = pickle.load(open(osp.join(self.path_scenes,'train',self.scene_name,'list_object_descriptions.pkl'), 'rb'))
         self.text_descriptions = pickle.load(open(osp.join(self.path_scenes,'train',self.scene_name,'text_object_descriptions.pkl'), 'rb'))
         assert len(self.list_descriptions)==len(self.text_descriptions)
+
+        #Apply split
+        if split is not None:
+            assert split in ('train', 'test')
+            test_indices = (np.arange(len(self.list_descriptions)) % 5) == 0
+            indices = test_indices if split=='test' else np.bitwise_not(test_indices)
+            self.list_descriptions = [ld for (i, ld) in enumerate(self.list_descriptions) if indices[i]]
+            self.text_descriptions = [td for (i, td) in enumerate(self.text_descriptions) if indices[i]]
 
         print(self)
 
@@ -35,7 +44,6 @@ class Semantic3dObjectReferanceDataset(Dataset):
 
         mentioned_objects = [obj for obj in self.scene_objects if obj.id in mentioned_ids] #Including target
 
-        
         #Gather the distractor objects
         if self.num_distractors == 'all':
             distractor_objects = [obj for obj in self.scene_objects if obj.id not in mentioned_ids]
@@ -46,8 +54,18 @@ class Semantic3dObjectReferanceDataset(Dataset):
 
         mentioned_objects_classes = [obj.label for obj in mentioned_objects]
         mentioned_objects_positions = np.array([obj.center[0:2] for obj in mentioned_objects])
-        distractor_objects_classes = [obj.label for obj in distractor_objects]
-        distractor_objects_positions = np.array([obj.center[0:2] for obj in distractor_objects])
+        if len(distractor_objects) > 0:
+            distractor_objects_classes = [obj.label for obj in distractor_objects]
+            distractor_objects_positions = np.array([obj.center[0:2] for obj in distractor_objects])
+        else:
+            distractor_objects_classes = []
+            distractor_objects_positions = np.array([]).reshape((0,2))
+
+        #Gather the offset vectors
+        for obj in self.scene_objects:
+            if obj.id == target_id:
+                target_center = obj.center[0:2]
+        offset_vectors = target_center - np.vstack((mentioned_objects_positions, distractor_objects_positions))
 
         #Always stacks mentioned then distractors
         return {
@@ -56,18 +74,9 @@ class Semantic3dObjectReferanceDataset(Dataset):
             'objects_positions': np.vstack((mentioned_objects_positions, distractor_objects_positions)),
             'text_descriptions': text_descr,
             'target_classes': target_class,
-            'description_lengths': len(list_descr)
+            'description_lengths': len(list_descr),
+            'offset_vectors': offset_vectors,
         }
-
-        # return { 
-        #     'target_idx': target_idx,
-        #     'mentioned_objects_classes': mentioned_objects_classes,
-        #     'mentioned_objects_positions': mentioned_objects_positions,
-        #     'distractor_objects_classes': distractor_objects_classes,
-        #     'distractor_objects_positions': distractor_objects_positions,
-        #     'text_descriptions': text_descr,
-        #     'target_classes': target_class
-        # }
 
     # Gather lists in outer list, stack arrays along new dim. Batch comes as list of dicts.
     def collate_fn(batch):
@@ -88,7 +97,7 @@ class Semantic3dObjectReferanceDataset(Dataset):
         return len(self.list_descriptions)
 
     def __repr__(self):
-        return f'Semantic3dObjectReferanceDataset: {len(self.scene_objects)} objects and {len(self.text_descriptions)} text descriptions.'
+        return f'Semantic3dObjectReferanceDataset: {len(self.scene_objects)} objects and {len(self.text_descriptions)} text descriptions, split {self.split}.'
 
     def get_known_classes(self):
         classes = [obj.label for obj in self.scene_objects]
