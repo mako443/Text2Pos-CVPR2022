@@ -6,14 +6,14 @@ import matplotlib.pyplot as plt
 
 from torch.utils.data import Dataset, DataLoader
 
-from models.transformer import TransformerMatch1, get_mlp
+from models.dgcnn import DGMatch
 from dataloading.semantic3d import Semantic3dObjectReferanceDataset
 
-dataset_train = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=0, split='train')
+dataset_train = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=4, split='train')
 dataloader_train = DataLoader(dataset_train, batch_size=8, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
 data0 = dataset_train[0]
 
-dataset_val = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=0, split='test')
+dataset_val = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=4, split='test')
 dataloader_val = DataLoader(dataset_val, batch_size=8, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
 
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -22,7 +22,7 @@ torch.autograd.set_detect_anomaly(True)
 ALPHA_REF = 2.0
 ALPHA_TARGET_CLASS = 5.0
 ALPHA_OBJECT_CLASS = 1.0
-ALPHA_OFFSET = 0.01
+# ALPHA_OFFSET = 0.01
 
 def train_epoch(model, dataloader):
     known_classes = list(model.known_classes.keys())
@@ -41,31 +41,31 @@ def train_epoch(model, dataloader):
         loss_ref = []
         loss_objclass = []
         loss_offset = []
-        for i in range(model_output.obj_ref_pred.size(0)):
+        for i in range(model_output.pred_object_ref.size(0)):
             #Obj-ref
-            targets = torch.zeros(model_output.obj_ref_pred.size(1))
+            targets = torch.zeros(model_output.pred_object_ref.size(1))
             targets[batch['target_idx'][i]] = 1
             assert batch['target_idx'][i] == 0
-            loss_ref.append(criterion_ref(model_output.obj_ref_pred[i], targets.to(model_output.obj_ref_pred)))
+            loss_ref.append(criterion_ref(model_output.pred_object_ref[i], targets.to(model_output.pred_object_ref)))
             
-            preds = model_output.obj_ref_pred[i].cpu().detach().numpy()
+            preds = model_output.pred_object_ref[i].cpu().detach().numpy()
             epoch_acc_ref.append(np.argmax(preds) == batch['target_idx'][i])
 
             #Obj-class
             targets = torch.tensor([known_classes.index(c) for c in batch['objects_classes'][i]], dtype=torch.long, device=DEVICE)
-            loss_objclass.append(criterion_object_class(model_output.obj_class_pred[i], targets))
+            loss_objclass.append(criterion_object_class(model_output.pred_object_class[i], targets))
 
-            preds = model_output.obj_class_pred[i].cpu().detach().numpy()
+            preds = model_output.pred_object_class[i].cpu().detach().numpy()
             epoch_acc_objclass.append(np.mean(np.argmax(preds, axis=1) == targets.cpu().detach().numpy()))
 
             #Offset
             indices = torch.arange(1, batch['description_lengths'][i]) # Select the mentioned, non-target objects
-            inputs = model_output.obj_offset_pred[i][indices]
+            inputs = model_output.pred_object_offset[i][indices]
             targets = torch.tensor(batch['offset_vectors'][i][indices], dtype=torch.float, device=DEVICE)
             loss_offset.append(criterion_offset(inputs, targets))
 
             indices = indices.cpu().detach().numpy()
-            preds = model_output.obj_offset_pred[i].cpu().detach().numpy()
+            preds = model_output.pred_object_offset[i].cpu().detach().numpy()
             diffs = preds[indices] - batch['offset_vectors'][i][indices]
             diffs = np.linalg.norm(diffs, axis=1)
             epoch_acc_offset.append(np.mean(diffs))
@@ -75,17 +75,19 @@ def train_epoch(model, dataloader):
         loss_offset = torch.mean(torch.stack(loss_offset))
 
         #Target class loss
-        target_class_indices = torch.tensor([list(model.known_classes.keys()).index(batch['target_classes'][i]) for i in range(model_output.obj_ref_pred.size(0))], dtype=torch.long, device=DEVICE)
-        loss_target_class = criterion_target_class(model_output.target_class_pred, target_class_indices)
-        preds = model_output.target_class_pred.cpu().detach().numpy()
+        target_class_indices = torch.tensor([list(model.known_classes.keys()).index(batch['target_classes'][i]) for i in range(model_output.pred_object_ref.size(0))], dtype=torch.long, device=DEVICE)
+        loss_target_class = criterion_target_class(model_output.pred_target_class, target_class_indices)
+        preds = model_output.pred_target_class.cpu().detach().numpy()
         epoch_acc_tgtclass.append(np.mean(np.argmax(preds, axis=1) == target_class_indices.cpu().detach().numpy()))
 
-        loss = ALPHA_REF * loss_ref + ALPHA_TARGET_CLASS * loss_target_class + ALPHA_OBJECT_CLASS * loss_objclass + ALPHA_OFFSET * loss_offset
+        # loss = ALPHA_REF * loss_ref + ALPHA_TARGET_CLASS * loss_target_class + ALPHA_OBJECT_CLASS * loss_objclass + ALPHA_OFFSET * loss_offset
+        loss = ALPHA_REF * loss_ref + ALPHA_TARGET_CLASS * loss_target_class + ALPHA_OBJECT_CLASS * loss_objclass
         
         loss.backward()
         optimizer.step()
 
         epoch_losses.append(loss.item())
+        break
 
     return np.mean(epoch_losses), np.mean(epoch_acc_ref), np.mean(epoch_acc_tgtclass), np.mean(epoch_acc_objclass), np.mean(epoch_acc_offset)                    
 
@@ -103,33 +105,34 @@ def val_epoch(model, dataloader):
 
         #Obj-ref and obj-class loss, TODO: vectorize
         loss_objclass = []
-        for i in range(model_output.obj_ref_pred.size(0)):
+        for i in range(model_output.pred_object_ref.size(0)):
             #Obj-ref            
-            preds = model_output.obj_ref_pred[i].cpu().detach().numpy()
+            preds = model_output.pred_object_ref[i].cpu().detach().numpy()
             epoch_acc_ref.append(np.argmax(preds) == batch['target_idx'][i])
 
             #Obj-class
             targets = torch.tensor([known_classes.index(c) for c in batch['objects_classes'][i]], dtype=torch.long, device=DEVICE)
-            preds = model_output.obj_class_pred[i].cpu().detach().numpy()
+            preds = model_output.pred_object_class[i].cpu().detach().numpy()
             epoch_acc_objclass.append(np.mean(np.argmax(preds, axis=1) == targets.cpu().detach().numpy()))
 
             #Offset
             indices = torch.arange(1, batch['description_lengths'][i]) # Select the mentioned, non-target objects
 
             indices = indices.cpu().detach().numpy()
-            preds = model_output.obj_offset_pred[i].cpu().detach().numpy()
+            preds = model_output.pred_object_offset[i].cpu().detach().numpy()
             diffs = preds[indices] - batch['offset_vectors'][i][indices]
             diffs = np.linalg.norm(diffs, axis=1)
             epoch_acc_offset.append(np.mean(diffs))            
 
         #Target class
-        target_class_indices = torch.tensor([list(model.known_classes.keys()).index(batch['target_classes'][i]) for i in range(model_output.obj_ref_pred.size(0))], dtype=torch.long, device=DEVICE)
-        preds = model_output.target_class_pred.cpu().detach().numpy()
+        target_class_indices = torch.tensor([list(model.known_classes.keys()).index(batch['target_classes'][i]) for i in range(model_output.pred_object_ref.size(0))], dtype=torch.long, device=DEVICE)
+        preds = model_output.pred_target_class.cpu().detach().numpy()
         epoch_acc_tgtclass.append(np.mean(np.argmax(preds, axis=1) == target_class_indices.cpu().detach().numpy()))
 
     return np.mean(epoch_acc_ref), np.mean(epoch_acc_tgtclass), np.mean(epoch_acc_objclass), np.mean(epoch_acc_offset)
 
-learning_rates = np.logspace(-2.5,-4,5)#[3:]
+#learning_rates = np.logspace(-2.5,-4,5)#[3:]
+learning_rates = np.logspace(-2,-4,5)
 
 dict_loss = {lr: [] for lr in learning_rates}
 dict_acc_ref = {lr: [] for lr in learning_rates}
@@ -143,7 +146,7 @@ dict_acc_objclass_val = {lr: [] for lr in learning_rates}
 dict_acc_offset_val = {lr: [] for lr in learning_rates}
 
 for lr in learning_rates:
-    model = TransformerMatch1(dataset_train.get_known_classes(), dataset_train.get_known_words(), embedding_dim=300, num_layers=3)
+    model = DGMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), embedding_dim=128, num_layers=3, k=10, use_residual=True)
     model = model.cuda()
 
     optimizer = optim.Adam(model.parameters(), lr=lr)

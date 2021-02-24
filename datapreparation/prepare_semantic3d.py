@@ -31,7 +31,7 @@ def convert_s3d_data(path_pcd, path_images, split, scene_name):
 
 #Removes all but the <count> biggest objects of each class from the list, also removes their correspondences from the view-object lists
 #Alternative: bigger clustering
-def reduce_objects(objects, view_objects, count=7):
+def reduce_objects(objects, view_objects, count=16):
     reduced_objects = []
     for object_class in CLASSES_COLORS.keys():
         class_objects = [o for o in objects if o.label==object_class]

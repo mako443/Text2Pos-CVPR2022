@@ -11,12 +11,18 @@ from easydict import EasyDict
 from models.modules import get_mlp, LanguageEncoder
 
 '''
-Matching Modules
+Transformer-based matching modules
 
 TODO:
 - why is "wrong" order better??
 - encode obj color
 - encode position or full bboxes?
+
+PARAMETERS:
+- pos_embedding
+- language_encoder
+- nhead, dim_feedforward
+- MLPs
 '''
 
 class TransformerMatch1(torch.nn.Module):
@@ -33,19 +39,19 @@ class TransformerMatch1(torch.nn.Module):
         self.language_encoder = LanguageEncoder(known_words, embedding_dim, bi_dir=True)
 
         #Self attention layers
-        self.encoder_layers = nn.ModuleList([nn.TransformerEncoderLayer(embedding_dim + embedding_dim, nhead=8, dim_feedforward=2048)])
+        self.encoder_layers = nn.ModuleList([nn.TransformerEncoderLayer(2 * embedding_dim, nhead=8, dim_feedforward=2048)])
         #TODO: do Xavier?
         for layer in self.encoder_layers:
             for p in layer.parameters():
                 if p.dim() > 1:
                     nn.init.xavier_uniform_(p)        
 
-        #Text encoding
-        self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=embedding_dim, bidirectional=True)
+        # #Text encoding
+        # self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=embedding_dim, bidirectional=True)
 
         # TODO: One MLP for all or separate after each TF layer?
-        #self.mlp_ref_type = get_mlp([2*embedding_dim, 256, 128, 64, 32, 3]) #TODO: num aux.-classes (2 or 3), optimize MLP
-        self.mlp_ref_type = get_mlp([2*embedding_dim, embedding_dim, 1])
+        #self.mlp_ref_confidence = get_mlp([2*embedding_dim, 256, 128, 64, 32, 3]) #TODO: num aux.-classes (2 or 3), optimize MLP
+        self.mlp_ref_confidence = get_mlp([2*embedding_dim, embedding_dim, 1])
 
         self.mlp_target_class = get_mlp([embedding_dim, 16, len(self.known_classes)])
 
@@ -60,9 +66,9 @@ class TransformerMatch1(torch.nn.Module):
     ## Object referance types [B, num_obj ∈ {0,1,2}: ground-truth whether each object is unrelated, mentioned, or the target. Used for aux.-loss.
     '''
     def forward(self, object_classes, object_positions, descriptions):
-        # '''
-        # Encode the descriptions
-        # '''
+        '''
+        Encode the descriptions
+        '''
         batch_size = len(descriptions)
         description_encodings = self.language_encoder(descriptions) # [B, DIM]
         description_encodings = torch.unsqueeze(description_encodings, dim=1) # [B, 1, DIM]
@@ -101,7 +107,7 @@ class TransformerMatch1(torch.nn.Module):
         '''
         Make predictions
         '''
-        obj_ref_pred = self.mlp_ref_type(features) # [num_obj, B, 1]
+        obj_ref_pred = self.mlp_ref_confidence(features) # [num_obj, B, 1]
         # obj_ref_pred = torch.transpose(torch.squeeze(obj_ref_pred, dim=-1), 0, 1) # [num_obj, B, 1] -> [B, num_obj]
         obj_ref_pred = torch.squeeze(obj_ref_pred, dim=-1)
 
@@ -123,7 +129,7 @@ class TransformerMatch1(torch.nn.Module):
 
     @property
     def device(self):
-        return next(self.lstm.parameters()).device
+        return next(self.pos_embedding.parameters()).device
 
 
 if __name__ == "__main__":

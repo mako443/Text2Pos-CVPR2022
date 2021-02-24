@@ -97,7 +97,7 @@ class Semantic3dObjectReferanceDataset(Dataset):
         return len(self.list_descriptions)
 
     def __repr__(self):
-        return f'Semantic3dObjectReferanceDataset: {len(self.scene_objects)} objects and {len(self.text_descriptions)} text descriptions, split {self.split}.'
+        return f'Semantic3dObjectReferanceDataset: {len(self.scene_objects)} objects and {len(self.text_descriptions)} text descriptions, <{self.num_distractors}> distractors, split {self.split}.'
 
     def get_known_classes(self):
         classes = [obj.label for obj in self.scene_objects]
