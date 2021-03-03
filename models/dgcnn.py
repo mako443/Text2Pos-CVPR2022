@@ -19,9 +19,9 @@ from models.modules import get_mlp, LanguageEncoder
 path = './data/ModelNet10'
 pre_transform, transform = T.NormalizeScale(), T.SamplePoints(1024)
 train_dataset = ModelNet(path, '10', True, transform, pre_transform)
-train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, num_workers=1)
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=4)
 test_dataset = ModelNet(path, '10', False, transform, pre_transform)
-test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False, num_workers=1)
+test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=4)
 
 class Net(torch.nn.Module):
     def __init__(self):
@@ -34,11 +34,11 @@ class Net(torch.nn.Module):
         self.mlp2 = get_mlp([1024, 512, 256, 10])
 
     def forward(self, data):
-        x, batch = data.pos, data.batch
-        out1 = self.conv1(x)
-        out2 = self.conv2(x)
+        pos, batch = data.pos, data.batch
+        x1 = self.conv1(pos)
+        x2 = self.conv2(x1)
 
-        x = torch.cat((out1, out2), dim=1)
+        x = torch.cat((x1, x2), dim=1)
         x = self.mlp1(x)
 
         x = gnn.global_mean_pool(x, batch)
@@ -121,3 +121,4 @@ plt.title('Val acc')
 plt.gca().set_ylim(bottom=0.0) #Set the bottom to 0.0
 plt.legend()
 
+plt.savefig('losses_accs.png')
