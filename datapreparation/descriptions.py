@@ -111,7 +111,13 @@ def describe_object(scene_objects, idx, max_mentioned_objects=5, max_dist=25):
             text += f' and {obj.direction} of a {obj.color_text} {obj.label}'
     text += '.'
 
-    return description, text
+    # Create hints (the same as 'text' but split into a list of separate strings).
+    hints = []
+    hints.append(f'The target is a {description[0].color_text} {description[0].label}.')
+    for obj in description[1:]:
+        hints.append(f'It is {obj.direction} of a {obj.color_text} {obj.label}.')
+
+    return description, text, hints
 
 
 #Graph with objects and attributes as nodes, pairwise bidrectionals connections between all objects to facilitate learning

@@ -31,7 +31,7 @@ def convert_s3d_data(path_pcd, path_images, split, scene_name):
 
 #Removes all but the <count> biggest objects of each class from the list, also removes their correspondences from the view-object lists
 #Alternative: bigger clustering
-def reduce_objects(objects, view_objects, count=7):
+def reduce_objects(objects, view_objects, count=16):
     reduced_objects = []
     for object_class in CLASSES_COLORS.keys():
         class_objects = [o for o in objects if o.label==object_class]
@@ -51,13 +51,14 @@ def convert_color_s3d(color_rgb):
     return COLOR_NAMES[np.argmin(dists)]
 
 def describe_objects(scene_objects):
-    all_descriptions, all_texts = [], []
+    all_descriptions, all_texts, all_hints = [], [], []
     for idx in range(len(scene_objects)):
-        description, text = describe_object(scene_objects, idx, max_mentioned_objects=5)
+        description, text, hints = describe_object(scene_objects, idx, max_mentioned_objects=5)
         all_descriptions.append(description)
         all_texts.append(text)
+        all_hints.append(hints)
 
-    return all_descriptions, all_texts
+    return all_descriptions, all_texts, all_hints
 
 if __name__ == "__main__":
     path_pcd = 'data/numpy_merged/'
@@ -70,15 +71,17 @@ if __name__ == "__main__":
     objects = [o for o in objects if o.label in ['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars']]
     objects, view_objects = reduce_objects(objects, view_objects)
 
-    descriptions, texts = describe_objects(objects)
+    descriptions, texts, hints = describe_objects(objects)
 
     pickle.dump(objects,      open(osp.join(output_dir,'train', scene_name, 'objects.pkl'), 'wb'))
     pickle.dump(descriptions, open(osp.join(output_dir,'train', scene_name, 'list_object_descriptions.pkl'), 'wb'))
     pickle.dump(texts,        open(osp.join(output_dir,'train', scene_name, 'text_object_descriptions.pkl'), 'wb'))
+    pickle.dump(hints,        open(osp.join(output_dir,'train', scene_name, 'hint_object_descriptions.pkl'), 'wb'))
     print(f'Saved {len(objects)} objects, {len(descriptions)} descriptions and {len(texts)} texts to {osp.join(output_dir,"train", scene_name)}')
 
     idx = np.random.randint(len(descriptions))
     print(texts[idx])
+    print(hints[idx])
     img = cv2.flip(draw_objects_objectDescription(objects, descriptions[idx]), 0)
     cv2.imwrite("object_description.jpg", img)
 

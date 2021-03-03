@@ -4,121 +4,133 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 import torch_geometric.nn as gnn
-from torch_geometric.datasets import ModelNet
-from torch_geometric.data import DataLoader
-import torch_geometric.transforms as T
 
 import numpy as np
 import os
 import os.path as osp
 import pickle
 import matplotlib.pyplot as plt
+from easydict import EasyDict
 
 from models.modules import get_mlp, LanguageEncoder
 
-path = './data/ModelNet10'
-pre_transform, transform = T.NormalizeScale(), T.SamplePoints(1024)
-train_dataset = ModelNet(path, '10', True, transform, pre_transform)
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=4)
-test_dataset = ModelNet(path, '10', False, transform, pre_transform)
-test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=4)
+'''
+Dynamic-Graph-based matching modules
 
-class Net(torch.nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
+TODO:
+- use residual connections?
+- extract and cat global graph features?
+- which aggregation?
+- BatchNorm in MLP? (reshape to B*num_obj)
+'''
+class DGMatch(torch.nn.Module):
+    def __init__(self, known_classes, known_words, embed_dim, k, use_layers):
+        super(DGMatch, self).__init__()
 
-        self.conv1 = gnn.DynamicEdgeConv(get_mlp([2 * 3, 64, 64]), k=20, aggr='max')
-        self.conv2 = gnn.DynamicEdgeConv(get_mlp([2 * 64, 128]), k=20, aggr='max')
+        self.k = k
+        self.use_layers = use_layers
+        assert use_layers in ('first', 'last', 'all')
+        self.embed_dim = embed_dim
 
-        self.mlp1 = get_mlp([128 + 64, 512])
-        self.mlp2 = get_mlp([1024, 512, 256, 10])
+        # Set idx=0 for padding/unknown
+        self.known_classes = {c: (i+1) for i,c in enumerate(known_classes)}
+        self.known_classes['<unk>'] = 0
+        self.class_embedding = nn.Embedding(len(self.known_classes), embed_dim, padding_idx=0)
 
-    def forward(self, data):
-        pos, batch = data.pos, data.batch
-        x1 = self.conv1(pos)
-        x2 = self.conv2(x1)
+        self.pos_embedding = get_mlp([2, embed_dim//2, embed_dim])
 
-        x = torch.cat((x1, x2), dim=1)
-        x = self.mlp1(x)
+        self.language_encoder = LanguageEncoder(known_words, embed_dim, bi_dir=True)    
 
-        x = gnn.global_mean_pool(x, batch)
+        # self.graph_layers = nn.ModuleList([gnn.DynamicEdgeConv(get_mlp([4*embed_dim, 2*embed_dim]), k) for i in range(num_layers)])
+        self.graph1 = gnn.DynamicEdgeConv(get_mlp([4 * embed_dim, 4*embed_dim, 2*embed_dim], add_batchnorm=True), k=k, aggr='max')
+        self.graph2 = gnn.DynamicEdgeConv(get_mlp([4 * embed_dim, 4*embed_dim, 2*embed_dim], add_batchnorm=True), k=k, aggr='max')
 
-        x = self.mlp2(x)
+        in_dim = 4*embed_dim if use_layers=='all' else 2*embed_dim
+        self.mlp_features = get_mlp([in_dim, in_dim, 2*embed_dim])
 
-        return x
+        #Prediction layers
+        self.mlp_object_ref = get_mlp([2*embed_dim, embed_dim, 1]) #Predict a reference confidence for each obj
+        self.mlp_target_class = get_mlp([embed_dim, 16, len(self.known_classes)]) #Predict the class of the referred object based on the text
+        self.mlp_object_class = get_mlp([2*embed_dim, embed_dim, 16, len(self.known_classes)]) #Predict the class of each object based
+        self.mlp_object_offset = get_mlp([2*embed_dim, embed_dim, 64, 2])
 
-def train_epoch(model, dataloader):
-    model.train()
-    epoch_losses = []
-    epoch_accs = []
+    def forward(self, object_classes, object_positions, descriptions):
+        '''
+        Encode the descriptions
+        '''
+        batch_size = len(descriptions)
+        description_encodings = self.language_encoder(descriptions) # [B, DIM]
+        description_encodings = torch.unsqueeze(description_encodings, dim=1) # [B, 1, DIM]        
 
-    for i_batch, batch in enumerate(dataloader):
-        optimizer.zero_grad()
+        '''
+        Encode the objects
+        '''    
+        num_objects = len(object_classes[0])
+        class_indices = torch.zeros((batch_size, num_objects), dtype=torch.long)
+        for i in range(batch_size):
+            for j in range(num_objects):
+                class_indices[i,j] = self.known_classes.get(object_classes[i][j],0)
+        class_embeddings = self.class_embedding(class_indices.to(self.device)) # [B, num_obj, DIM]
 
-        out = model(batch)
-        loss = criterion(out, batch.y)
-        
-        loss.backward()
-        optimizer.step()
+        pos_embeddings = self.pos_embedding(torch.tensor(object_positions, dtype=torch.float, device=self.device)) # [B, num_obj, DIM]
 
-        with torch.no_grad():
-            preds = torch.argmax(out, dim=-1)
-            acc = torch.mean(preds == batch.y)
+        object_encodings = class_embeddings + pos_embeddings # [B, num_obj, DIM]
 
-        epoch_losses.append(loss.item())
-        epoch_accs.append(acc.item())
+        '''
+        Merge object and description encodings (concat the description encoding to every object encoding for combined graph inputs)
+        '''
+        description_encodings_repeated = description_encodings.repeat(1, num_objects, 1) # [B, num_obj, DIM]
+        features = torch.cat((object_encodings, description_encodings_repeated), dim=-1) # [B, num_obj, 2*DIM]        
 
-    return np.mean(epoch_losses), np.mean(epoch_accs)
+        '''
+        Run graph layers
+        '''
+        features = features.reshape((-1, 2*self.embed_dim)) # [B*num_obj, 2*DIM], reshaped to process batch as sparse graph
+        batch = torch.zeros(len(features), dtype=torch.long, device=self.device)
+        for i in range(batch_size):
+            batch[i*num_objects : (i+1)*num_objects] = i
 
-@torch.no_grad()
-def val_epoch(model, dataloader):
-    model.eval()
-    epoch_accs = []
+        graph_x1 = self.graph1.forward(features, batch)
+        graph_x2 = self.graph2.forward(graph_x1, batch)
 
-    for i_batch, batch in enumerate(dataloader):
-        out = model(batch)
-        preds = torch.argmax(out, dim=-1)
-        acc = torch.mean(preds == batch.y)
+        if self.use_layers == 'first':
+            features = graph_x1
+        elif self.use_layers == 'last':
+            features = graph_x2
+        elif self.use_layers == 'all':
+            features = torch.cat((graph_x1, graph_x2), dim=-1)
 
-        epoch_accs.append(acc.item())
-        
-    return np.mean(epoch_accs)
+        features = features.reshape((batch_size, num_objects, -1)) # [B, num_obj, 2*DIM]
+        #Concant description again
+        # features = torch.cat((features, description_encodings_repeated), dim=-1)
 
-DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-model = Net().to(DEVICE)
-optimizer = optim.Adam(model.parameters(), lr=0.001)
-criterion = nn.CrossEntropyLoss()
+        features = self.mlp_features(features) #TODO: use this even w/o use_residual?
 
-train_losses = []
-train_accs = []
-val_accs = []
+        '''
+        Make predictions
+        '''
+        pred_object_ref = torch.squeeze(self.mlp_object_ref(features), dim=-1)
+        pred_target_class = torch.squeeze(self.mlp_target_class(description_encodings), dim=1)
+        pred_object_class = self.mlp_object_class(features)
+        pred_object_offset = self.mlp_object_offset(features)
 
-for epoch in range(32):
-    loss, acc = train_epoch(model, train_loader)
-    train_losses.append(loss)
-    train_accs.append(acc)
+        model_output = EasyDict()
+        model_output.features = features
+        model_output.pred_object_ref = pred_object_ref
+        model_output.pred_target_class = pred_target_class
+        model_output.pred_object_class = pred_object_class
+        model_output.pred_object_offset = pred_object_offset
+        return model_output
 
-    acc = val_epoch(model, test_loader)
-    val_accs.append(acc)
-    
-    print(f'epoch {epoch}, loss {loss:0.3f} train-acc {train_accs[-1] : 0.3f}, val-acc {val_accs[-1] : 0.3f}')
+    @property
+    def device(self):
+        return next(self.pos_embedding.parameters()).device        
 
-plt.figure()
-plt.subplot(2,2,1)
-plt.plot(train_losses)
-plt.title('Losses')
-plt.gca().set_ylim(bottom=0.0) #Set the bottom to 0.0
+if __name__ == "__main__":
+    model = DGMatch(['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars'], 'a b c d e'.split(), embed_dim=32, k=7, use_layers='all')
 
-plt.subplot(2,2,2)
-plt.plot(train_accs)
-plt.title('Train acc')
-plt.gca().set_ylim(bottom=0.0) #Set the bottom to 0.0
-plt.legend()
+    object_classes = [['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars'] for i in range(3)]
+    object_positions = np.random.rand(3, 5, 2)
+    descriptions = ['a b x d e', 'a b c x a c', 'a a']
 
-plt.subplot(2,2,4)
-plt.plot(val_accs)
-plt.title('Val acc')
-plt.gca().set_ylim(bottom=0.0) #Set the bottom to 0.0
-plt.legend()
-
-plt.savefig('losses_accs.png')
+    out = model(object_classes, object_positions, descriptions)
