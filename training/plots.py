@@ -1,12 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_metrics(metrics, save_path):
+def plot_metrics(metrics, save_path, show_plot=False, size=(16,10)):
     rows = int(np.round(np.sqrt(len(metrics))))
     cols = int(np.ceil(len(metrics)/rows))
 
     fig = plt.figure()
-    fig.set_size_inches(16,10)
+    fig.set_size_inches(*size)
 
     for i, key in enumerate(metrics.keys()):
         plt.subplot(rows, cols, i+1)
@@ -18,9 +18,11 @@ def plot_metrics(metrics, save_path):
         plt.gca().set_ylim(bottom=0.0) #Set the bottom to 0.0
         plt.legend()
 
-    plt.savefig(save_path)
-
-    print(f'\n Plot saved as {save_path} \n')
+    if show_plot:
+        plt.show()
+    else:
+        plt.savefig(save_path)
+        print(f'\n Plot saved as {save_path} \n')
 
 if __name__ == "__main__":
     metrics = {}

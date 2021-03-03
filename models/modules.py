@@ -5,12 +5,16 @@ import torch.nn.functional as F
 
 import numpy as np
 
-def get_mlp(dims):
+def get_mlp(dims, add_batchnorm=False):
+    if len(dims)<3:
+        print('get_mlp(): less than 2 layers!')
     mlp = []
     for i in range(len(dims)-1):
         mlp.append(nn.Linear(dims[i], dims[i+1]))
         if i<len(dims)-2:
             mlp.append(nn.ReLU())
+            if add_batchnorm:
+                mlp.append(nn.BatchNorm1d(dims[i+1]))
     return nn.Sequential(*mlp)
 
 class LanguageEncoder(torch.nn.Module):

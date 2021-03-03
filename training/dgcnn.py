@@ -9,20 +9,18 @@ from torch.utils.data import Dataset, DataLoader
 from models.dgcnn import DGMatch
 from dataloading.semantic3d import Semantic3dObjectReferanceDataset
 
-dataset_train = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=4, split='train')
-dataloader_train = DataLoader(dataset_train, batch_size=8, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
-data0 = dataset_train[0]
+from training.args import parse_arguments
+from training.plots import plot_metrics
 
-dataset_val = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=4, split='test')
-dataloader_val = DataLoader(dataset_val, batch_size=8, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
+# dataset_train = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=4, split='train')
+# dataloader_train = DataLoader(dataset_train, batch_size=8, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
+# data0 = dataset_train[0]
+
+# dataset_val = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=4, split='test')
+# dataloader_val = DataLoader(dataset_val, batch_size=8, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
 
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 torch.autograd.set_detect_anomaly(True)
-
-ALPHA_REF = 2.0
-ALPHA_TARGET_CLASS = 5.0
-ALPHA_OBJECT_CLASS = 1.0
-# ALPHA_OFFSET = 0.01
 
 def train_epoch(model, dataloader):
     known_classes = list(model.known_classes.keys())
@@ -34,6 +32,9 @@ def train_epoch(model, dataloader):
     epoch_acc_offset = []
 
     for i_batch, batch in enumerate(dataloader):
+        if args.max_batches is not None and i_batch >= args.max_batches:
+            break
+
         optimizer.zero_grad()
         model_output = model(batch['objects_classes'], batch['objects_positions'], batch['text_descriptions']) #[B, num_obj]
 
@@ -87,7 +88,6 @@ def train_epoch(model, dataloader):
         optimizer.step()
 
         epoch_losses.append(loss.item())
-        break
 
     return np.mean(epoch_losses), np.mean(epoch_acc_ref), np.mean(epoch_acc_tgtclass), np.mean(epoch_acc_objclass), np.mean(epoch_acc_offset)                    
 
@@ -131,142 +131,95 @@ def val_epoch(model, dataloader):
 
     return np.mean(epoch_acc_ref), np.mean(epoch_acc_tgtclass), np.mean(epoch_acc_objclass), np.mean(epoch_acc_offset)
 
-#learning_rates = np.logspace(-2.5,-4,5)#[3:]
-learning_rates = np.logspace(-2,-4,5)
+if __name__ == "__main__":
+    args = parse_arguments()
+    print(args, '\n')
 
-dict_loss = {lr: [] for lr in learning_rates}
-dict_acc_ref = {lr: [] for lr in learning_rates}
-dict_acc_tgtclass = {lr: [] for lr in learning_rates}
-dict_acc_objclass = {lr: [] for lr in learning_rates}
-dict_acc_offset = {lr: [] for lr in learning_rates}
+    '''
+    Create data loaders
+    '''
+    dataset_train = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=args.num_distractors, split='train')
+    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
+    data0 = dataset_train[0]
+    batch = next(iter(dataloader_train))
 
-dict_acc_ref_val = {lr: [] for lr in learning_rates}
-dict_acc_tgtclass_val = {lr: [] for lr in learning_rates}
-dict_acc_objclass_val = {lr: [] for lr in learning_rates}
-dict_acc_offset_val = {lr: [] for lr in learning_rates}
+    dataset_val = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=args.num_distractors, split='test')
+    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
 
-for lr in learning_rates:
-    model = DGMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), embedding_dim=128, num_layers=3, k=10, use_residual=True)
-    model = model.cuda()
+    DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    torch.autograd.set_detect_anomaly(True)    
 
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    criterion_ref_weights = torch.ones(len(data0['objects_classes']), dtype=torch.float, device=DEVICE) #Balance the weight of one ref-target vs. #mentioned + #distractor -1 other objects
-    criterion_ref_weights[0] = len(data0['objects_classes'])-1
-    criterion_ref = nn.BCEWithLogitsLoss(weight=criterion_ref_weights) # OPTION: weights?
-    criterion_target_class = nn.CrossEntropyLoss(weight=torch.tensor([1,1,1,1,1,1], dtype=torch.float, device=DEVICE)) # OPTION: weights?
-    criterion_object_class = nn.CrossEntropyLoss()
-    criterion_offset = nn.MSELoss()
+    ALPHA_REF = args.alpha_obj_ref
+    ALPHA_TARGET_CLASS = args.alpha_target_class
+    ALPHA_OBJECT_CLASS = args.alpha_obj_class
+    ALPHA_OFFSET = args.alpha_offset    
 
-    loss_key = lr   
+    '''
+    Start training
+    '''    
+    learning_rates = np.logspace(-3,-4.5,5)
 
-    for epoch in range(32):
-        print(f'\r lr {lr:0.6} epoch {epoch}', end='')
+    dict_loss = {lr: [] for lr in learning_rates}
+    dict_acc_ref = {lr: [] for lr in learning_rates}
+    dict_acc_tgtclass = {lr: [] for lr in learning_rates}
+    dict_acc_objclass = {lr: [] for lr in learning_rates}
+    dict_acc_offset = {lr: [] for lr in learning_rates}
 
-        loss, acc_ref, acc_tgtclass, acc_objclass, acc_offset = train_epoch(model, dataloader_train)
-        dict_loss[loss_key].append(loss)
-        dict_acc_ref[loss_key].append(acc_ref)
-        dict_acc_tgtclass[loss_key].append(acc_tgtclass)
-        dict_acc_objclass[loss_key].append(acc_objclass)     
-        dict_acc_offset[loss_key].append(acc_offset)
+    dict_acc_ref_val = {lr: [] for lr in learning_rates}
+    dict_acc_tgtclass_val = {lr: [] for lr in learning_rates}
+    dict_acc_objclass_val = {lr: [] for lr in learning_rates}
+    dict_acc_offset_val = {lr: [] for lr in learning_rates}
 
-        acc_ref, acc_tgtclass, acc_objclass, acc_offset = val_epoch(model, dataloader_val)
-        dict_acc_ref_val[loss_key].append(acc_ref)
-        dict_acc_tgtclass_val[loss_key].append(acc_tgtclass)
-        dict_acc_objclass_val[loss_key].append(acc_objclass)      
-        dict_acc_offset_val[loss_key].append(acc_offset)  
+    for lr in learning_rates:
+        model = DGMatch(dataset_train.get_known_classes(), 
+                        dataset_train.get_known_words(), 
+                        embed_dim=args.embed_dim, 
+                        k=args.k, 
+                        use_layers=args.use_layers)
 
-    print()
+        model = model.cuda()
 
-'''
-Train plots
-'''
-fig = plt.figure(1)
-fig.set_size_inches(10,10)
-plt.subplot(3,2,1)
-for k in dict_loss.keys():
-    l=dict_loss[k]
-    line, = plt.plot(l)
-    line.set_label(f'{k:0.6}')
-plt.title('Losses')
-plt.gca().set_ylim(bottom=0.0) #Set the bottom to 0.0
-plt.legend()
+        optimizer = optim.Adam(model.parameters(), lr=lr)
+        criterion_ref_weights = torch.ones(len(data0['objects_classes']), dtype=torch.float, device=DEVICE) #Balance the weight of one ref-target vs. #mentioned + #distractor -1 other objects
+        criterion_ref_weights[0] = float(len(data0['objects_classes']) - 1) / 2
+        criterion_ref = nn.BCEWithLogitsLoss(weight=criterion_ref_weights) # OPTION: weights?
+        criterion_target_class = nn.CrossEntropyLoss(weight=torch.tensor([1,1,1,1,1,1], dtype=torch.float, device=DEVICE)) # OPTION: weights?
+        criterion_object_class = nn.CrossEntropyLoss()
+        criterion_offset = nn.MSELoss()
 
-plt.subplot(3,2,2)
-for k in dict_acc_ref.keys():
-    l=dict_acc_ref[k]
-    line, = plt.plot(l)
-    line.set_label(f'{k:0.6}')
-plt.title('Ref-Accuracy')
-plt.gca().set_ylim(bottom=0.0) #Set the bottom to 0.0
-plt.legend()
+        loss_key = lr   
 
-plt.subplot(3,2,3)
-for k in dict_acc_tgtclass.keys():
-    l=dict_acc_tgtclass[k]
-    line, = plt.plot(l)
-    line.set_label(f'{k:0.6}')
-plt.title('Targetclass-Accuracy')
-plt.gca().set_ylim(bottom=0.0) #Set the bottom to 0.0
-plt.legend()
+        for epoch in range(24):
+            print(f'\r lr {lr:0.6} epoch {epoch}', end='')
 
-plt.subplot(3,2,4)
-for k in dict_acc_objclass.keys():
-    l=dict_acc_objclass[k]
-    line, = plt.plot(l)
-    line.set_label(f'{k:0.6}')
-plt.title('Objectclass-Accuracy')
-plt.gca().set_ylim(bottom=0.0) #Set the bottom to 0.0
-plt.legend()
+            loss, acc_ref, acc_tgtclass, acc_objclass, acc_offset = train_epoch(model, dataloader_train)
+            dict_loss[loss_key].append(loss)
+            dict_acc_ref[loss_key].append(acc_ref)
+            dict_acc_tgtclass[loss_key].append(acc_tgtclass)
+            dict_acc_objclass[loss_key].append(acc_objclass)     
+            dict_acc_offset[loss_key].append(acc_offset)
 
-plt.subplot(3,2,5)
-for k in dict_acc_offset.keys():
-    l=dict_acc_offset[k]
-    line, = plt.plot(l)
-    line.set_label(f'{k:0.6}')
-plt.title('Offset norm err')
-plt.gca().set_ylim(bottom=0.0) #Set the bottom to 0.0
-plt.legend()
+            acc_ref, acc_tgtclass, acc_objclass, acc_offset = val_epoch(model, dataloader_val)
+            dict_acc_ref_val[loss_key].append(acc_ref)
+            dict_acc_tgtclass_val[loss_key].append(acc_tgtclass)
+            dict_acc_objclass_val[loss_key].append(acc_objclass)      
+            dict_acc_offset_val[loss_key].append(acc_offset)  
 
-'''
-Val plots
-'''
-fig = plt.figure(2)
-fig.set_size_inches(10,10)
-plt.subplot(3,2,2)
-for k in dict_acc_ref_val.keys():
-    l=dict_acc_ref_val[k]
-    line, = plt.plot(l)
-    line.set_label(f'{k:0.6}')
-plt.title('Ref-Accuracy')
-plt.gca().set_ylim(bottom=0.0) #Set the bottom to 0.0
-plt.legend()
+        print(f'\n')
 
-plt.subplot(3,2,3)
-for k in dict_acc_tgtclass_val.keys():
-    l=dict_acc_tgtclass_val[k]
-    line, = plt.plot(l)
-    line.set_label(f'{k:0.6}')
-plt.title('Targetclass-Accuracy')
-plt.gca().set_ylim(bottom=0.0) #Set the bottom to 0.0
-plt.legend()
-
-plt.subplot(3,2,4)
-for k in dict_acc_objclass_val.keys():
-    l=dict_acc_objclass_val[k]
-    line, = plt.plot(l)
-    line.set_label(f'{k:0.6}')
-plt.title('Objectclass-Accuracy')
-plt.gca().set_ylim(bottom=0.0) #Set the bottom to 0.0
-plt.legend()
-
-plt.subplot(3,2,5)
-for k in dict_acc_offset_val.keys():
-    l=dict_acc_offset_val[k]
-    line, = plt.plot(l)
-    line.set_label(f'{k:0.6}')
-plt.title('Offset norm err')
-plt.gca().set_ylim(bottom=0.0) #Set the bottom to 0.0
-plt.legend()
-
-
-plt.show()
+    '''
+    Save plots
+    '''
+    plot_name = f'dgcnn_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_l{args.use_layers}_k{args.k}_gamma{args.lr_gamma}.png'
+    metrics = {
+        'train-loss': dict_loss,
+        'train-acc-ref': dict_acc_ref,
+        'train-acc-targetclass': dict_acc_tgtclass,
+        'train-acc-objclass': dict_acc_objclass,
+        'train-acc-offset': dict_acc_offset,
+        'val-acc-ref': dict_acc_ref_val,
+        'val-acc-targetclass': dict_acc_tgtclass_val,
+        'val-acc-objclass': dict_acc_objclass_val,
+        'val-acc-offset': dict_acc_offset_val,
+    }
+    plot_metrics(metrics, './plots/'+plot_name)
