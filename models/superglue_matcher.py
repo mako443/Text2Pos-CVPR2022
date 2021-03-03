@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
+import time
 import numpy as np
 import os
 import pickle
@@ -15,6 +16,7 @@ from models.superglue import SuperGlue
 TODO:
 - optimize SuperGlue params
 - CARE: norm embeddings before SuperGlue
+- implement batching
 '''
 
 class SuperGlueMatch(torch.nn.Module):

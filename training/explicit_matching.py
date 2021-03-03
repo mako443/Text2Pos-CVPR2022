@@ -64,6 +64,7 @@ if __name__ == "__main__":
     # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
 
     DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    print('device:', DEVICE)
     torch.autograd.set_detect_anomaly(True)    
 
     '''

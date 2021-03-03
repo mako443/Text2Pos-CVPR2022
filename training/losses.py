@@ -20,17 +20,25 @@ class MatchingLoss(nn.Module):
 
         return torch.mean(torch.stack(batch_losses))
 
-def calc_recall_precision(gt_matches, matches0, matches1):
-    assert gt_matches.shape[1]==2 and len(gt_matches.shape)==2
-    gt_matches = gt_matches.tolist()
+def calc_recall_precision(batch_gt_matches, batch_matches0, batch_matches1):
+    assert len(batch_gt_matches) == len(batch_matches0) == len(batch_matches1)
+    all_recalls = []
+    all_precisions = []
 
-    recall = []
-    for i,j in gt_matches:
-        recall.append(matches0[i] == j or matches1[j] == i)
+    for idx in range(len(batch_gt_matches)):
+        gt_matches, matches0, matches1 = batch_gt_matches[idx], batch_matches0[idx], batch_matches1[idx]
+        gt_matches = gt_matches.tolist()
 
-    precision = []
-    for i,j in enumerate(matches0):
-        if j>= 0:
-            precision.append([i, j] in gt_matches) #CARE: this only works as expected after tolist()
+        recall = []
+        for i,j in gt_matches:
+            recall.append(matches0[i] == j or matches1[j] == i)
 
-    return np.mean(recall), np.mean(precision)
+        precision = []
+        for i,j in enumerate(matches0):
+            if j>= 0:
+                precision.append([i, j] in gt_matches) #CARE: this only works as expected after tolist()
+
+        all_recalls.append(np.mean(recall))
+        all_precisions.append(np.mean(precision))
+
+    return np.mean(all_recalls), np.mean(all_precisions)
