@@ -4,7 +4,7 @@ import os.path as osp
 import pickle
 import cv2
 
-from datapreparation.imports import Object3D, ViewObject, Pose, DescriptionObject, DIRECTIONS, DIRECTIONS_COMPASS, IMAGE_WIDHT, calc_angle_diff
+from datapreparation.imports import Object3D, ViewObject, Pose, DescriptionObject, DIRECTIONS, DIRECTIONS_COMPASS, IMAGE_WIDHT, calc_angle_diff, CellObject, COLORS, COLOR_NAMES
 from datapreparation.drawing import draw_objects_poses, draw_objects_poses_viewObjects
 
 '''
@@ -119,7 +119,46 @@ def describe_object(scene_objects, idx, max_mentioned_objects=5, max_dist=25):
 
     return description, text, hints
 
+def describe_cell(scene_objects, cell_bbox, min_fraction=0.33, min_objects=2):
+    cell_size = cell_bbox[2] - cell_bbox[0]
+    DIRECTIONS = np.array([ [0, 1],
+                            [0,-1],
+                            [ 1, 0],
+                            [-1, 0],
+                            [ 0, 0],]) * cell_size/3
+    
+    DIRECTION_NAMES = ['north', 'south', 'east', 'west', 'center']
 
-#Graph with objects and attributes as nodes, pairwise bidrectionals connections between all objects to facilitate learning
-def get_graph_description():
-    pass
+    cell_mean = np.hstack((0.5*(cell_bbox[0:2] + cell_bbox[2:4]), 0))
+    cell_objects = []
+    for obj in scene_objects:
+        mask = np.bitwise_and.reduce((  obj.points_w[:, 0] >= cell_bbox[0], 
+                                        obj.points_w[:, 1] >= cell_bbox[1],
+                                        obj.points_w[:, 0] <= cell_bbox[2],
+                                        obj.points_w[:, 1] <= cell_bbox[3]))
+        points_in_cell = obj.points_w[mask]
+        if len(points_in_cell) / len(obj.points_w) >= min_fraction:
+            points_in_cell_relative = points_in_cell - cell_mean
+            cell_object = CellObject(obj.points_w, points_in_cell_relative, obj.label, obj.id, obj.color, obj.scene_name)
+            cell_objects.append(cell_object)
+
+    if len(cell_objects) < min_objects:
+        return None
+
+    #Build description
+    text = ""
+    for i, obj in enumerate(cell_objects):
+        color_dists = np.linalg.norm(COLORS - obj.color, axis=1)
+        color_text = COLOR_NAMES[np.argmin(color_dists)]
+
+        direction_diffs = np.linalg.norm(obj.center_in_cell[0:2] - DIRECTIONS, axis=1)
+        direction = DIRECTION_NAMES[np.argmin(direction_diffs)]
+
+        if i==0:
+            text += "In this cell there is a "
+        else:
+            text += " and a "
+        text += f'{color_text} {obj.label} in the {direction}'
+    text += "."
+
+    return {'objects': cell_objects, 'bbox': cell_bbox, 'description': text}

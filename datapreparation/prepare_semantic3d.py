@@ -6,11 +6,12 @@ import cv2
 
 from datapreparation.imports import Object3D, ViewObject, Pose, DescriptionObject, calc_angle_diff
 from datapreparation.drawing import draw_objects_poses, draw_objects_poses_viewObjects, draw_objects_poses_descriptions, draw_viewobjects, draw_objects_objectDescription, combine_images
-from datapreparation.descriptions import describe_pose, get_text_description, describe_object
+from datapreparation.drawing import draw_cells
+from datapreparation.descriptions import describe_pose, get_text_description, describe_object, describe_cell
 
 import sys
-# sys.path.append('/home/imanox/Documents/Text2Image/Semantic3D-Net')
-sys.path.append('/usr/stud/kolmet/thesis/semantic3d')
+sys.path.append('/home/imanox/Documents/Text2Image/Semantic3D-Net')
+# sys.path.append('/usr/stud/kolmet/thesis/semantic3d')
 from semantic.imports import ClusteredObject as ClusteredObject_S3D, ViewObject as ViewObject_S3D, COLORS, COLOR_NAMES
 from graphics.imports import CLASSES_COLORS, Pose as Pose_S3D
 
@@ -60,6 +61,26 @@ def describe_objects(scene_objects):
 
     return all_descriptions, all_texts, all_hints
 
+def describe_cells(scene_objects, cell_size=25):
+    object_bboxes = np.array([obj.aligned_bbox for obj in scene_objects]) #[x, y,z , wx, wh, wz]
+    object_mins = object_bboxes[:, 0:3]
+    object_maxs = object_bboxes[:, 0:3] + object_bboxes[:, 3:6]
+    scene_min, scene_max = np.min(object_mins, axis=0), np.max(object_maxs, axis=0)
+    
+    cells = []
+    best_cell = {'objects': []}
+    for cell_x in range(int(scene_min[0]), int(scene_max[0]), cell_size):
+        for cell_y in range(int(scene_min[1]), int(scene_max[1]), cell_size):
+            cell_bbox = np.array([cell_x, cell_y, cell_x + cell_size, cell_y + cell_size])
+            cell_data = describe_cell(scene_objects, cell_bbox)
+            
+            if cell_data is not None:
+                cells.append(cell_data)
+                if len(cell_data['objects']) > len(best_cell['objects']):
+                    best_cell = cell_data
+
+    return cells, best_cell
+
 if __name__ == "__main__":
     path_pcd = 'data/numpy_merged/'
     path_images = 'data/pointcloud_images_o3d_merged_occ/'
@@ -67,9 +88,11 @@ if __name__ == "__main__":
     objects, poses, view_objects = convert_s3d_data(path_pcd, path_images, 'train', scene_name)
     output_dir = 'data/semantic3d'
 
-    #Remove stuff classes (at least for now)
+    #Remove stuff classes (at least for now) and retain only the k largest objects of each class
     objects = [o for o in objects if o.label in ['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars']]
     objects, view_objects = reduce_objects(objects, view_objects)
+
+    cells, best_cell = describe_cells(objects)
 
     descriptions, texts, hints = describe_objects(objects)
 
@@ -77,13 +100,20 @@ if __name__ == "__main__":
     pickle.dump(descriptions, open(osp.join(output_dir,'train', scene_name, 'list_object_descriptions.pkl'), 'wb'))
     pickle.dump(texts,        open(osp.join(output_dir,'train', scene_name, 'text_object_descriptions.pkl'), 'wb'))
     pickle.dump(hints,        open(osp.join(output_dir,'train', scene_name, 'hint_object_descriptions.pkl'), 'wb'))
-    print(f'Saved {len(objects)} objects, {len(descriptions)} descriptions and {len(texts)} texts to {osp.join(output_dir,"train", scene_name)}')
+    pickle.dump(cells,        open(osp.join(output_dir,'train', scene_name, 'cell_object_descriptions.pkl'), 'wb'))
+    print(f'Saved {len(objects)} objects, {len(descriptions)} descriptions, {len(texts)} texts and {len(cells)} cells with {mean_cell_objects:0.2f} avg. objects to {osp.join(output_dir,"train", scene_name)}')
+    print()
 
     idx = np.random.randint(len(descriptions))
     print(texts[idx])
     print(hints[idx])
     img = cv2.flip(draw_objects_objectDescription(objects, descriptions[idx]), 0)
     cv2.imwrite("object_description.jpg", img)
+
+    mean_cell_objects = np.mean([len(cell['objects']) for cell in cells])
+    img = cv2.flip(draw_cells(objects, cells), 0)
+    print(best_cell['description'], '\n')
+    cv2.imwrite("cells.png", img)    
 
     quit()
 

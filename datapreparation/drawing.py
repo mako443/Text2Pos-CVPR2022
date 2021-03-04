@@ -87,6 +87,26 @@ def draw_objects_objectDescription(objects, description_list):
 
     return img
 
+def draw_cells(objects, cells):
+    scale, min_x, max_x, min_y, max_y = get_scale(objects)
+    img = draw_objects_poses(objects, [])
+
+    for cell in cells:
+        cell_bbox = cell['bbox']
+        cell_mean = 0.5*(cell_bbox[0:2] + cell_bbox[2:4])
+
+        bbox = np.int0((cell['bbox'] - np.array((min_x, min_y, min_x, min_y))) * scale)
+        cv2.rectangle(img, tuple(bbox[0:2]), tuple(bbox[2:4]), (255,255,255), thickness=2)
+
+        for obj in cell['objects']:
+            center = obj.center_in_cell[0:2] + cell_mean
+            center = np.int0((center - np.array((min_x, min_y))) * scale)
+            c = CLASSES_COLORS[obj.label]
+            cv2.circle(img, tuple(center), 3, (c[2], c[1], c[0]), thickness=2)
+
+    return img
+
+
 def draw_viewobjects(img, view_objects):
     for v in view_objects:
         box = np.int0(cv2.boxPoints(v.rect_i))
