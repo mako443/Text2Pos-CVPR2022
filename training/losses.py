@@ -38,7 +38,7 @@ def calc_recall_precision(batch_gt_matches, batch_matches0, batch_matches1):
             if j>= 0:
                 precision.append([i, j] in gt_matches) #CARE: this only works as expected after tolist()
 
-        all_recalls.append(np.mean(recall))
-        all_precisions.append(np.mean(precision))
+        recall = np.mean(recall) if len(recall)>0 else 0.0
+        precision = np.mean(precision) if len(precision)>0 else 0.0
 
     return np.mean(all_recalls), np.mean(all_precisions)

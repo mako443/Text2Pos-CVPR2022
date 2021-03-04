@@ -59,14 +59,18 @@ class Semantic3dObjectReferanceDataset(Dataset):
         else:
             distractor_objects = []
 
+        #Gather the classes, positions and colors (colors ∈ [0, 1])
         mentioned_objects_classes = [obj.label for obj in mentioned_objects]
         mentioned_objects_positions = np.array([obj.center[0:2] for obj in mentioned_objects])
+        mentioned_objects_colors = np.array([obj.color for obj in mentioned_objects])
         if len(distractor_objects) > 0:
             distractor_objects_classes = [obj.label for obj in distractor_objects]
             distractor_objects_positions = np.array([obj.center[0:2] for obj in distractor_objects])
+            distractor_objects_colors = np.array([obj.color for obj in distractor_objects])
         else:
             distractor_objects_classes = []
             distractor_objects_positions = np.array([]).reshape((0,2))
+            distractor_objects_colors = np.array([]).reshape((0,3))
 
         #Gather the offset vectors
         for obj in self.scene_objects:
@@ -96,6 +100,7 @@ class Semantic3dObjectReferanceDataset(Dataset):
             'target_idx': target_idx,
             'objects_classes': mentioned_objects_classes + distractor_objects_classes,
             'objects_positions': np.vstack((mentioned_objects_positions, distractor_objects_positions)),
+            'objects_colors': np.vstack((mentioned_objects_colors, distractor_objects_colors)),
             'text_descriptions': text_descr,
             'hint_descriptions': hint_descr,
             'target_classes': target_class,
