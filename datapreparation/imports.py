@@ -51,6 +51,27 @@ class Object3D:
         maxs = np.max(self.points_w, axis=0)
         return np.hstack((mins, maxs-mins))
 
+class CellObject:
+    def __init__(self, points_w, points_cell, label, id, color, scene_name):
+        self.points_w = points_w
+        self.points_cell = points_cell #Points that are in the cell, shifted by the cell-mean
+        self.label = label
+        self.id = id
+        self.color = color
+        self.scene_name = scene_name
+
+    @property
+    def center_in_cell(self):
+        return 0.5 * (np.min(self.points_cell, axis=0) + np.max(self.points_cell, axis=0))
+
+    #Aligned bbox of the (relative) points_cell
+    @property
+    def aligned_bbox_cell(self):
+        points = self.points_cell[:, 0:2]
+        rect = cv2.minAreaRect(points.astype(np.float32))
+        box = np.int0(cv2.boxPoints(rect))
+        return bbox
+
 
 class ViewObject:
     @classmethod
