@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
+import time
 import numpy as np
 import os
 import pickle
@@ -15,6 +16,7 @@ from models.superglue import SuperGlue
 TODO:
 - optimize SuperGlue params
 - CARE: norm embeddings before SuperGlue
+- implement batching
 '''
 
 class SuperGlueMatch(torch.nn.Module):
@@ -40,31 +42,34 @@ class SuperGlueMatch(torch.nn.Module):
 
     #Currently not batches!
     def forward(self, object_classes, object_positions, hints):
+        batch_size = len(object_classes)
         '''
         Encode the hints
         '''
-        hint_encodings = self.language_encoder(hints) # [num_hints, DIM]
+        hint_encodings = torch.stack([self.language_encoder(hint_sample) for hint_sample in hints]) # [B, num_hints, DIM]
 
         '''
         Encode the objects
         '''    
-        num_objects = len(object_classes)
-        class_indices = torch.zeros(num_objects, dtype=torch.long)
-        for j in range(num_objects):
-            class_indices[j] = self.known_classes.get(object_classes[j],0)
-        class_embeddings = self.class_embedding(class_indices.to(self.device)) # [num_obj, DIM]
+        num_objects = len(object_classes[0])
+        class_indices = torch.zeros((batch_size, num_objects), dtype=torch.long)
+        for i in range(batch_size):
+            for j in range(num_objects):
+                class_indices[i, j] = self.known_classes.get(object_classes[i][j],0)
+        class_embeddings = self.class_embedding(class_indices.to(self.device)) # [B, num_obj, DIM]
 
-        pos_embeddings = self.pos_embedding(torch.tensor(object_positions, dtype=torch.float, device=self.device)) # [num_obj, DIM]
+        pos_embeddings = self.pos_embedding(torch.tensor(object_positions, dtype=torch.float, device=self.device)) # [B, num_obj, DIM]
 
-        object_encodings = F.normalize(class_embeddings) + F.normalize(pos_embeddings) # [num_obj, DIM], normalize for equal magnitudes
-        object_encodings = F.normalize(object_encodings) #Normalize for stable matching
+        object_encodings = F.normalize(class_embeddings, dim=-1) + F.normalize(pos_embeddings, dim=-1) # [B, num_obj, DIM], normalize for equal magnitudes
+        object_encodings = F.normalize(object_encodings, dim=-1) # [B, num_obj, DIM] Normalize for stable matching
 
         '''
         Match object-encodings to hint-encodings
         '''
-        desc0 = object_encodings.transpose(0,1).unsqueeze(dim=0) #[1, DIM, num_obj]
-        desc1 = hint_encodings.transpose(0,1).unsqueeze(dim=0) #[1, DIM, num_hints]
+        desc0 = object_encodings.transpose(1, 2) #[B, DIM, num_obj]
+        desc1 = hint_encodings.transpose(1, 2) #[B, DIM, num_hints]
         
+        print(desc0.shape, desc1.shape)
         matcher_output = self.superglue(desc0, desc1)
 
         outputs = EasyDict()
@@ -80,7 +85,15 @@ class SuperGlueMatch(torch.nn.Module):
         return next(self.pos_embedding.parameters()).device       
 
 if __name__ == "__main__":
-    model = SuperGlueMatch(['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars'], 'a b c d e'.split(), 300)
+    model = SuperGlueMatch(['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars'], 'a b c d e'.split(), 300, num_layers=2, sinkhorn_iters=10)
 
-    out = model(['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars', 'xx'], np.random.rand(6,2), ['a b x d e', 'a b c x a c', 'a a'])
+    batch_size = 3
+    out = model([['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars', 'xx'] for _ in range(batch_size)], 
+                np.random.rand(batch_size, 6, 2), 
+                [['a b x d e', 'a b c x a c', 'a a'] for _ in range(batch_size)])
+
+    print('Done')
+
+            
+
 

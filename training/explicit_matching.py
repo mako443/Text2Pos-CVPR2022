@@ -51,6 +51,7 @@ if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
     assert args.batch_size == 1
+    quit()
     
     '''
     Create data loaders

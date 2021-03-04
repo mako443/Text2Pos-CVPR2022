@@ -11,6 +11,7 @@ def parse_arguments():
     parser.add_argument('--num_layers', type=int, default=3)
     parser.add_argument('--nhead', type=int, default=8)
     parser.add_argument('--dim_feedforward', type=int, default=2048)
+    parser.add_argument('--use_color', action='store_true')
     
     # DGCNN
     parser.add_argument('--use_layers', type=str, default='all')
