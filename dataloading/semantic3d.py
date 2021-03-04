@@ -147,9 +147,78 @@ class Semantic3dObjectReferanceDataset(Dataset):
             for hint in hints:
                 words.extend(hint.replace('.','').replace(',','').lower().split())
         return list(np.unique(words))
-        
+
+class Semantic3dCellRetrievalDataset(Dataset):
+    def __init__(self, path_numpy, path_scenes, mention_color=True, mention_position=True):       
+        self.path_numpy = path_numpy
+        self.path_scenes = path_scenes
+        self.mention_color = mention_color
+        self.mention_position = mention_position
+    
+        self.scene_name = 'sg27_station5_intensity_rgb'
+
+        #Load objects
+        self.scene_objects     = pickle.load(open(osp.join(self.path_scenes,'train',self.scene_name,'objects.pkl'), 'rb'))
+        self.cells = pickle.load(open(osp.join(self.path_scenes,'train',self.scene_name,'cell_object_descriptions.pkl'), 'rb'))
+
+        #Build descriptions (do it here to have known words available)
+        self.cell_texts = [self.build_description(cell) for cell in self.cells]
+
+    def __getitem__(self, idx):
+        cell = self.cells[idx]
+        bbox = cell['bbox']
+        cell_mean = 0.5*(bbox[0:2] + bbox[2:4])
+        cell_size = np.mean((bbox[2] - bbox[0], bbox[3] - bbox[1]))
+
+        cell_objects = cell['objects']
+    
+        description = self.cell_texts[idx]
+
+        return {'objects': cell_objects,
+                'description': description}
+
+    def build_description(self, cell):
+        cell_objects = cell['objects']
+        bbox = cell['bbox']
+        cell_mean = 0.5*(bbox[0:2] + bbox[2:4])
+        cell_size = np.mean((bbox[2] - bbox[0], bbox[3] - bbox[1]))
+
+        directions = np.array([ [0, 1],
+                                [0,-1],
+                                [ 1, 0],
+                                [-1, 0],
+                                [ 0, 0],]) * cell_size/3
+        direction_names = ['north', 'south', 'east', 'west', 'center']
+
+        text = ""
+        for i, obj in enumerate(cell_objects):
+            if i==0:
+                text += 'The cell has a '
+            else:
+                text += ' and a '
+
+            if self.mention_color:
+                text += f'{obj.color_text} '
+
+            text += f'{obj.label} '
+
+            if self.mention_position:
+                direction_diffs = np.linalg.norm(directions - obj.center_in_cell[0:2], axis=1)
+                direction = direction_names[np.argmin(direction_diffs)]
+                text += f'in the {direction}'
+        text += '.'
+
+        return text
+
+    def __len__(self):
+        return len(self.cell_descriptions)    
 
 if __name__ == "__main__":
+    dataset = Semantic3dCellRetrievalDataset('./data/numpy_merged/', './data/semantic3d')
+    data = dataset[0]
+
+    quit()
+
     dataset = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=2)
     dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
     data = dataset[0]

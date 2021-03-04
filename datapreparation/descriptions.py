@@ -145,20 +145,20 @@ def describe_cell(scene_objects, cell_bbox, min_fraction=0.33, min_objects=2):
     if len(cell_objects) < min_objects:
         return None
 
-    #Build description
-    text = ""
-    for i, obj in enumerate(cell_objects):
-        color_dists = np.linalg.norm(COLORS - obj.color, axis=1)
-        color_text = COLOR_NAMES[np.argmin(color_dists)]
+    # #Build description
+    # text = ""
+    # for i, obj in enumerate(cell_objects):
+    #     color_dists = np.linalg.norm(COLORS - obj.color, axis=1)
+    #     color_text = COLOR_NAMES[np.argmin(color_dists)]
 
-        direction_diffs = np.linalg.norm(obj.center_in_cell[0:2] - DIRECTIONS, axis=1)
-        direction = DIRECTION_NAMES[np.argmin(direction_diffs)]
+    #     direction_diffs = np.linalg.norm(obj.center_in_cell[0:2] - DIRECTIONS, axis=1)
+    #     direction = DIRECTION_NAMES[np.argmin(direction_diffs)]
 
-        if i==0:
-            text += "In this cell there is a "
-        else:
-            text += " and a "
-        text += f'{color_text} {obj.label} in the {direction}'
-    text += "."
+    #     if i==0:
+    #         text += "In this cell there is a "
+    #     else:
+    #         text += " and a "
+    #     text += f'{color_text} {obj.label} in the {direction}'
+    # text += "."
 
-    return {'objects': cell_objects, 'bbox': cell_bbox, 'description': text}
+    return {'objects': cell_objects, 'bbox': cell_bbox}

@@ -93,6 +93,7 @@ if __name__ == "__main__":
     objects, view_objects = reduce_objects(objects, view_objects)
 
     cells, best_cell = describe_cells(objects)
+    mean_cell_objects = np.mean([len(cell['objects']) for cell in cells])
 
     descriptions, texts, hints = describe_objects(objects)
 
@@ -110,9 +111,7 @@ if __name__ == "__main__":
     img = cv2.flip(draw_objects_objectDescription(objects, descriptions[idx]), 0)
     cv2.imwrite("object_description.jpg", img)
 
-    mean_cell_objects = np.mean([len(cell['objects']) for cell in cells])
     img = cv2.flip(draw_cells(objects, cells), 0)
-    print(best_cell['description'], '\n')
     cv2.imwrite("cells.png", img)    
 
     quit()

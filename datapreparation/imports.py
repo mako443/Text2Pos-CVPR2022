@@ -52,13 +52,16 @@ class Object3D:
         return np.hstack((mins, maxs-mins))
 
 class CellObject:
-    def __init__(self, points_w, points_cell, label, id, color, scene_name):
+    def __init__(self, points_w, points_cell, label, id, color_rgb, scene_name):
         self.points_w = points_w
         self.points_cell = points_cell #Points that are in the cell, shifted by the cell-mean
         self.label = label
         self.id = id
-        self.color = color
+        self.color_rgb = color_rgb
         self.scene_name = scene_name
+
+        color_dists = np.linalg.norm(COLORS - color_rgb, axis=1)
+        self.color_text = COLOR_NAMES[np.argmin(color_dists)]
 
     @property
     def center_in_cell(self):
