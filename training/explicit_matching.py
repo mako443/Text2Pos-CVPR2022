@@ -103,19 +103,20 @@ if __name__ == "__main__":
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)
 
         for epoch in range(args.epochs):
-            loss, recall, precision, epoch_time = train_epoch(model, dataloader_train, args)
+            loss, train_recall, train_precision, epoch_time = train_epoch(model, dataloader_train, args)
             dict_loss[lr].append(loss)
-            dict_recall[lr].append(recall)
-            dict_precision[lr].append(precision)
+            dict_recall[lr].append(train_recall)
+            dict_precision[lr].append(train_precision)
 
-            recall, precision = val_epoch(model, dataloader_val, args)
-            dict_val_recall[lr].append(recall)
-            dict_val_precision[lr].append(precision)            
+            val_recall, val_precision = val_epoch(model, dataloader_val, args)
+            dict_val_recall[lr].append(val_recall)
+            dict_val_precision[lr].append(val_precision)            
 
             scheduler.step()
 
-            print(f'\t lr {lr:0.6} epoch {epoch} loss {loss:0.3f} recall {recall:0.2f} precision {precision:0.2f} time {epoch_time:0.3f}')
+            print(f'\t lr {lr:0.6} epoch {epoch} loss {loss:0.3f} t-recall {train_recall:0.2f} t-precision {train_precision:0.2f} v-recall {val_recall:0.2f} v-precision {val_precision:0.2f} time {epoch_time:0.3f}')
         print()
+        break
 
     '''
     Save plots
