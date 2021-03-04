@@ -116,7 +116,6 @@ if __name__ == "__main__":
 
             print(f'\t lr {lr:0.6} epoch {epoch} loss {loss:0.3f} t-recall {train_recall:0.2f} t-precision {train_precision:0.2f} v-recall {val_recall:0.2f} v-precision {val_precision:0.2f} time {epoch_time:0.3f}')
         print()
-        break
 
     '''
     Save plots
