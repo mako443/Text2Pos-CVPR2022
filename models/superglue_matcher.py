@@ -29,6 +29,7 @@ class SuperGlueMatch(torch.nn.Module):
         self.class_embedding = nn.Embedding(len(self.known_classes), embed_dim, padding_idx=0)
 
         self.pos_embedding = get_mlp([2,128, embed_dim]) #OPTION: pos_embedding layers
+        self.color_embedding = get_mlp([3,128, embed_dim]) #OPTION: color_embedding layers
 
         self.language_encoder = LanguageEncoder(known_words, embed_dim, bi_dir=True)  
 
@@ -41,7 +42,7 @@ class SuperGlueMatch(torch.nn.Module):
         self.superglue = SuperGlue(config)
 
     #Currently not batches!
-    def forward(self, object_classes, object_positions, hints):
+    def forward(self, object_classes, object_positions, hints, object_colors=None):
         batch_size = len(object_classes)
         '''
         Encode the hints
@@ -59,8 +60,12 @@ class SuperGlueMatch(torch.nn.Module):
         class_embeddings = self.class_embedding(class_indices.to(self.device)) # [B, num_obj, DIM]
 
         pos_embeddings = self.pos_embedding(torch.tensor(object_positions, dtype=torch.float, device=self.device)) # [B, num_obj, DIM]
-
         object_encodings = F.normalize(class_embeddings, dim=-1) + F.normalize(pos_embeddings, dim=-1) # [B, num_obj, DIM], normalize for equal magnitudes
+        
+        if object_colors is not None:
+            color_embeddings = self.color_embedding(torch.tensor(object_colors, dtype=torch.float, device=self.device)) # [B, num_obj, DIM]
+            object_encodings += F.normalize(color_embeddings, dim=-1)
+
         object_encodings = F.normalize(object_encodings, dim=-1) # [B, num_obj, DIM] Normalize for stable matching
 
         '''
@@ -69,7 +74,6 @@ class SuperGlueMatch(torch.nn.Module):
         desc0 = object_encodings.transpose(1, 2) #[B, DIM, num_obj]
         desc1 = hint_encodings.transpose(1, 2) #[B, DIM, num_hints]
         
-        print(desc0.shape, desc1.shape)
         matcher_output = self.superglue(desc0, desc1)
 
         outputs = EasyDict()

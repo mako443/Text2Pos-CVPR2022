@@ -23,7 +23,6 @@ TODO:
 - which aggregation?
 - BatchNorm in MLP? (reshape to B*num_obj)
 '''
-
 class DGMatch(torch.nn.Module):
     def __init__(self, known_classes, known_words, embed_dim, k, use_layers):
         super(DGMatch, self).__init__()
