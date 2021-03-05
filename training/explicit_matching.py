@@ -117,7 +117,7 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'matching_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_c{args.use_color}_g{args.lr_gamma}.png'
+    plot_name = f'textNorm_matching_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_c{args.use_color}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-recall': dict_recall,

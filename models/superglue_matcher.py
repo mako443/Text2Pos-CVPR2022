@@ -38,13 +38,14 @@ class SuperGlueMatch(torch.nn.Module):
         }
         self.superglue = SuperGlue(config)
 
-    #Currently not batches!
     def forward(self, object_classes, object_positions, hints, object_colors=None):
         batch_size = len(object_classes)
         '''
         Encode the hints
         '''
         hint_encodings = torch.stack([self.language_encoder(hint_sample) for hint_sample in hints]) # [B, num_hints, DIM]
+
+        hint_encodings = F.normalize(hint_encodings, dim=-1) #Norming those too
 
         '''
         Encode the objects
