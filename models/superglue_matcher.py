@@ -14,9 +14,6 @@ from models.superglue import SuperGlue
 
 '''
 TODO:
-- optimize SuperGlue params
-- CARE: norm embeddings before SuperGlue
-- implement batching
 '''
 
 class SuperGlueMatch(torch.nn.Module):

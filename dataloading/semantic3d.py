@@ -149,11 +149,10 @@ class Semantic3dObjectReferanceDataset(Dataset):
         return list(np.unique(words))
 
 class Semantic3dCellRetrievalDataset(Dataset):
-    def __init__(self, path_numpy, path_scenes, mention_color=True, mention_position=True):       
+    def __init__(self, path_numpy, path_scenes, mention_features):       
         self.path_numpy = path_numpy
         self.path_scenes = path_scenes
-        self.mention_color = mention_color
-        self.mention_position = mention_position
+        self.mention_features = mention_features
     
         self.scene_name = 'sg27_station5_intensity_rgb'
 
@@ -163,6 +162,8 @@ class Semantic3dCellRetrievalDataset(Dataset):
 
         #Build descriptions (do it here to have known words available)
         self.cell_texts = [self.build_description(cell) for cell in self.cells]
+        mean_obj = np.mean([len(cell['objects']) for cell in self.cells])
+        print(f'Semantic3dCellRetrievalDataset: {len(self)} cells with {mean_obj: 0.2f} objects avg, features: {mention_features}')
 
     def __getitem__(self, idx):
         cell = self.cells[idx]
@@ -174,8 +175,13 @@ class Semantic3dCellRetrievalDataset(Dataset):
     
         description = self.cell_texts[idx]
 
+        #Select a cell index for negative objects in Triplet-training
+        negative_indices = [i for i in range(len(self)) if i!=idx and len(self.cell_texts)!=len(description)]
+        negative_objects = self.cells[np.random.choice(negative_indices)]['objects']
+
         return {'objects': cell_objects,
-                'description': description}
+                'negative_objects': negative_objects,
+                'descriptions': description}
 
     def build_description(self, cell):
         cell_objects = cell['objects']
@@ -197,12 +203,13 @@ class Semantic3dCellRetrievalDataset(Dataset):
             else:
                 text += ' and a '
 
-            if self.mention_color:
+            if 'color' in self.mention_features:
                 text += f'{obj.color_text} '
 
-            text += f'{obj.label} '
+            if 'class' in self.mention_features:
+                text += f'{obj.label} '
 
-            if self.mention_position:
+            if 'position' in self.mention_features:
                 direction_diffs = np.linalg.norm(directions - obj.center_in_cell[0:2], axis=1)
                 direction = direction_names[np.argmin(direction_diffs)]
                 text += f'in the {direction}'
@@ -211,11 +218,32 @@ class Semantic3dCellRetrievalDataset(Dataset):
         return text
 
     def __len__(self):
-        return len(self.cell_descriptions)    
+        return len(self.cells)    
+    
+    def get_known_classes(self):
+        classes = []
+        for cell in self.cells:
+            classes.extend([obj.label for obj in cell['objects']])
+        return list(np.unique(classes))        
+
+    def get_known_words(self):
+        words = []
+        for d in self.cell_texts:
+            words.extend(d.replace('.','').replace(',','').lower().split())
+        return list(np.unique(words))
+
+    def collate_fn(batch):
+        data = {}
+        for k, v in batch[0].items():
+            data[k] = [batch[i][k] for i in range(len(batch))]
+        return data
+
 
 if __name__ == "__main__":
-    dataset = Semantic3dCellRetrievalDataset('./data/numpy_merged/', './data/semantic3d')
+    dataset = Semantic3dCellRetrievalDataset('./data/numpy_merged/', './data/semantic3d', ['class', 'color', 'position'])
+    dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dCellRetrievalDataset.collate_fn)
     data = dataset[0]
+    batch = next(iter(dataloader))
 
     quit()
 

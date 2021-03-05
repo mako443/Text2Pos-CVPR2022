@@ -17,9 +17,6 @@ from training.losses import MatchingLoss, calc_recall_precision
 '''
 TODO:
 - if not working: mock-train texts to texts (english - german)
-- try to encode object colors
-- care: what about ambivalent matches?
-- batched training good/bad?
 - regress offsets: classify, discretized vector, actual vector
 '''
 
