@@ -30,9 +30,15 @@ def convert_s3d_data(path_pcd, path_images, split, scene_name):
 
     return objects, poses, view_objects
 
+def convert_s3d_data_objectsOnly(path_pcd, path_images, split, scene_name):  
+    objects = pickle.load(open(osp.join(path_pcd, f'{scene_name}.objects.pkl'), 'rb'))
+    objects = [Object3D.from_clustered_object_s3d(o) for o in objects]  
+    return objects    
+
+
 #Removes all but the <count> biggest objects of each class from the list, also removes their correspondences from the view-object lists
 #Alternative: bigger clustering
-def reduce_objects(objects, view_objects, count=16):
+def reduce_objects(objects, view_objects=None, count=16):
     reduced_objects = []
     for object_class in CLASSES_COLORS.keys():
         class_objects = [o for o in objects if o.label==object_class]
@@ -41,6 +47,10 @@ def reduce_objects(objects, view_objects, count=16):
 
     reduced_ids = [o.id for o in reduced_objects]
 
+    if view_objects is None:
+        return reduced_objects
+
+    #Also remove the objects from the view-objects
     reduced_view_objects = {}
     for k in view_objects.keys():
         reduced_view_objects[k] = [vo for vo in view_objects[k] if vo.id in reduced_ids]
@@ -84,10 +94,35 @@ def describe_cells(scene_objects, cell_size=25):
 if __name__ == "__main__":
     path_pcd = 'data/numpy_merged/'
     path_images = 'data/pointcloud_images_o3d_merged_occ/'
-    scene_name = 'sg27_station5_intensity_rgb'
-    objects, poses, view_objects = convert_s3d_data(path_pcd, path_images, 'train', scene_name)
+    scene_name = 'bildstein_station1_xyz_intensity_rgb'
     output_dir = 'data/semantic3d'
 
+    '''
+    Creating cell-data -> need objects only
+    '''
+    if True:
+        objects = convert_s3d_data_objectsOnly(path_pcd, path_images, 'train', scene_name)
+        objects = [o for o in objects if o.label in ['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars']]
+        objects = reduce_objects(objects)
+        
+        cells, best_cell = describe_cells(objects)
+        mean_cell_objects = np.mean([len(cell['objects']) for cell in cells])   
+
+        pickle.dump(objects,      open(osp.join(output_dir,'train', scene_name, 'objects.pkl'), 'wb'))
+        pickle.dump(cells,        open(osp.join(output_dir,'train', scene_name, 'cell_object_descriptions.pkl'), 'wb'))
+        print(f'Saved {len(objects)} objects and {len(cells)} cells with {mean_cell_objects:0.2f} avg. objects to {osp.join(output_dir,"train", scene_name)}')
+        
+        cell_idx = np.argmax([len(cell['objects']) for cell in cells]) 
+        img = cv2.flip(draw_cells(objects, cells, highlight_idx=cell_idx), 0)
+        cv2.imwrite("cells.png", img)   
+        quit()
+
+
+
+    '''
+    Creating all data (needs renderings)
+    '''
+    objects, poses, view_objects = convert_s3d_data(path_pcd, path_images, 'train', scene_name)
     #Remove stuff classes (at least for now) and retain only the k largest objects of each class
     objects = [o for o in objects if o.label in ['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars']]
     objects, view_objects = reduce_objects(objects, view_objects)
@@ -111,8 +146,9 @@ if __name__ == "__main__":
     img = cv2.flip(draw_objects_objectDescription(objects, descriptions[idx]), 0)
     cv2.imwrite("object_description.jpg", img)
 
-    img = cv2.flip(draw_cells(objects, cells), 0)
-    cv2.imwrite("cells.png", img)    
+    cell_idx = np.argmax([len(cell['objects']) for cell in cells]) 
+    img = cv2.flip(draw_cells(objects, cells, highlight_idx=cell_idx), 0)
+    cv2.imwrite("cells.png", img)   
 
     quit()
 

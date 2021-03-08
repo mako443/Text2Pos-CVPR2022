@@ -87,16 +87,17 @@ def draw_objects_objectDescription(objects, description_list):
 
     return img
 
-def draw_cells(objects, cells):
+def draw_cells(objects, cells, highlight_idx=-1):
     scale, min_x, max_x, min_y, max_y = get_scale(objects)
     img = draw_objects_poses(objects, [])
 
-    for cell in cells:
+    for idx, cell in enumerate(cells):
         cell_bbox = cell['bbox']
         cell_mean = 0.5*(cell_bbox[0:2] + cell_bbox[2:4])
 
         bbox = np.int0((cell['bbox'] - np.array((min_x, min_y, min_x, min_y))) * scale)
-        cv2.rectangle(img, tuple(bbox[0:2]), tuple(bbox[2:4]), (255,255,255), thickness=2)
+        c = (0,0,255) if idx == highlight_idx else (255,255,255)
+        cv2.rectangle(img, tuple(bbox[0:2]), tuple(bbox[2:4]), c, thickness=2)
 
         for obj in cell['objects']:
             center = obj.center_in_cell[0:2] + cell_mean
