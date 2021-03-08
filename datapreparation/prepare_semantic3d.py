@@ -4,7 +4,7 @@ import os.path as osp
 import pickle
 import cv2
 
-from datapreparation.imports import Object3D, ViewObject, Pose, DescriptionObject, calc_angle_diff
+from datapreparation.imports import Object3D, ViewObject, Pose, DescriptionObject, calc_angle_diff, COMBINED_SCENE_NAMES
 from datapreparation.drawing import draw_objects_poses, draw_objects_poses_viewObjects, draw_objects_poses_descriptions, draw_viewobjects, draw_objects_objectDescription, combine_images
 from datapreparation.drawing import draw_cells
 from datapreparation.descriptions import describe_pose, get_text_description, describe_object, describe_cell
@@ -91,30 +91,48 @@ def describe_cells(scene_objects, cell_size=25):
 
     return cells, best_cell
 
+def get_scene_size(objects):
+    centers = np.array([obj.center for obj in objects])
+    xy_min, xy_max = np.min(centers[:, 0:2], axis=0), np.max(centers[:, 0:2], axis=0)
+    xy = xy_max - xy_min
+    return np.linalg.norm(xy)
+
 if __name__ == "__main__":
     path_pcd = 'data/numpy_merged/'
     path_images = 'data/pointcloud_images_o3d_merged_occ/'
-    scene_name = 'bildstein_station1_xyz_intensity_rgb'
+    # scene_name = 'bildstein_station1_xyz_intensity_rgb'
     output_dir = 'data/semantic3d'
 
     '''
     Creating cell-data -> need objects only
     '''
     if True:
-        objects = convert_s3d_data_objectsOnly(path_pcd, path_images, 'train', scene_name)
-        objects = [o for o in objects if o.label in ['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars']]
-        objects = reduce_objects(objects)
-        
-        cells, best_cell = describe_cells(objects)
-        mean_cell_objects = np.mean([len(cell['objects']) for cell in cells])   
+        for scene_name in COMBINED_SCENE_NAMES:
+            print(scene_name)
+            objects = convert_s3d_data_objectsOnly(path_pcd, path_images, 'train', scene_name)
+            objects = [o for o in objects if o.label in ['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars']]
+            objects = reduce_objects(objects)
+            
+            #Build cells of decreasing size until <=4.0 objects per cell
+            mean_cell_objects = np.inf
+            cell_size = 25
+            while True:
+                cells, best_cell = describe_cells(objects, cell_size)
+                mean_cell_objects = np.mean([len(cell['objects']) for cell in cells])   
+                if mean_cell_objects >4.0:
+                    cell_size -= 5
+                else:
+                    break      
 
-        pickle.dump(objects,      open(osp.join(output_dir,'train', scene_name, 'objects.pkl'), 'wb'))
-        pickle.dump(cells,        open(osp.join(output_dir,'train', scene_name, 'cell_object_descriptions.pkl'), 'wb'))
-        print(f'Saved {len(objects)} objects and {len(cells)} cells with {mean_cell_objects:0.2f} avg. objects to {osp.join(output_dir,"train", scene_name)}')
-        
-        cell_idx = np.argmax([len(cell['objects']) for cell in cells]) 
-        img = cv2.flip(draw_cells(objects, cells, highlight_idx=cell_idx), 0)
-        cv2.imwrite("cells.png", img)   
+            output_dir_scene = osp.join(output_dir,'train', scene_name)
+            if not osp.isdir(output_dir_scene): os.mkdir(output_dir_scene)
+            pickle.dump(objects,      open(osp.join(output_dir_scene, 'objects.pkl'), 'wb'))
+            pickle.dump(cells,        open(osp.join(output_dir_scene, 'cell_object_descriptions.pkl'), 'wb'))
+            print(f'Saved {len(objects)} objects and {len(cells)} cells with {mean_cell_objects:0.2f} avg. objects (size {cell_size}) to {osp.join(output_dir,"train", scene_name)}')
+            
+            cell_idx = np.argmax([len(cell['objects']) for cell in cells]) 
+            img = cv2.flip(draw_cells(objects, cells, highlight_idx=cell_idx), 0)
+            cv2.imwrite(f"./images/cells_{scene_name}.png", img)   
         quit()
 
 

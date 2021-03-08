@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 
 from models.cell_retrieval import CellRetrievalNetwork
 from dataloading.semantic3d import Semantic3dCellRetrievalDataset, Semantic3dCellRetrievalDatasetMulti
+from datapreparation.imports import COMBINED_SCENE_NAMES
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -97,9 +98,12 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    scene_names = ['bildstein_station1_xyz_intensity_rgb', 'sg27_station5_intensity_rgb']
-    dataset_train = Semantic3dCellRetrievalDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.use_features)
+    scene_names = COMBINED_SCENE_NAMES #['bildstein_station1_xyz_intensity_rgb', 'sg27_station5_intensity_rgb']
+    dataset_train = Semantic3dCellRetrievalDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.use_features, split='train')
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dCellRetrievalDataset.collate_fn, shuffle=args.shuffle)
+    dataset_val = Semantic3dCellRetrievalDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.use_features, split='test')
+    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dCellRetrievalDataset.collate_fn, shuffle=args.shuffle)
+
     data0 = dataset_train[0]
     batch = next(iter(dataloader_train))
     print(data0['descriptions'])
@@ -130,10 +134,10 @@ if __name__ == "__main__":
             loss, train_acc = train_epoch(model, dataloader_train, args)
             dict_loss[lr].append(loss)
 
-            # val_acc = val_epoch(model, dataloader_train, args)
+            val_acc = val_epoch(model, dataloader_val, args)
             for k in args.top_k:
                 dict_acc[k][lr].append(train_acc[k])
-                # dict_acc_val[k][lr].append(val_acc[k])
+                dict_acc_val[k][lr].append(val_acc[k])
 
             scheduler.step()
             print(f'\t lr {lr:0.4} epoch {epoch} train-acc: ', end="")
@@ -146,9 +150,11 @@ if __name__ == "__main__":
     '''
     plot_name = f'cellRet_len{len(dataset_train)}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_f{"-".join(args.use_features)}.png'
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
+    val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}
     metrics = {
         'train-loss': dict_loss,
-        **train_accs 
+        **train_accs,
+        **val_accs
     }
     plot_metrics(metrics, './plots/'+plot_name)  
 
