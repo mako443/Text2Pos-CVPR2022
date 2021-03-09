@@ -34,8 +34,9 @@ def train_epoch(model, dataloader, args):
             break
 
         optimizer.zero_grad()
-        color_input = batch['objects_colors'] if args.use_color else None
-        output = model(batch['objects_classes'], batch['objects_positions'], batch['hint_descriptions'], object_colors=color_input)
+        # color_input = batch['objects_colors'] if args.use_color else None
+        # output = model(batch['objects_classes'], batch['objects_positions'], batch['hint_descriptions'], object_colors=color_input)
+        output = model(batch['objects'], batch['hint_descriptions'])
 
         loss = criterion(output.P, batch['all_matches'])
         # print(f'\t\t batch {i_batch} loss {loss.item(): 0.3f}')
@@ -52,12 +53,13 @@ def train_epoch(model, dataloader, args):
 
 @torch.no_grad()
 def val_epoch(model, dataloader, args):
-    # model.eval() #CARE: not setting eval!
+    model.eval() #TODO/CARE: set eval() or not?
     epoch_recalls = []
     epoch_precisions = []
     for i_batch, batch in enumerate(dataloader):
-        color_input = batch['objects_colors'] if args.use_color else None
-        output = model(batch['objects_classes'], batch['objects_positions'], batch['hint_descriptions'], object_colors=color_input)
+        #color_input = batch['objects_colors'] if args.use_color else None
+        #output = model(batch['objects_classes'], batch['objects_positions'], batch['hint_descriptions'], object_colors=color_input)
+        output = model(batch['objects'], batch['hint_descriptions'])
 
         recall, precision = calc_recall_precision(batch['matches'], output.matches0.cpu().detach().numpy(), output.matches1.cpu().detach().numpy())
         epoch_recalls.append(recall)
@@ -95,7 +97,7 @@ if __name__ == "__main__":
     dict_val_precision = {lr: [] for lr in learning_reates}    
     
     for lr in learning_reates:
-        model = SuperGlueMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args.embed_dim, args.num_layers, args.sinkhorn_iters)
+        model = SuperGlueMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args)
         model.to(DEVICE)
 
         optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -120,7 +122,7 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'sanity_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_c{args.use_color}_g{args.lr_gamma}.png'
+    plot_name = f'SG-Match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-recall': dict_recall,

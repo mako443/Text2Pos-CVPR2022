@@ -58,6 +58,7 @@ class Semantic3dObjectReferanceDataset(Dataset):
             distractor_objects = np.random.choice([obj for obj in self.scene_objects if obj.id not in mentioned_ids], size=self.num_distractors, replace=False)
         else:
             distractor_objects = []
+        distractor_objects = list(distractor_objects)
 
         #Gather the classes, positions and colors (colors ∈ [0, 1])
         mentioned_objects_classes = [obj.label for obj in mentioned_objects]
@@ -101,6 +102,7 @@ class Semantic3dObjectReferanceDataset(Dataset):
             'objects_classes': mentioned_objects_classes + distractor_objects_classes,
             'objects_positions': np.vstack((mentioned_objects_positions, distractor_objects_positions)),
             'objects_colors': np.vstack((mentioned_objects_colors, distractor_objects_colors)),
+            'objects': mentioned_objects + distractor_objects,
             'text_descriptions': text_descr,
             'hint_descriptions': hint_descr,
             'target_classes': target_class,

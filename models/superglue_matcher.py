@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
 
 import time
 import numpy as np
@@ -11,69 +12,81 @@ from easydict import EasyDict
 
 from models.modules import get_mlp, LanguageEncoder
 from models.superglue import SuperGlue
+from dataloading.semantic3d import Semantic3dObjectReferanceDataset
 
 '''
 TODO:
-
+- Why the bad validation performance?
 '''
 
 class SuperGlueMatch(torch.nn.Module):
-    def __init__(self, known_classes, known_words, embed_dim, num_layers, sinkhorn_iters):
+    def __init__(self, known_classes, known_words, args):
         super(SuperGlueMatch, self).__init__()
+        self.embed_dim = args.embed_dim
+        self.num_layers = args.num_layers
+        self.sinkhorn_iters = args.sinkhorn_iters
 
         # Set idx=0 for padding
         self.known_classes = {c: (i+1) for i,c in enumerate(known_classes)}
         self.known_classes['<unk>'] = 0
-        self.class_embedding = nn.Embedding(len(self.known_classes), embed_dim, padding_idx=0)
+        self.class_embedding = nn.Embedding(len(self.known_classes), self.embed_dim, padding_idx=0)
 
-        self.pos_embedding = get_mlp([2,128, embed_dim]) #OPTION: pos_embedding layers
-        self.color_embedding = get_mlp([3,128, embed_dim]) #OPTION: color_embedding layers
+        self.pos_embedding = get_mlp([3,128, self.embed_dim]) #OPTION: pos_embedding layers
+        self.color_embedding = get_mlp([3,128, self.embed_dim]) #OPTION: color_embedding layers
 
-        self.language_encoder = LanguageEncoder(known_words, embed_dim, bi_dir=True)  
+        self.mlp_merge = get_mlp([3*self.embed_dim, self.embed_dim])
 
-        print('CARE: ONLY SELF LAYERS!')
+        self.language_encoder = LanguageEncoder(known_words, self.embed_dim, bi_dir=True)  
+
+        # print('CARE: ONLY SELF LAYERS!')
         config = {
-            'descriptor_dim': embed_dim,
-            # 'GNN_layers': ['self', 'cross'] * num_layers,
-            'GNN_layers': ['self', ] * num_layers,
-            'sinkhorn_iterations': sinkhorn_iters,
+            'descriptor_dim': self.embed_dim,
+            'GNN_layers': ['self', 'cross'] * self.num_layers,
+            # 'GNN_layers': ['self', ] * self.num_layers,
+            'sinkhorn_iterations': self.sinkhorn_iters,
             'match_threshold': 0.2,
         }
         self.superglue = SuperGlue(config)
 
-    def forward(self, object_classes, object_positions, hints, object_colors=None):
-        batch_size = len(object_classes)
+    def forward(self, objects, hints):
+        batch_size = len(objects)
         '''
         Encode the hints
         '''
         hint_encodings = torch.stack([self.language_encoder(hint_sample) for hint_sample in hints]) # [B, num_hints, DIM]
-
         hint_encodings = F.normalize(hint_encodings, dim=-1) #Norming those too
 
         '''
         Encode the objects
         '''    
-        num_objects = len(object_classes[0])
-        class_indices = torch.zeros((batch_size, num_objects), dtype=torch.long)
+        num_objects = len(objects[0])
+        class_indices = torch.zeros((batch_size, num_objects), dtype=torch.long, device=self.device)
         for i in range(batch_size):
             for j in range(num_objects):
-                class_indices[i, j] = self.known_classes.get(object_classes[i][j],0)
-        class_embeddings = self.class_embedding(class_indices.to(self.device)) # [B, num_obj, DIM]
+                class_indices[i, j] = self.known_classes.get(objects[i][j].label, 0)
+        class_embeddings = self.class_embedding(class_indices) # [B, num_obj, DIM]
 
-        pos_embeddings = self.pos_embedding(torch.tensor(object_positions, dtype=torch.float, device=self.device)) # [B, num_obj, DIM]
-        object_encodings = F.normalize(class_embeddings, dim=-1) + F.normalize(pos_embeddings, dim=-1) # [B, num_obj, DIM], normalize for equal magnitudes
+        pos_embeddings = torch.zeros((batch_size, num_objects, 3), dtype=torch.float, device=self.device)
+        for i in range(batch_size):
+            for j in range(num_objects):
+                pos_embeddings[i, j, :] = torch.from_numpy(objects[i][j].center)
+        pos_embeddings = self.pos_embedding(pos_embeddings) # [B, num_obj, DIM]
         
-        if object_colors is not None:
-            color_embeddings = self.color_embedding(torch.tensor(object_colors, dtype=torch.float, device=self.device)) # [B, num_obj, DIM]
-            object_encodings += F.normalize(color_embeddings, dim=-1)
+        color_embeddings = torch.zeros((batch_size, num_objects, 3), dtype=torch.float, device=self.device)
+        for i in range(batch_size):
+            for j in range(num_objects):
+                color_embeddings[i, j, :] = torch.from_numpy(objects[i][j].color)
+        color_embeddings = self.color_embedding(color_embeddings) # [B, num_obj, DIM]
 
-        object_encodings = F.normalize(object_encodings, dim=-1) # [B, num_obj, DIM] Normalize for stable matching
+        object_encodings = self.mlp_merge(torch.cat((class_embeddings, pos_embeddings, color_embeddings), dim=-1)) # [B, num_obj, DIM]
+        object_encodings = F.normalize(object_encodings, dim=-1) # [B, num_obj, DIM]
 
         '''
         Match object-encodings to hint-encodings
         '''
         desc0 = object_encodings.transpose(1, 2) #[B, DIM, num_obj]
         desc1 = hint_encodings.transpose(1, 2) #[B, DIM, num_hints]
+        print("desc", desc0.shape, desc1.shape)
         
         matcher_output = self.superglue(desc0, desc1)
 
@@ -81,6 +94,8 @@ class SuperGlueMatch(torch.nn.Module):
         outputs.P = matcher_output['P']
         outputs.matches0 = matcher_output['matches0']
         outputs.matches1 = matcher_output['matches1']
+
+        print("P", outputs.P.shape)
 
         return outputs
 
@@ -90,12 +105,19 @@ class SuperGlueMatch(torch.nn.Module):
         return next(self.pos_embedding.parameters()).device       
 
 if __name__ == "__main__":
-    model = SuperGlueMatch(['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars'], 'a b c d e'.split(), 300, num_layers=2, sinkhorn_iters=10)
+    args = EasyDict()
+    args.embed_dim = 16
+    args.num_layers = 2
+    args.sinkhorn_iters = 10
 
-    batch_size = 3
-    out = model([['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars', 'xx'] for _ in range(batch_size)], 
-                np.random.rand(batch_size, 6, 2), 
-                [['a b x d e', 'a b c x a c', 'a a'] for _ in range(batch_size)])
+    model = SuperGlueMatch(['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars'], 'a b c d e'.split(), args)
+
+    dataset = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=2)
+    dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
+    data = dataset[0]
+    batch = next(iter(dataloader))    
+
+    out = model(batch['objects'], batch['hint_descriptions'])
 
     print('Done')
 
