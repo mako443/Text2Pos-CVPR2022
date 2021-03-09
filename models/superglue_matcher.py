@@ -31,9 +31,11 @@ class SuperGlueMatch(torch.nn.Module):
 
         self.language_encoder = LanguageEncoder(known_words, embed_dim, bi_dir=True)  
 
+        print('CARE: ONLY SELF LAYERS!')
         config = {
             'descriptor_dim': embed_dim,
-            'GNN_layers': ['self', 'cross'] * num_layers,
+            # 'GNN_layers': ['self', 'cross'] * num_layers,
+            'GNN_layers': ['self', ] * num_layers,
             'sinkhorn_iterations': sinkhorn_iters,
             'match_threshold': 0.2,
         }

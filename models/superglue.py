@@ -209,8 +209,10 @@ class SuperGlue(nn.Module):
         self.kenc = KeypointEncoder(
             self.config['descriptor_dim'], self.config['keypoint_encoder'])
 
-        self.gnn = AttentionalGNN(
-            self.config['descriptor_dim'], self.config['GNN_layers'])
+        if len(self.config['GNN_layers']) > 0:
+            self.gnn = AttentionalGNN( self.config['descriptor_dim'], self.config['GNN_layers'])
+        else:
+            self.gnn = None
 
         self.final_proj = nn.Conv1d(
             self.config['descriptor_dim'], self.config['descriptor_dim'],
@@ -260,7 +262,8 @@ class SuperGlue(nn.Module):
         # desc1 = desc1 + self.kenc(kpts1, data['scores1'])
 
         # Multi-layer Transformer network.
-        desc0, desc1 = self.gnn(desc0, desc1)
+        if self.gnn is not None:
+            desc0, desc1 = self.gnn(desc0, desc1)
 
         # Final MLP projection.
         mdesc0, mdesc1 = self.final_proj(desc0), self.final_proj(desc1)

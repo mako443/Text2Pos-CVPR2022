@@ -52,7 +52,7 @@ def train_epoch(model, dataloader, args):
 
 @torch.no_grad()
 def val_epoch(model, dataloader, args):
-    model.eval()
+    # model.eval() #CARE: not setting eval!
     epoch_recalls = []
     epoch_precisions = []
     for i_batch, batch in enumerate(dataloader):
@@ -108,7 +108,7 @@ if __name__ == "__main__":
             dict_recall[lr].append(train_recall)
             dict_precision[lr].append(train_precision)
 
-            val_recall, val_precision = val_epoch(model, dataloader_val, args)
+            val_recall, val_precision = val_epoch(model, dataloader_val, args) #CARE: which loader for val!
             dict_val_recall[lr].append(val_recall)
             dict_val_precision[lr].append(val_precision)            
 
@@ -120,7 +120,7 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'textNorm_matching_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_c{args.use_color}_g{args.lr_gamma}.png'
+    plot_name = f'sanity_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_c{args.use_color}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-recall': dict_recall,
