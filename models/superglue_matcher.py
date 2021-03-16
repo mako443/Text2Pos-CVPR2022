@@ -16,7 +16,6 @@ from dataloading.semantic3d import Semantic3dObjectReferanceDataset
 
 '''
 TODO:
-- Why the bad validation performance?
 '''
 
 class SuperGlueMatch(torch.nn.Module):

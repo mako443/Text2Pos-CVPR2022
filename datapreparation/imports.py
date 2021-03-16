@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 
 #TODO: move these to the respective "prepare-X" modules
+COMBINED_SCENE_NAMES=('bildstein_station1_xyz_intensity_rgb','domfountain_station1_xyz_intensity_rgb','neugasse_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb','untermaederbrunnen_station1_xyz_intensity_rgb')
 CLASSES_DICT={'unlabeled': 0, 'man-made terrain': 1, 'natural terrain': 2, 'high vegetation': 3, 'low vegetation': 4, 'buildings': 5, 'hard scape': 6, 'scanning artefacts': 7, 'cars': 8}
 CLASSES_COLORS={'unlabeled': (255,255,255), 'man-made terrain': (60,30,30), 'natural terrain': (30,60,30), 'high vegetation': (120,255,120), 'low vegetation': (60,150,60), 'buildings': (255,255,0), 'hard scape': (0,255,255), 'scanning artefacts': (255,0,0), 'cars': (0,0,255)}
 IMAGE_WIDHT=1620
@@ -27,6 +28,7 @@ class Object3D:
         o.label = co.label
         o.id = co.clustered_object_id
         o.points_w = co.points_w
+        o.points_w_color = co.points_w_color
         o.color = co.color
         return o
 
@@ -52,13 +54,18 @@ class Object3D:
         return np.hstack((mins, maxs-mins))
 
 class CellObject:
-    def __init__(self, points_w, points_cell, label, id, color, scene_name):
+    def __init__(self, points_w, points_w_color, points_cell, points_cell_color, label, id, color_rgb, scene_name):
         self.points_w = points_w
+        self.points_w_color = points_w_color
         self.points_cell = points_cell #Points that are in the cell, shifted by the cell-mean
+        self.points_cell_color = points_cell_color
         self.label = label
         self.id = id
-        self.color = color
+        self.color_rgb = color_rgb
         self.scene_name = scene_name
+
+        color_dists = np.linalg.norm(COLORS - color_rgb, axis=1)
+        self.color_text = COLOR_NAMES[np.argmin(color_dists)]
 
     @property
     def center_in_cell(self):
@@ -69,8 +76,24 @@ class CellObject:
     def aligned_bbox_cell(self):
         points = self.points_cell[:, 0:2]
         rect = cv2.minAreaRect(points.astype(np.float32))
-        box = np.int0(cv2.boxPoints(rect))
+        bbox = np.int0(cv2.boxPoints(rect))
         return bbox
+
+class Cell:
+    def __init__(self, bbox, scene_name, objects):
+        """Grid-cell for object-set retrieval
+
+        Args:
+            bbox (np.ndarray): [x0, y0, x1, y1]
+            scene_name (str): scene name
+        """
+        self.bbox = bbox
+        self.scene_name = scene_name
+        self.objects = objects     
+
+    @property
+    def center(self):
+        return 0.5*(self.bbox[0:2] + self.bbox[2:4])
 
 
 class ViewObject:
@@ -98,7 +121,10 @@ class Pose:
         p.eye = pose.eye
         p.forward = pose.forward
         p.phi = pose.phi
-        p.E = pose.E
+        try:
+            p.E = pose.E
+        except:
+            pass
         return p
 
 class DescriptionObject:

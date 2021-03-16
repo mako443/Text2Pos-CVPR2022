@@ -5,9 +5,8 @@ import torch.nn.functional as F
 
 import numpy as np
 
+#TODO: BN before or after ReLU?
 def get_mlp(dims, add_batchnorm=False):
-    if add_batchnorm:
-        raise Exception('BN before ReLU?...')
     if len(dims)<3:
         print('get_mlp(): less than 2 layers!')
     mlp = []

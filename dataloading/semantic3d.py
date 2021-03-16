@@ -6,11 +6,18 @@ import h5py
 import json
 import pickle
 import numpy as np
+
+import torch
 from torch.utils.data import Dataset, DataLoader
 
-import random
+import torch_geometric.transforms as T
+from torch_geometric.data import Data as PyG_Data, DataLoader as PyG_DataLoader
 
-from datapreparation.imports import Object3D, DescriptionObject
+import random
+import cv2
+
+from datapreparation.imports import Object3D, DescriptionObject, COMBINED_SCENE_NAMES
+from datapreparation.drawing import draw_cells
 
 class Semantic3dObjectReferanceDataset(Dataset):
     def __init__(self, path_numpy, path_scenes, num_distractors='all', split=None):
@@ -149,9 +156,205 @@ class Semantic3dObjectReferanceDataset(Dataset):
             for hint in hints:
                 words.extend(hint.replace('.','').replace(',','').lower().split())
         return list(np.unique(words))
+
+class Semantic3dCellRetrievalDataset(Dataset):
+    def __init__(self, path_numpy, path_scenes, scene_name, mention_features, split=None):       
+        self.path_numpy = path_numpy
+        self.path_scenes = path_scenes
+        self.mention_features = mention_features
+    
+        # self.scene_name = 'bildstein_station1_xyz_intensity_rgb'
+        self.scene_name = scene_name
+
+        #Load objects
+        self.scene_objects = pickle.load(open(osp.join(self.path_scenes,'train',self.scene_name,'objects.pkl'), 'rb'))
+        self.cells = pickle.load(open(osp.join(self.path_scenes,'train',self.scene_name,'cell_object_descriptions.pkl'), 'rb'))
+
+        #Build descriptions (do it here to have known words available)
+        self.cell_texts = [self.build_description(cell) for cell in self.cells]
+
+        #Possibly apply split
+        if split is not None:
+            assert split in ('train', 'test')
+            test_indices = (np.arange(len(self.cells)) % 5) == 0
+            indices = test_indices if split=='test' else np.bitwise_not(test_indices)    
+            self.cells = [c for (i, c) in enumerate(self.cells) if indices[i]]        
+            self.cell_texts = [t for (i, t) in enumerate(self.cell_texts) if indices[i]]        
+
+        self.mean_obj = np.mean([len(cell['objects']) for cell in self.cells])
+        # print(f'Semantic3dCellRetrievalDataset ({self.scene_name}): {len(self)} cells with {mean_obj: 0.2f} objects avg, features: {mention_features}')
+
+    def __getitem__(self, idx):
+        cell = self.cells[idx]
+        bbox = cell['bbox']
+        cell_mean = 0.5*(bbox[0:2] + bbox[2:4])
+        cell_size = np.mean((bbox[2] - bbox[0], bbox[3] - bbox[1]))
+
+        cell_objects = cell['objects']
+    
+        description = self.cell_texts[idx]
+
+        #Select a cell index for negative objects in Triplet-training
+        negative_indices = [i for i in range(len(self)) if i!=idx and len(self.cell_texts)!=len(description)]
+        negative_objects = self.cells[np.random.choice(negative_indices)]['objects']
+
+        return {'objects': cell_objects,
+                'negative_objects': negative_objects,
+                'descriptions': description,
+                'scene_names': self.scene_name }
+
+    def build_description(self, cell):
+        cell_objects = cell['objects']
+        bbox = cell['bbox']
+        cell_mean = 0.5*(bbox[0:2] + bbox[2:4])
+        cell_size = np.mean((bbox[2] - bbox[0], bbox[3] - bbox[1]))
+
+        directions = np.array([ [0, 1],
+                                [0,-1],
+                                [ 1, 0],
+                                [-1, 0],
+                                [ 0, 0],]) * cell_size/3
+        direction_names = ['north', 'south', 'east', 'west', 'center']
+
+        text = ""
+        for i, obj in enumerate(cell_objects):
+            if i==0:
+                text += 'The cell has a '
+            else:
+                text += ' and a '
+
+            if 'color' in self.mention_features:
+                text += f'{obj.color_text} '
+
+            if 'class' in self.mention_features:
+                text += f'{obj.label} '
+
+            if 'position' in self.mention_features:
+                direction_diffs = np.linalg.norm(directions - obj.center_in_cell[0:2], axis=1)
+                direction = direction_names[np.argmin(direction_diffs)]
+                text += f'in the {direction}'
+        text += '.'
+
+        return text
+
+    def __len__(self):
+        return len(self.cells)    
+    
+    def get_known_classes(self):
+        classes = []
+        for cell in self.cells:
+            classes.extend([obj.label for obj in cell['objects']])
+        return list(np.unique(classes))        
+
+    def get_known_words(self):
+        words = []
+        for d in self.cell_texts:
+            words.extend(d.replace('.','').replace(',','').lower().split())
+        return list(np.unique(words))
+
+    def collate_fn(batch):
+        data = {}
+        for k, v in batch[0].items():
+            data[k] = [batch[i][k] for i in range(len(batch))]
+        return data
+
+class Semantic3dCellRetrievalDatasetMulti(Dataset):
+    def __init__(self, path_numpy, path_scenes, scene_names, mention_features, split=None): 
+        self.scene_names = scene_names
+        self.split = split
+        self.datasets = [Semantic3dCellRetrievalDataset(path_numpy, path_scenes, scene_name, mention_features, split) for scene_name in scene_names]
+
+        self.mean_obj = np.mean([dataset.mean_obj for dataset in self.datasets])
+
+        print(str(self))
+
+    def __len__(self):
+        return np.sum([len(ds) for ds in self.datasets])
+
+    def __getitem__(self, idx):
+        count = 0
+        for dataset in self.datasets:
+            idx_in_dataset = idx - count
+            if idx_in_dataset < len(dataset):
+                return dataset[idx_in_dataset]
+            else:
+                count += len(dataset)
+        assert False
+
+    def __repr__(self):
+        return f'Semantic3dCellRetrievalDatasetMulti: {len(self.scene_names)} scenes, {len(self)} cells, {self.mean_obj: 0.2f} mean objects, split: {self.split}'
+
+    def get_known_words(self):
+        known_words = []
+        for ds in self.datasets:
+            known_words.extend(ds.get_known_words())
+        return list(np.unique(known_words))
+
+    def get_known_classes(self):
+        known_classes = []
+        for ds in self.datasets:
+            known_classes.extend(ds.get_known_classes())
+        return list(np.unique(known_classes))
+
+class Semantic3dObjectDataset(Dataset):
+    def __init__(self, path_numpy, path_scenes, split=None, num_points=2048):
+        self.path_numpy = path_numpy
+        self.path_scenes = path_scenes
+        self.split = split  
+
+        self.scene_name = 'bildstein_station1_xyz_intensity_rgb'
+
+        #Load objects
+        self.scene_objects = pickle.load(open(osp.join(self.path_scenes,'train',self.scene_name,'objects.pkl'), 'rb')) 
+        random.shuffle(self.scene_objects)
+
+        self.known_classes = list(np.unique([obj.label for obj in self.scene_objects]))
+        self.class_to_index = {c: i for (i,c) in enumerate(self.known_classes)}
+
+        self.transform = T.Compose([T.NormalizeScale(), T.FixedPoints(num_points)])
+
+        print(f'Semantic3dObjectDataset: {len(self)} objects, using {num_points} points')
+
+    def __len__(self):
+        return len(self.scene_objects)
+
+    def __getitem__(self, idx):
+        obj = self.scene_objects[idx]
+        points = torch.tensor(np.float32(obj.points_w))
+        colors = torch.tensor(np.float32(obj.points_w_color))
+        label = self.class_to_index[obj.label]
         
+        data = PyG_Data(x=colors, y=label, pos=points)
+
+        data = self.transform(data)
+        return data
+
 
 if __name__ == "__main__":
+    dataset = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d')
+    dataloader = PyG_DataLoader(dataset, batch_size=2)
+    data = dataset[0]
+    batch = next(iter(dataloader))
+    quit()
+
+    #CARE which is from which ;)
+    # dataset = Semantic3dCellRetrievalDataset('./data/numpy_merged/', './data/semantic3d', 'bildstein_station1_xyz_intensity_rgb', ['class', 'color', 'position'])
+    # data = dataset[0]
+    # scene_names = COMBINED_SCENE_NAMES #['bildstein_station1_xyz_intensity_rgb', 'sg27_station5_intensity_rgb']
+    
+    # dataset_multi_train = Semantic3dCellRetrievalDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, ['class', 'color', 'position'], split='train')
+    # dataset_multi_test  = Semantic3dCellRetrievalDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, ['class', 'color', 'position'], split='test')
+    # dataloader = DataLoader(dataset_multi_train, batch_size=2, collate_fn=Semantic3dCellRetrievalDataset.collate_fn)
+    # batch = next(iter(dataloader))
+
+    # cell_lengths = [len(cell['objects']) for cell in dataset.cells]
+    # idx = np.argmax(cell_lengths)
+    # img = cv2.flip(draw_cells(dataset.scene_objects, dataset.cells, highlight_idx=idx), 0)
+    # cv2.imwrite('cells_dataset.png', img)
+    # print(dataset.cell_texts[idx])
+
+    # quit()
+
     dataset = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=2)
     dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
     data = dataset[0]

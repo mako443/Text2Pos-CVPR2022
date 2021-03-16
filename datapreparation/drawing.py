@@ -52,7 +52,7 @@ def draw_objects_poses_viewObjects(objects, poses, view_objects, keys):
 
     return img
 
-def draw_objects_poses_descriptions(objects, poses, descriptions):
+def draw_objects_poses_descriptions_DEPRECATED(objects, poses, descriptions):
     assert len(poses)==len(descriptions)
     scale, min_x, max_x, min_y, max_y = get_scale(objects)
     img = draw_objects_poses(objects, poses)
@@ -67,6 +67,21 @@ def draw_objects_poses_descriptions(objects, poses, descriptions):
             cv2.arrowedLine(img, (int(start[0]), int(start[1])), (int(end[0]), int(end[1])), (255,255,255), 3)            
 
     return img
+
+def draw_objects_poseDescription(objects, pose, description):
+    scale, min_x, max_x, min_y, max_y = get_scale(objects)
+    img = draw_objects_poses(objects, [])
+    objects_dict = {o.id : o for o in objects}    
+
+    center = np.int0((pose.eye[0:2] - np.array((min_x, min_y)))*scale)
+    cv2.circle(img, (center[0], center[1]), 5, (0,0,255), thickness=2)
+    for do in description:
+        object3d = objects_dict[do.id]
+        end = np.int0(( 0.5*(np.max(object3d.points_w[:, 0:2], axis=0) + np.min(object3d.points_w[:, 0:2], axis=0)) - np.array((min_x, min_y))) * scale)
+        cv2.arrowedLine(img, (center[0], center[1]), (end[0], end[1]), (255,255,255), thickness=2)
+
+    return img
+
 
 def draw_objects_objectDescription(objects, description_list):
     scale, min_x, max_x, min_y, max_y = get_scale(objects)
@@ -87,16 +102,17 @@ def draw_objects_objectDescription(objects, description_list):
 
     return img
 
-def draw_cells(objects, cells):
+def draw_cells(objects, cells, highlight_idx=-1):
     scale, min_x, max_x, min_y, max_y = get_scale(objects)
     img = draw_objects_poses(objects, [])
 
-    for cell in cells:
+    for idx, cell in enumerate(cells):
         cell_bbox = cell['bbox']
         cell_mean = 0.5*(cell_bbox[0:2] + cell_bbox[2:4])
 
         bbox = np.int0((cell['bbox'] - np.array((min_x, min_y, min_x, min_y))) * scale)
-        cv2.rectangle(img, tuple(bbox[0:2]), tuple(bbox[2:4]), (255,255,255), thickness=2)
+        c = (0,0,255) if idx == highlight_idx else (255,255,255)
+        cv2.rectangle(img, tuple(bbox[0:2]), tuple(bbox[2:4]), c, thickness=2)
 
         for obj in cell['objects']:
             center = obj.center_in_cell[0:2] + cell_mean
