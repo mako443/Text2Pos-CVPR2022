@@ -10,7 +10,7 @@ def parse_arguments():
     parser.add_argument('--embed_dim', type=int, default=300)
     parser.add_argument('--num_layers', type=int, default=8)
     parser.add_argument('--nhead', type=int, default=8)
-    parser.add_argument('--dim_feedforward', type=int, default=2048)
+    parser.add_argument('--dim_ff', type=int, default=2048)
     # parser.add_argument('--use_color', action='store_true')
     parser.add_argument('--use_features', nargs='+', default=['class', 'color', 'position'])
     parser.add_argument('--shuffle', action='store_true')

@@ -28,6 +28,7 @@ class Object3D:
         o.label = co.label
         o.id = co.clustered_object_id
         o.points_w = co.points_w
+        o.points_w_color = co.points_w_color
         o.color = co.color
         return o
 
@@ -53,9 +54,11 @@ class Object3D:
         return np.hstack((mins, maxs-mins))
 
 class CellObject:
-    def __init__(self, points_w, points_cell, label, id, color_rgb, scene_name):
+    def __init__(self, points_w, points_w_color, points_cell, points_cell_color, label, id, color_rgb, scene_name):
         self.points_w = points_w
+        self.points_w_color = points_w_color
         self.points_cell = points_cell #Points that are in the cell, shifted by the cell-mean
+        self.points_cell_color = points_cell_color
         self.label = label
         self.id = id
         self.color_rgb = color_rgb
@@ -73,8 +76,24 @@ class CellObject:
     def aligned_bbox_cell(self):
         points = self.points_cell[:, 0:2]
         rect = cv2.minAreaRect(points.astype(np.float32))
-        box = np.int0(cv2.boxPoints(rect))
+        bbox = np.int0(cv2.boxPoints(rect))
         return bbox
+
+class Cell:
+    def __init__(self, bbox, scene_name, objects):
+        """Grid-cell for object-set retrieval
+
+        Args:
+            bbox (np.ndarray): [x0, y0, x1, y1]
+            scene_name (str): scene name
+        """
+        self.bbox = bbox
+        self.scene_name = scene_name
+        self.objects = objects     
+
+    @property
+    def center(self):
+        return 0.5*(self.bbox[0:2] + self.bbox[2:4])
 
 
 class ViewObject:
@@ -102,7 +121,10 @@ class Pose:
         p.eye = pose.eye
         p.forward = pose.forward
         p.phi = pose.phi
-        p.E = pose.E
+        try:
+            p.E = pose.E
+        except:
+            pass
         return p
 
 class DescriptionObject:

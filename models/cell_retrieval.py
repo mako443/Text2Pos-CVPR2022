@@ -13,6 +13,9 @@ from easydict import EasyDict
 
 from models.modules import get_mlp, LanguageEncoder
 from dataloading.semantic3d import Semantic3dCellRetrievalDataset
+from dataloading.semantic3d_poses import Semantic3dPosesDataset
+from datapreparation.descriptions import describe_cell
+from datapreparation.prepare_semantic3d import create_cells
 
 '''
 TODO:
@@ -107,18 +110,45 @@ class CellRetrievalNetwork(torch.nn.Module):
         x = F.normalize(x)
         return x
 
+    def forward(self):
+        raise Exception('Not implemented.')
+
     @property
     def device(self):
-        return next(self.pos_embedding.parameters()).device      
+        return next(self.pos_embedding.parameters()).device   
+
+    '''
+    Generates cells based on all scene objects and cell-size, cell-stride as hyperparams.
+    '''
+    def create_cells(scene_objects, cell_size, cell_stride):
+        cells = create_cells(scene_objects, cell_size=25, cell_stride=12.5)
+        return cells
+
+    '''
+    Finds the cell that best matches the pose (closest to center.)
+    Training can be done by encoding a set of pose descriptions and their respective best-matching cells, then Pairwise-Ranking-Loss.
+    '''
+    def find_best_cell(cells, pose):
+        dists = [cell.center - pose.eye[0:2] for cell in cells]
+        dists = np.linalg.norm(dists, axis=1)
+        return cells[np.argmin(dists)]
 
 if __name__ == "__main__":
     model = CellRetrievalNetwork(['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars'], 'a b c d e'.split(), embed_dim=32, k=2)      
 
-    dataset = Semantic3dCellRetrievalDataset('./data/numpy_merged/', './data/semantic3d', ['class', 'color', 'position'])
-    dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dCellRetrievalDataset.collate_fn)
-    data = dataset[0]
+    dataset = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d')
+    dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dPosesDataset.collate_fn)
+    data = dataset[0]        
     batch = next(iter(dataloader))
 
-    text = model.encode_text(batch['descriptions'])
-    objects = model.encode_objects(batch['objects'])
+    
 
+    # dataset = Semantic3dCellRetrievalDataset('./data/numpy_merged/', './data/semantic3d', ['class', 'color', 'position'])
+    # dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dCellRetrievalDataset.collate_fn)
+    # data = dataset[0]
+    # batch = next(iter(dataloader))
+
+    # text = model.encode_text(batch['descriptions'])
+    # objects = model.encode_objects(batch['objects'])
+
+    

@@ -8,6 +8,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from models.superglue_matcher import SuperGlueMatch
+from models.graph_matcher import GraphMatch
+from models.tf_matcher import TransformerMatch
 from dataloading.semantic3d import Semantic3dObjectReferanceDataset
 
 from training.args import parse_arguments
@@ -31,8 +33,9 @@ def train_epoch(model, dataloader, args):
             break
 
         optimizer.zero_grad()
-        color_input = batch['objects_colors'] if args.use_color else None
-        output = model(batch['objects_classes'], batch['objects_positions'], batch['hint_descriptions'], object_colors=color_input)
+        # color_input = batch['objects_colors'] if args.use_color else None
+        # output = model(batch['objects_classes'], batch['objects_positions'], batch['hint_descriptions'], object_colors=color_input)
+        output = model(batch['objects'], batch['hint_descriptions'], verbose=(i_batch==0))
 
         loss = criterion(output.P, batch['all_matches'])
         # print(f'\t\t batch {i_batch} loss {loss.item(): 0.3f}')
@@ -45,6 +48,10 @@ def train_epoch(model, dataloader, args):
         epoch_recalls.append(recall)
         epoch_precisions.append(precision)
 
+        # if i_batch == args.max_batches - 1:
+        #     print('P')
+        #     print(output.P.cpu().detach().numpy().astype(np.float16))
+
     return np.mean(epoch_losses), np.mean(epoch_recalls), np.mean(epoch_precisions), time.time()-t0
 
 @torch.no_grad()
@@ -53,8 +60,9 @@ def val_epoch(model, dataloader, args):
     epoch_recalls = []
     epoch_precisions = []
     for i_batch, batch in enumerate(dataloader):
-        color_input = batch['objects_colors'] if args.use_color else None
-        output = model(batch['objects_classes'], batch['objects_positions'], batch['hint_descriptions'], object_colors=color_input)
+        # color_input = batch['objects_colors'] if args.use_color else None
+        # output = model(batch['objects_classes'], batch['objects_positions'], batch['hint_descriptions'], object_colors=color_input)
+        output = model(batch['objects'], batch['hint_descriptions'])
 
         recall, precision = calc_recall_precision(batch['matches'], output.matches0.cpu().detach().numpy(), output.matches1.cpu().detach().numpy())
         epoch_recalls.append(recall)
@@ -84,7 +92,7 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_reates = np.logspace(-3,-5,5)[2:]
+    learning_reates = [1e-3,] #np.logspace(-1, -3 ,3)
     dict_loss = {lr: [] for lr in learning_reates}
     dict_recall = {lr: [] for lr in learning_reates}
     dict_precision = {lr: [] for lr in learning_reates}
@@ -92,7 +100,9 @@ if __name__ == "__main__":
     dict_val_precision = {lr: [] for lr in learning_reates}    
     
     for lr in learning_reates:
-        model = SuperGlueMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args.embed_dim, args.num_layers, args.sinkhorn_iters)
+        # model = SuperGlueMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args.embed_dim, args.num_layers, args.sinkhorn_iters)
+        # model = GraphMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args.embed_dim, args.k, args.sinkhorn_iters, args.num_layers, args.use_features)
+        model = TransformerMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args)
         model.to(DEVICE)
 
         optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -117,7 +127,9 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'textNorm_matching_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_c{args.use_color}_g{args.lr_gamma}.png'
+    # plot_name = f'matching_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_c{args.use_color}_g{args.lr_gamma}.png'
+    # plot_name = f'G-match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_k{args.k}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    plot_name = f'TF-match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-recall': dict_recall,

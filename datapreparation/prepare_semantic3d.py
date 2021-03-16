@@ -4,10 +4,10 @@ import os.path as osp
 import pickle
 import cv2
 
-from datapreparation.imports import Object3D, ViewObject, Pose, DescriptionObject, calc_angle_diff, COMBINED_SCENE_NAMES
-from datapreparation.drawing import draw_objects_poses, draw_objects_poses_viewObjects, draw_objects_poses_descriptions, draw_viewobjects, draw_objects_objectDescription, combine_images
-from datapreparation.drawing import draw_cells
-from datapreparation.descriptions import describe_pose, get_text_description, describe_object, describe_cell
+from datapreparation.imports import Object3D, ViewObject, Pose, DescriptionObject, calc_angle_diff, COMBINED_SCENE_NAMES, Cell, CellObject
+from datapreparation.drawing import draw_objects_poses, draw_objects_poses_viewObjects, draw_viewobjects, draw_objects_objectDescription, combine_images
+from datapreparation.drawing import draw_cells, draw_objects_poseDescription
+from datapreparation.descriptions import get_text_description, describe_object, describe_cell, describe_pose
 
 import sys
 sys.path.append('/home/imanox/Documents/Text2Image/Semantic3D-Net')
@@ -30,11 +30,13 @@ def convert_s3d_data(path_pcd, path_images, split, scene_name):
 
     return objects, poses, view_objects
 
-def convert_s3d_data_objectsOnly(path_pcd, path_images, split, scene_name):  
+def convert_s3d_data_objectsPosesOnly(path_pcd, path_images, split, scene_name):  
     objects = pickle.load(open(osp.join(path_pcd, f'{scene_name}.objects.pkl'), 'rb'))
     objects = [Object3D.from_clustered_object_s3d(o) for o in objects]  
-    return objects    
 
+    poses = pickle.load(open(osp.join(path_images, split, scene_name, 'poses.pkl'), 'rb'))
+    poses = [Pose.from_pose_s3d(p) for p in poses]
+    return objects, poses
 
 #Removes all but the <count> biggest objects of each class from the list, also removes their correspondences from the view-object lists
 #Alternative: bigger clustering
@@ -71,22 +73,22 @@ def describe_objects(scene_objects):
 
     return all_descriptions, all_texts, all_hints
 
-def describe_cells(scene_objects, cell_size=25):
+def create_cells(scene_objects, cell_size=25, cell_stride=25):
     object_bboxes = np.array([obj.aligned_bbox for obj in scene_objects]) #[x, y,z , wx, wh, wz]
     object_mins = object_bboxes[:, 0:3]
     object_maxs = object_bboxes[:, 0:3] + object_bboxes[:, 3:6]
     scene_min, scene_max = np.min(object_mins, axis=0), np.max(object_maxs, axis=0)
     
     cells = []
-    best_cell = {'objects': []}
-    for cell_x in range(int(scene_min[0]), int(scene_max[0]), cell_size):
-        for cell_y in range(int(scene_min[1]), int(scene_max[1]), cell_size):
+    best_cell = Cell([-1, -1, -1, -1], "none", [])
+    for cell_x in range(int(scene_min[0]), int(scene_max[0]), cell_stride):
+        for cell_y in range(int(scene_min[1]), int(scene_max[1]), cell_stride):
             cell_bbox = np.array([cell_x, cell_y, cell_x + cell_size, cell_y + cell_size])
             cell_data = describe_cell(scene_objects, cell_bbox)
             
             if cell_data is not None:
                 cells.append(cell_data)
-                if len(cell_data['objects']) > len(best_cell['objects']):
+                if len(cell_data.objects) > len(best_cell.objects):
                     best_cell = cell_data
 
     return cells, best_cell
@@ -100,42 +102,53 @@ def get_scene_size(objects):
 if __name__ == "__main__":
     path_pcd = 'data/numpy_merged/'
     path_images = 'data/pointcloud_images_o3d_merged_occ/'
-    # scene_name = 'bildstein_station1_xyz_intensity_rgb'
+    # scene_name = 'sg27_station5_intensity_rgb'
     output_dir = 'data/semantic3d'
 
     '''
-    Creating cell-data -> need objects only
+    Creating cell-data and pose-descriptions -> need objects and poses.pkl
     '''
     if True:
         for scene_name in COMBINED_SCENE_NAMES:
+        # for scene_name in ('bildstein_station1_xyz_intensity_rgb', ):
             print(scene_name)
-            objects = convert_s3d_data_objectsOnly(path_pcd, path_images, 'train', scene_name)
+            objects, poses = convert_s3d_data_objectsPosesOnly(path_pcd, path_images, 'train', scene_name)
             objects = [o for o in objects if o.label in ['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars']]
             objects = reduce_objects(objects)
+
+            poses = [p for p in poses if np.abs(p.phi) < 0.1] #Take poses only in one direction for now
             
             #Build cells of decreasing size until <=4.0 objects per cell
             mean_cell_objects = np.inf
             cell_size = 25
             while True:
-                cells, best_cell = describe_cells(objects, cell_size)
+                cells, best_cell = create_cells(objects, cell_size)
                 mean_cell_objects = np.mean([len(cell['objects']) for cell in cells])   
                 if mean_cell_objects >4.0:
                     cell_size -= 5
                 else:
-                    break      
+                    break   
+
+            pose_descriptions = [describe_pose(objects, pose) for pose in poses]
 
             output_dir_scene = osp.join(output_dir,'train', scene_name)
             if not osp.isdir(output_dir_scene): os.mkdir(output_dir_scene)
             pickle.dump(objects,      open(osp.join(output_dir_scene, 'objects.pkl'), 'wb'))
+            pickle.dump(poses,      open(osp.join(output_dir_scene, 'poses.pkl'), 'wb'))
             pickle.dump(cells,        open(osp.join(output_dir_scene, 'cell_object_descriptions.pkl'), 'wb'))
-            print(f'Saved {len(objects)} objects and {len(cells)} cells with {mean_cell_objects:0.2f} avg. objects (size {cell_size}) to {osp.join(output_dir,"train", scene_name)}')
+            pickle.dump(pose_descriptions,        open(osp.join(output_dir_scene, 'pose_descriptions.pkl'), 'wb'))
+            print(f'Saved {len(objects)}, {len(cells)} cells with {mean_cell_objects:0.2f} avg. objects (cell-size {cell_size}) and {len(pose_descriptions)} pose-descriptions to {osp.join(output_dir,"train", scene_name)}')
+
+        idx = np.random.randint(len(poses))
+        img = cv2.flip(draw_objects_poseDescription(objects, poses[idx], pose_descriptions[idx]), 0)
+        cv2.imwrite(f'./pose-descriptions_{scene_name}.png', img)
+        for do in pose_descriptions[idx]:
+            print(do)
             
-            cell_idx = np.argmax([len(cell['objects']) for cell in cells]) 
-            img = cv2.flip(draw_cells(objects, cells, highlight_idx=cell_idx), 0)
-            cv2.imwrite(f"./images/cells_{scene_name}.png", img)   
+            # cell_idx = np.argmax([len(cell['objects']) for cell in cells]) 
+            # img = cv2.flip(draw_cells(objects, cells, highlight_idx=cell_idx), 0)
+            # cv2.imwrite(f"./images/cells_{scene_name}.png", img)   
         quit()
-
-
 
     '''
     Creating all data (needs renderings)
@@ -144,6 +157,9 @@ if __name__ == "__main__":
     #Remove stuff classes (at least for now) and retain only the k largest objects of each class
     objects = [o for o in objects if o.label in ['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars']]
     objects, view_objects = reduce_objects(objects, view_objects)
+    quit()
+
+    poses = [p for p in poses if np.abs(p.eye)]
 
     cells, best_cell = describe_cells(objects)
     mean_cell_objects = np.mean([len(cell['objects']) for cell in cells])

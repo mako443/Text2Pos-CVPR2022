@@ -4,7 +4,9 @@ import os.path as osp
 import pickle
 import cv2
 
-from datapreparation.imports import Object3D, ViewObject, Pose, DescriptionObject, DIRECTIONS, DIRECTIONS_COMPASS, IMAGE_WIDHT, calc_angle_diff, CellObject, COLORS, COLOR_NAMES
+from typing import List
+
+from datapreparation.imports import Object3D, ViewObject, Pose, DescriptionObject, DIRECTIONS, DIRECTIONS_COMPASS, IMAGE_WIDHT, calc_angle_diff, Cell, CellObject, COLORS, COLOR_NAMES
 from datapreparation.drawing import draw_objects_poses, draw_objects_poses_viewObjects
 
 '''
@@ -23,7 +25,7 @@ def select_view_objects(view_objects, pose, max_objects):
     return view_objects_sorted[0:max_objects]
 
 #Describes the pose at <key> based on up to <max_objects> objects in each direction, chosing the most-center ones
-def describe_pose(view_objects, poses, key, max_objects=3):
+def describe_pose_DEPRECATED(view_objects, poses, key, max_objects=3):
     ref = poses[key]
 
     #Search the key of every pose that will be used for each direction
@@ -68,6 +70,7 @@ Descriptions for objects
 '''
 Describes an object based on the closest ones next to it
 CARE: the objects are not necessarily visible from e/o positions
+CARE: max-dist not used!
 Directions: +y <=> north, +x <=> east ✓ pptk-checked
 '''
 def describe_object(scene_objects, idx, max_mentioned_objects=5, max_dist=25):
@@ -119,7 +122,21 @@ def describe_object(scene_objects, idx, max_mentioned_objects=5, max_dist=25):
 
     return description, text, hints
 
+#TODO: use new "Cell" class
 def describe_cell(scene_objects, cell_bbox, min_fraction=0.33, min_objects=2):
+    """Describe a cell by finding the objects inside it
+
+    Args:
+        scene_objects (List[Object3D]): List of objects in the scene
+        cell_bbox (np.ndarray): [x0, y0, x1, y1]
+        min_fraction (float, optional): Minimum fraction of points of an object that have to be inside the cell to count it as one of the cell object. Defaults to 0.33.
+        min_objects (int, optional): Minimum number of cell objects, otherwise returns None. Defaults to 2.
+
+    Returns:
+        cell (Cell) or None: Cell with data and cell-objects
+    """
+    assert scene_objects[0].scene_name == scene_objects[-1].scene_name
+
     cell_size = cell_bbox[2] - cell_bbox[0]
     DIRECTIONS = np.array([ [0, 1],
                             [0,-1],
@@ -137,28 +154,47 @@ def describe_cell(scene_objects, cell_bbox, min_fraction=0.33, min_objects=2):
                                         obj.points_w[:, 0] <= cell_bbox[2],
                                         obj.points_w[:, 1] <= cell_bbox[3]))
         points_in_cell = obj.points_w[mask]
+        points_in_cell_color = obj.points_w_color[mask]
         if len(points_in_cell) / len(obj.points_w) >= min_fraction:
             points_in_cell_relative = points_in_cell - cell_mean
-            cell_object = CellObject(obj.points_w, points_in_cell_relative, obj.label, obj.id, obj.color, obj.scene_name)
+            cell_object = CellObject(obj.points_w, obj.points_w_color, points_in_cell_relative, points_in_cell_color, obj.label, obj.id, obj.color, obj.scene_name)
             cell_objects.append(cell_object)
 
     if len(cell_objects) < min_objects:
         return None
 
-    # #Build description
-    # text = ""
-    # for i, obj in enumerate(cell_objects):
-    #     color_dists = np.linalg.norm(COLORS - obj.color, axis=1)
-    #     color_text = COLOR_NAMES[np.argmin(color_dists)]
+    cell = Cell(cell_bbox, scene_objects[0].scene_name, cell_objects)
+    return cell
 
-    #     direction_diffs = np.linalg.norm(obj.center_in_cell[0:2] - DIRECTIONS, axis=1)
-    #     direction = DIRECTION_NAMES[np.argmin(direction_diffs)]
+'''
+Descriptions for Poses
+'''
 
-    #     if i==0:
-    #         text += "In this cell there is a "
-    #     else:
-    #         text += " and a "
-    #     text += f'{color_text} {obj.label} in the {direction}'
-    # text += "."
 
-    return {'objects': cell_objects, 'bbox': cell_bbox}
+'''
+Describes a pose based on the closest objects next to it.
+CARE: the objects are not necessarily visible from e/o positions
+Directions: +y <=> north, +x <=> east
+TODO: add max-dist?
+'''
+def describe_pose(scene_objects: List[Object3D], pose: Pose, max_mentioned_objects=6):
+    description = []
+
+    object_distances = [obj.center - pose.eye for obj in scene_objects]
+    object_distances = np.linalg.norm(object_distances, axis=1)
+    closest_indices = np.argsort(object_distances)
+
+    mentioned_objects = [scene_objects[idx] for idx in closest_indices[0:max_mentioned_objects]]
+
+    for obj in mentioned_objects:
+        obj2pose = pose.eye - obj.center # e.g. "The pose is south of a car."
+        if abs(obj2pose[0])>=abs(obj2pose[1]) and obj2pose[0]>=0: direction='east'
+        if abs(obj2pose[0])>=abs(obj2pose[1]) and obj2pose[0]<=0: direction='west'
+        if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]>=0: direction='north'
+        if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]<=0: direction='south'        
+
+        do = DescriptionObject.from_object3d(obj, direction)
+        description.append(do)
+    
+    return description
+

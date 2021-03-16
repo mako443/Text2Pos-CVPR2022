@@ -6,7 +6,12 @@ import h5py
 import json
 import pickle
 import numpy as np
+
+import torch
 from torch.utils.data import Dataset, DataLoader
+
+import torch_geometric.transforms as T
+from torch_geometric.data import Data as PyG_Data, DataLoader as PyG_DataLoader
 
 import random
 import cv2
@@ -60,6 +65,7 @@ class Semantic3dObjectReferanceDataset(Dataset):
             distractor_objects = np.random.choice([obj for obj in self.scene_objects if obj.id not in mentioned_ids], size=self.num_distractors, replace=False)
         else:
             distractor_objects = []
+        distractor_objects = list(distractor_objects)
 
         #Gather the classes, positions and colors (colors ∈ [0, 1])
         mentioned_objects_classes = [obj.label for obj in mentioned_objects]
@@ -103,6 +109,7 @@ class Semantic3dObjectReferanceDataset(Dataset):
             'objects_classes': mentioned_objects_classes + distractor_objects_classes,
             'objects_positions': np.vstack((mentioned_objects_positions, distractor_objects_positions)),
             'objects_colors': np.vstack((mentioned_objects_colors, distractor_objects_colors)),
+            'objects': mentioned_objects + distractor_objects,
             'text_descriptions': text_descr,
             'hint_descriptions': hint_descr,
             'target_classes': target_class,
@@ -289,24 +296,64 @@ class Semantic3dCellRetrievalDatasetMulti(Dataset):
             known_classes.extend(ds.get_known_classes())
         return list(np.unique(known_classes))
 
+class Semantic3dObjectDataset(Dataset):
+    def __init__(self, path_numpy, path_scenes, split=None, num_points=2048):
+        self.path_numpy = path_numpy
+        self.path_scenes = path_scenes
+        self.split = split  
+
+        self.scene_name = 'bildstein_station1_xyz_intensity_rgb'
+
+        #Load objects
+        self.scene_objects = pickle.load(open(osp.join(self.path_scenes,'train',self.scene_name,'objects.pkl'), 'rb')) 
+        random.shuffle(self.scene_objects)
+
+        self.known_classes = list(np.unique([obj.label for obj in self.scene_objects]))
+        self.class_to_index = {c: i for (i,c) in enumerate(self.known_classes)}
+
+        self.transform = T.Compose([T.NormalizeScale(), T.FixedPoints(num_points)])
+
+        print(f'Semantic3dObjectDataset: {len(self)} objects, using {num_points} points')
+
+    def __len__(self):
+        return len(self.scene_objects)
+
+    def __getitem__(self, idx):
+        obj = self.scene_objects[idx]
+        points = torch.tensor(np.float32(obj.points_w))
+        colors = torch.tensor(np.float32(obj.points_w_color))
+        label = self.class_to_index[obj.label]
+        
+        data = PyG_Data(x=colors, y=label, pos=points)
+
+        data = self.transform(data)
+        return data
+
+
 if __name__ == "__main__":
-    #CARE which is from which ;)
-    dataset = Semantic3dCellRetrievalDataset('./data/numpy_merged/', './data/semantic3d', 'bildstein_station1_xyz_intensity_rgb', ['class', 'color', 'position'])
+    dataset = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d')
+    dataloader = PyG_DataLoader(dataset, batch_size=2)
     data = dataset[0]
-    scene_names = COMBINED_SCENE_NAMES #['bildstein_station1_xyz_intensity_rgb', 'sg27_station5_intensity_rgb']
-    
-    dataset_multi_train = Semantic3dCellRetrievalDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, ['class', 'color', 'position'], split='train')
-    dataset_multi_test  = Semantic3dCellRetrievalDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, ['class', 'color', 'position'], split='test')
-    dataloader = DataLoader(dataset_multi_train, batch_size=2, collate_fn=Semantic3dCellRetrievalDataset.collate_fn)
     batch = next(iter(dataloader))
-
-    cell_lengths = [len(cell['objects']) for cell in dataset.cells]
-    idx = np.argmax(cell_lengths)
-    img = cv2.flip(draw_cells(dataset.scene_objects, dataset.cells, highlight_idx=idx), 0)
-    cv2.imwrite('cells_dataset.png', img)
-    print(dataset.cell_texts[idx])
-
     quit()
+
+    #CARE which is from which ;)
+    # dataset = Semantic3dCellRetrievalDataset('./data/numpy_merged/', './data/semantic3d', 'bildstein_station1_xyz_intensity_rgb', ['class', 'color', 'position'])
+    # data = dataset[0]
+    # scene_names = COMBINED_SCENE_NAMES #['bildstein_station1_xyz_intensity_rgb', 'sg27_station5_intensity_rgb']
+    
+    # dataset_multi_train = Semantic3dCellRetrievalDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, ['class', 'color', 'position'], split='train')
+    # dataset_multi_test  = Semantic3dCellRetrievalDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, ['class', 'color', 'position'], split='test')
+    # dataloader = DataLoader(dataset_multi_train, batch_size=2, collate_fn=Semantic3dCellRetrievalDataset.collate_fn)
+    # batch = next(iter(dataloader))
+
+    # cell_lengths = [len(cell['objects']) for cell in dataset.cells]
+    # idx = np.argmax(cell_lengths)
+    # img = cv2.flip(draw_cells(dataset.scene_objects, dataset.cells, highlight_idx=idx), 0)
+    # cv2.imwrite('cells_dataset.png', img)
+    # print(dataset.cell_texts[idx])
+
+    # quit()
 
     dataset = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=2)
     dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
