@@ -68,7 +68,7 @@ class CellObject:
         self.color_text = COLOR_NAMES[np.argmin(color_dists)]
 
     def __repr__(self):
-        return f'CellObject: {self.color_text} {self.label} '
+        return f'CellObject: {self.color_text} {self.label}'
 
     @property
     def center_in_cell(self):
@@ -97,6 +97,9 @@ class Cell:
     @property
     def center(self):
         return 0.5*(self.bbox[0:2] + self.bbox[2:4])
+
+    def __repr__(self):
+        return f'Cell with {len(self.objects)} objects'
 
 
 class ViewObject:

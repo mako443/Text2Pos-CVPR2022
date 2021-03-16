@@ -35,7 +35,7 @@ class Semantic3dPosesDataset(Dataset):
         self.pose_texts = [self.create_pose_text(description) for description in self.pose_descriptions]
 
         #Create cells
-        self.cells, _ = create_cells(self.scene_objects, cell_size=25, cell_stride=12.5)
+        self.cells, _ = create_cells(self.scene_objects, cell_size=65, cell_stride=65/3)
         self.best_cell_indices = [self.find_best_cell(pose) for pose in self.poses]
 
         print(self)
@@ -53,15 +53,15 @@ class Semantic3dPosesDataset(Dataset):
 
     def __getitem__(self, idx):
         pose = self.poses[idx]
-        description = self.pose_descriptions[idx]
         text = self.pose_texts[idx]
         cell_idx = self.best_cell_indices[idx]
+        cell = self.cells[cell_idx]
 
         return {
             'poses': pose,
-            'descriptions': description,
             'texts': text,
-            'cell_idx': cell_idx
+            'cells': cell,
+            'cell_indices': cell_idx
         }
 
     def collate_fn(data):
@@ -80,16 +80,32 @@ class Semantic3dPosesDataset(Dataset):
 
         return text
 
-    def plot(self, pose_idx=None):
-        highlight_indices = [idx for idx in range(len(self.cells)) if idx in self.best_cell_indices]
-        img = cv2.flip(draw_cells(self.scene_objects, self.cells, poses=self.poses, pose_descriptions=self.pose_descriptions, highlight_indices=highlight_indices), 0)
+    def plot(self, pose_indices='all'):
+        if pose_indices=='all': pose_indices = np.arange(len(self))
+
+        highlight_indices = [self.best_cell_indices[idx] for idx in pose_indices]
+        poses = [self.poses[i] for i in pose_indices]
+        pose_descriptions = [self.pose_descriptions[i] for i in pose_indices]
+        img = cv2.flip(draw_cells(self.scene_objects, self.cells, poses=poses, pose_descriptions=pose_descriptions, highlight_indices=highlight_indices), 0)
         return img
+
+    def get_known_classes(self):
+        return list(np.unique([obj.label for obj in self.scene_objects]))
+
+    def get_known_words(self):
+        words = []
+        for d in self.pose_texts:
+            words.extend(d.replace('.','').replace(',','').lower().split())
+        return list(np.unique(words))
 
 if __name__ == '__main__':
     dataset = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d')
     dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dPosesDataset.collate_fn)
     data = dataset[0]        
     batch = next(iter(dataloader))
+    quit()
 
-    img = dataset.plot(np.random.randint(len(dataset)))
-    cv2.imwrite('cells.png', img)
+    for idx in range(len(dataset)):
+        img = dataset.plot([idx,])
+        cv2.imshow("", img); k = cv2.waitKey()
+        if k==ord('q'): break

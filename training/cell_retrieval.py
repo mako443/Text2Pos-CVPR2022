@@ -9,12 +9,11 @@ import matplotlib.pyplot as plt
 
 from models.cell_retrieval import CellRetrievalNetwork
 from dataloading.semantic3d import Semantic3dCellRetrievalDataset, Semantic3dCellRetrievalDatasetMulti
-from dataloading.semantic3d_poses import Semantic3dPosesDataset
 from datapreparation.imports import COMBINED_SCENE_NAMES
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
-from training.losses import calc_recall_precision, MatchingLoss, PairwiseRankingLoss, HardestRankingLoss
+from training.losses import MatchingLoss, PairwiseRankingLoss, HardestRankingLoss
 
 '''
 TODO:

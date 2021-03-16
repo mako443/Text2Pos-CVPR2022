@@ -32,7 +32,7 @@ def draw_objects_poses(objects, poses, draw_arrows=True, pose_descriptions=None)
 
     if type(poses)==dict: poses = list(poses.values())
     for i_p, p in enumerate(poses):
-        center = (p.eye[0:2] - np.array((min_x, min_y)))*scale
+        center = np.int0((p.eye[0:2] - np.array((min_x, min_y)))*scale)
         # end= center+15*scale*np.array((-np.cos(p.phi), -np.sin(p.phi)))
         # if draw_arrows: cv2.arrowedLine(img, (int(center[0]), int(center[1])), (int(end[0]), int(end[1])), (0,0,255), 4)  
         cv2.circle(img, (int(center[0]), int(center[1])), 6, (0,0,255), 4)
@@ -119,7 +119,7 @@ def draw_cells(objects, cells, highlight_indices=[], poses=[], pose_descriptions
 
         bbox = np.int0((cell.bbox - np.array((min_x, min_y, min_x, min_y))) * scale)
         c = (0,0,255) if idx in highlight_indices else (255,255,255)
-        t = 3 if idx in highlight_indices else 1
+        t = 4 if idx in highlight_indices else 1
         cv2.rectangle(img, tuple(bbox[0:2]), tuple(bbox[2:4] - np.array((5, 5),dtype=np.int)), c, thickness=t) # Subtract a few pixels to see different overlapping cells
 
         for obj in cell.objects:
