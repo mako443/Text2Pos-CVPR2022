@@ -15,9 +15,13 @@ def get_scale(objects):
     max_y = np.max([np.max(o.points_w[:,1]) for o in objects]) 
     return scale, min_x, max_x, min_y, max_y    
 
-def draw_objects_poses(objects, poses, draw_arrows=True):
+def draw_objects_poses(objects, poses, draw_arrows=True, pose_descriptions=None):
+    if pose_descriptions is not None:
+        assert len(poses) == len(pose_descriptions)
+
     scale, min_x, max_x, min_y, max_y = get_scale(objects)
     img = np.zeros((int(max_y-min_y)*scale, int(max_x-min_x)*scale, 3), np.uint8)
+    objects_dict = {o.id : o for o in objects}  
 
     for o in objects:
         points = (o.points_w[:,0:2] - np.array((min_x,min_y)))*scale
@@ -27,13 +31,16 @@ def draw_objects_poses(objects, poses, draw_arrows=True):
         _ = cv2.drawContours(img,[box],0,(c[2],c[1],c[0]),thickness=3)  
 
     if type(poses)==dict: poses = list(poses.values())
-    for p in poses:
+    for i_p, p in enumerate(poses):
         center = (p.eye[0:2] - np.array((min_x, min_y)))*scale
-        end= center+15*scale*np.array((-np.cos(p.phi), -np.sin(p.phi)))
+        # end= center+15*scale*np.array((-np.cos(p.phi), -np.sin(p.phi)))
+        # if draw_arrows: cv2.arrowedLine(img, (int(center[0]), int(center[1])), (int(end[0]), int(end[1])), (0,0,255), 4)  
         cv2.circle(img, (int(center[0]), int(center[1])), 6, (0,0,255), 4)
-        if draw_arrows:
-            cv2.arrowedLine(img, (int(center[0]), int(center[1])), (int(end[0]), int(end[1])), (0,0,255), 4)
-
+        if pose_descriptions is not None:
+            for do in pose_descriptions[i_p]:
+                object3d = objects_dict[do.id]
+                end = np.int0(( 0.5*(np.max(object3d.points_w[:, 0:2], axis=0) + np.min(object3d.points_w[:, 0:2], axis=0)) - np.array((min_x, min_y))) * scale)
+                cv2.arrowedLine(img, (center[0], center[1]), (end[0], end[1]), (255,255,255), thickness=2)            
     return img
 
 def draw_objects_poses_viewObjects(objects, poses, view_objects, keys):
@@ -102,19 +109,20 @@ def draw_objects_objectDescription(objects, description_list):
 
     return img
 
-def draw_cells(objects, cells, highlight_idx=-1):
+def draw_cells(objects, cells, highlight_indices=[], poses=[], pose_descriptions=None):
     scale, min_x, max_x, min_y, max_y = get_scale(objects)
-    img = draw_objects_poses(objects, [])
+    img = draw_objects_poses(objects, poses, draw_arrows=False, pose_descriptions=pose_descriptions)
 
     for idx, cell in enumerate(cells):
-        cell_bbox = cell['bbox']
+        cell_bbox = cell.bbox
         cell_mean = 0.5*(cell_bbox[0:2] + cell_bbox[2:4])
 
-        bbox = np.int0((cell['bbox'] - np.array((min_x, min_y, min_x, min_y))) * scale)
-        c = (0,0,255) if idx == highlight_idx else (255,255,255)
-        cv2.rectangle(img, tuple(bbox[0:2]), tuple(bbox[2:4]), c, thickness=2)
+        bbox = np.int0((cell.bbox - np.array((min_x, min_y, min_x, min_y))) * scale)
+        c = (0,0,255) if idx in highlight_indices else (255,255,255)
+        t = 3 if idx in highlight_indices else 1
+        cv2.rectangle(img, tuple(bbox[0:2]), tuple(bbox[2:4] - np.array((5, 5),dtype=np.int)), c, thickness=t) # Subtract a few pixels to see different overlapping cells
 
-        for obj in cell['objects']:
+        for obj in cell.objects:
             center = obj.center_in_cell[0:2] + cell_mean
             center = np.int0((center - np.array((min_x, min_y))) * scale)
             c = CLASSES_COLORS[obj.label]

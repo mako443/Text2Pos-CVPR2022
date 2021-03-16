@@ -14,8 +14,6 @@ from easydict import EasyDict
 from models.modules import get_mlp, LanguageEncoder
 from dataloading.semantic3d import Semantic3dCellRetrievalDataset
 from dataloading.semantic3d_poses import Semantic3dPosesDataset
-from datapreparation.descriptions import describe_cell
-from datapreparation.prepare_semantic3d import create_cells
 
 '''
 TODO:
@@ -116,22 +114,6 @@ class CellRetrievalNetwork(torch.nn.Module):
     @property
     def device(self):
         return next(self.pos_embedding.parameters()).device   
-
-    '''
-    Generates cells based on all scene objects and cell-size, cell-stride as hyperparams.
-    '''
-    def create_cells(scene_objects, cell_size, cell_stride):
-        cells = create_cells(scene_objects, cell_size=25, cell_stride=12.5)
-        return cells
-
-    '''
-    Finds the cell that best matches the pose (closest to center.)
-    Training can be done by encoding a set of pose descriptions and their respective best-matching cells, then Pairwise-Ranking-Loss.
-    '''
-    def find_best_cell(cells, pose):
-        dists = [cell.center - pose.eye[0:2] for cell in cells]
-        dists = np.linalg.norm(dists, axis=1)
-        return cells[np.argmin(dists)]
 
 if __name__ == "__main__":
     model = CellRetrievalNetwork(['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars'], 'a b c d e'.split(), embed_dim=32, k=2)      

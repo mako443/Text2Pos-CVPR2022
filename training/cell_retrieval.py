@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 
 from models.cell_retrieval import CellRetrievalNetwork
 from dataloading.semantic3d import Semantic3dCellRetrievalDataset, Semantic3dCellRetrievalDatasetMulti
+from dataloading.semantic3d_poses import Semantic3dPosesDataset
 from datapreparation.imports import COMBINED_SCENE_NAMES
 
 from training.args import parse_arguments

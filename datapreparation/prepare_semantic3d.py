@@ -10,8 +10,8 @@ from datapreparation.drawing import draw_cells, draw_objects_poseDescription
 from datapreparation.descriptions import get_text_description, describe_object, describe_cell, describe_pose
 
 import sys
-sys.path.append('/home/imanox/Documents/Text2Image/Semantic3D-Net')
-# sys.path.append('/usr/stud/kolmet/thesis/semantic3d')
+# sys.path.append('/home/imanox/Documents/Text2Image/Semantic3D-Net')
+sys.path.append('/usr/stud/kolmet/thesis/semantic3d')
 from semantic.imports import ClusteredObject as ClusteredObject_S3D, ViewObject as ViewObject_S3D, COLORS, COLOR_NAMES
 from graphics.imports import CLASSES_COLORS, Pose as Pose_S3D
 
@@ -81,8 +81,8 @@ def create_cells(scene_objects, cell_size=25, cell_stride=25):
     
     cells = []
     best_cell = Cell([-1, -1, -1, -1], "none", [])
-    for cell_x in range(int(scene_min[0]), int(scene_max[0]), cell_stride):
-        for cell_y in range(int(scene_min[1]), int(scene_max[1]), cell_stride):
+    for cell_x in np.arange(int(scene_min[0]), int(scene_max[0]), cell_stride):
+        for cell_y in np.arange(int(scene_min[1]), int(scene_max[1]), cell_stride):
             cell_bbox = np.array([cell_x, cell_y, cell_x + cell_size, cell_y + cell_size])
             cell_data = describe_cell(scene_objects, cell_bbox)
             
@@ -123,7 +123,7 @@ if __name__ == "__main__":
             cell_size = 25
             while True:
                 cells, best_cell = create_cells(objects, cell_size)
-                mean_cell_objects = np.mean([len(cell['objects']) for cell in cells])   
+                mean_cell_objects = np.mean([len(cell.objects) for cell in cells])   
                 if mean_cell_objects >4.0:
                     cell_size -= 5
                 else:

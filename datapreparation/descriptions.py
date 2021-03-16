@@ -170,7 +170,6 @@ def describe_cell(scene_objects, cell_bbox, min_fraction=0.33, min_objects=2):
 Descriptions for Poses
 '''
 
-
 '''
 Describes a pose based on the closest objects next to it.
 CARE: the objects are not necessarily visible from e/o positions

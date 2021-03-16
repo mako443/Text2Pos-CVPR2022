@@ -67,6 +67,9 @@ class CellObject:
         color_dists = np.linalg.norm(COLORS - color_rgb, axis=1)
         self.color_text = COLOR_NAMES[np.argmin(color_dists)]
 
+    def __repr__(self):
+        return f'CellObject: {self.color_text} {self.label} '
+
     @property
     def center_in_cell(self):
         return 0.5 * (np.min(self.points_cell, axis=0) + np.max(self.points_cell, axis=0))
