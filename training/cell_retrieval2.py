@@ -36,10 +36,6 @@ def train_epoch(model, dataloader, args):
         cell_objects = [cell.objects for cell in batch['cells']]
         positive = model.encode_objects(cell_objects)
 
-        print(anchor.shape)
-        print(positive.shape)
-        quit()
-
         loss = criterion(anchor, positive)
 
         loss.backward()
