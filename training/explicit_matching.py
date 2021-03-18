@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from models.superglue_matcher import SuperGlueMatch
-from models.graph_matcher import GraphMatch
+# from models.graph_matcher import GraphMatch
 from models.tf_matcher import TransformerMatch
 from dataloading.semantic3d import Semantic3dObjectReferanceDataset
 

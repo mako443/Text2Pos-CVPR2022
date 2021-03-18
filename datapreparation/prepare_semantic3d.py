@@ -81,8 +81,13 @@ def create_cells(scene_objects, cell_size=25, cell_stride=25):
     
     cells = []
     best_cell = Cell([-1, -1, -1, -1], "none", [])
-    for cell_x in np.arange(int(scene_min[0]), int(scene_max[0]), cell_stride):
-        for cell_y in np.arange(int(scene_min[1]), int(scene_max[1]), cell_stride):
+
+    start_x = scene_min[0] - cell_size + cell_stride
+    end_x   = scene_max[0] + cell_size - cell_stride
+    start_y = scene_min[1] - cell_size + cell_stride
+    end_y   = scene_max[1] + cell_size - cell_stride    
+    for cell_x in np.arange(int(start_x), int(end_x), cell_stride):
+        for cell_y in np.arange(int(start_y), int(end_y), cell_stride):
             cell_bbox = np.array([cell_x, cell_y, cell_x + cell_size, cell_y + cell_size])
             cell_data = describe_cell(scene_objects, cell_bbox)
             

@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from models.cell_retrieval import CellRetrievalNetwork
-from dataloading.semantic3d_poses import Semantic3dPosesDataset
+from dataloading.semantic3d_poses import Semantic3dPosesDataset, Semantic3dPosesDatasetMulti
 from datapreparation.imports import COMBINED_SCENE_NAMES
 
 from training.args import parse_arguments
@@ -19,8 +19,7 @@ from training.losses import MatchingLoss, PairwiseRankingLoss, HardestRankingLos
 TODO:
 - what about same best cells?!
 - cell size and stride
-- max-dist for descriptions
-- multi-scene
+- max-dist for descriptions?
 '''
 
 def train_epoch(model, dataloader, args):
@@ -30,17 +29,20 @@ def train_epoch(model, dataloader, args):
     for i_batch, batch in enumerate(dataloader):
         if args.max_batches is not None and i_batch >= args.max_batches:
             break  
+
+        batch_size = len(batch['texts'])
  
         optimizer.zero_grad()
         anchor = model.encode_text(batch['texts']) 
         cell_objects = [cell.objects for cell in batch['cells']]
         positive = model.encode_objects(cell_objects)
 
-        print(anchor.shape)
-        print(positive.shape)
-        quit()
-
-        loss = criterion(anchor, positive)
+        if args.ranking_loss == 'triplet':
+            negative_cell_objects = [cell.objects for cell in batch['negative_cells']]
+            negative = model.encode_objects(negative_cell_objects)
+            loss = criterion(anchor, positive, negative)
+        else:
+            loss = criterion(anchor, positive)
 
         loss.backward()
         optimizer.step()
@@ -50,7 +52,7 @@ def train_epoch(model, dataloader, args):
     return np.mean(epoch_losses)
 
 @torch.no_grad()
-def eval_epoch(model, dataloader, args):
+def eval_epoch(model, dataloader, args, targets='all'):
     """Top-k retrieval for each pose against all cells in the dataset.
     Model might not have seen cells in pairwise-ranking-loss training.
 
@@ -59,7 +61,6 @@ def eval_epoch(model, dataloader, args):
         dataloader : The dataloader
         args : Global argumentds
     """
-    assert args.ranking_loss == 'pairwise' #Else use other distances!
     dataset = dataloader.dataset
     
     #Encode all the cells
@@ -81,8 +82,13 @@ def eval_epoch(model, dataloader, args):
 
     accuracies = {k: [] for k in args.top_k}
     for i in range(len(pose_encodings)):
-        scores = cell_encodings[:] @ pose_encodings[i]
-        sorted_indices = np.argsort(-1.0 * scores) #Sort high->low
+        if args.ranking_loss == 'triplet':
+            dists = np.linalg.norm(cell_encodings[:] - pose_encodings[i], axis=1)
+            sorted_indices = np.argsort(dists) #Low->high
+        else:
+            scores = cell_encodings[:] @ pose_encodings[i]
+            sorted_indices = np.argsort(-1.0 * scores) #Sort high->low
+            
         for k in args.top_k:
             accuracies[k].append(correct_indices[i] in sorted_indices[0:k])
     
@@ -97,9 +103,10 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    scene_names = COMBINED_SCENE_NAMES #['bildstein_station1_xyz_intensity_rgb', 'sg27_station5_intensity_rgb']
-    dataset_train = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d')
+    dataset_train = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', COMBINED_SCENE_NAMES, args.cell_size, args.cell_stride, split='train')
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=args.shuffle)
+    dataset_val = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', COMBINED_SCENE_NAMES, args.cell_size, args.cell_stride, split='test')
+    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
     data = dataset_train[0]        
     batch = next(iter(dataloader_train))
 
@@ -107,7 +114,7 @@ if __name__ == "__main__":
     print('device:', device)
     torch.autograd.set_detect_anomaly(True)     
 
-    learning_reates = np.logspace(-1.5,-4,6)[:-2]
+    learning_reates = np.logspace(-1.5,-4,6)[1:-1]
     dict_loss = {lr: [] for lr in learning_reates}
     dict_acc = {k: {lr: [] for lr in learning_reates} for k in args.top_k}
     dict_acc_val = {k: {lr: [] for lr in learning_reates} for k in args.top_k}    
@@ -117,25 +124,32 @@ if __name__ == "__main__":
         model.to(device)    
 
         optimizer = optim.Adam(model.parameters(), lr=lr)
-        assert args.ranking_loss == 'pairwise'
         if args.ranking_loss == 'pairwise':
             criterion = PairwiseRankingLoss(margin=args.margin)
+        if args.ranking_loss == 'hardest':
+            criterion = HardestRankingLoss(margin=args.margin)
+        if args.ranking_loss == 'triplet':
+            criterion = nn.TripletMarginLoss(margin=args.margin)
 
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)
 
         for epoch in range(args.epochs):
             loss = train_epoch(model, dataloader_train, args)
             train_acc = eval_epoch(model, dataloader_train, args)
+            val_acc = eval_epoch(model, dataloader_val, args)
 
             dict_loss[lr].append(loss)
             for k in args.top_k:
                 dict_acc[k][lr].append(train_acc[k])
-                # dict_acc_val[k][lr].append(val_acc[k])
+                dict_acc_val[k][lr].append(val_acc[k])
 
             scheduler.step()
-            print(f'\t lr {lr:0.4} epoch {epoch} train-acc: ', end="")
+            print(f'\t lr {lr:0.4} loss {loss:0.2f} epoch {epoch} train-acc: ', end="")
             for k, v in train_acc.items():
                 print(f'{k}-{v:0.2f} ', end="")
+            print('val-acc: ', end="")
+            for k, v in val_acc.items():
+                print(f'{k}-{v:0.2f} ', end="")            
             print()        
 
     '''
@@ -147,6 +161,6 @@ if __name__ == "__main__":
     metrics = {
         'train-loss': dict_loss,
         **train_accs,
-        # **val_accs
+        **val_accs
     }
     plot_metrics(metrics, './plots/'+plot_name)              
