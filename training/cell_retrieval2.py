@@ -59,8 +59,10 @@ def eval_epoch(model, dataloader, args, targets='all'):
     Args:
         model : The model
         dataloader : The dataloader
-        args : Global argumentds
+        args : Global arguments
+        targets: <all> or <poses> to use all available cells as targets or only those matching a pose
     """
+    assert targets in ('all', 'poses')
     dataset = dataloader.dataset
     
     #Encode all the cells
@@ -75,10 +77,18 @@ def eval_epoch(model, dataloader, args, targets='all'):
     pose_encodings = np.zeros((0, model.embed_dim))
     correct_indices = []
     for i_batch, batch in enumerate(dataloader):
+        if args.max_batches is not None and i_batch >= args.max_batches:
+            break 
+
         encodings = model.encode_text(batch['texts'])
         pose_encodings = np.vstack((pose_encodings, encodings.cpu().detach().numpy()))
         correct_indices.extend(batch['cell_indices'])
     assert len(correct_indices) == len(pose_encodings)
+
+    if targets == 'poses': # Remove all the cells that are not the target of a pose
+        for idx in range(len(cell_encodings)):
+            if idx not in correct_indices:
+                cell_encodings[idx, :] = np.inf
 
     accuracies = {k: [] for k in args.top_k}
     for i in range(len(pose_encodings)):
@@ -103,10 +113,16 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    dataset_train = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', COMBINED_SCENE_NAMES, args.cell_size, args.cell_stride, split='train')
+    # dataset_train = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', COMBINED_SCENE_NAMES, args.cell_size, args.cell_stride, split='train')
+    # dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=args.shuffle)
+    # dataset_val = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', COMBINED_SCENE_NAMES, args.cell_size, args.cell_stride, split='test')
+    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
+
+    dataset_train = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d', "bildstein_station1_xyz_intensity_rgb", args.cell_size, args.cell_stride, split='train')
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=args.shuffle)
-    dataset_val = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', COMBINED_SCENE_NAMES, args.cell_size, args.cell_stride, split='test')
+    dataset_val = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d', "bildstein_station1_xyz_intensity_rgb", args.cell_size, args.cell_stride, split='test')
     dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
+
     data = dataset_train[0]        
     batch = next(iter(dataloader_train))
 
@@ -119,6 +135,7 @@ if __name__ == "__main__":
     dict_acc = {k: {lr: [] for lr in learning_reates} for k in args.top_k}
     dict_acc_val = {k: {lr: [] for lr in learning_reates} for k in args.top_k}    
 
+    ACC_TARGET = 'poses'
     for lr in learning_reates:
         model = CellRetrievalNetwork(dataset_train.get_known_classes(), dataset_train.get_known_words(), args.embed_dim, k=args.k, use_features=args.use_features)
         model.to(device)    
@@ -135,8 +152,9 @@ if __name__ == "__main__":
 
         for epoch in range(args.epochs):
             loss = train_epoch(model, dataloader_train, args)
-            train_acc = eval_epoch(model, dataloader_train, args)
-            val_acc = eval_epoch(model, dataloader_val, args)
+            train_acc = eval_epoch(model, dataloader_train, args, targets=ACC_TARGET)
+            # val_acc = {k: -1 for k in args.top_k}
+            val_acc = eval_epoch(model, dataloader_val, args, targets=ACC_TARGET)
 
             dict_loss[lr].append(loss)
             for k in args.top_k:
@@ -155,7 +173,7 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'cellFree_len{len(dataset_train)}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_f{"-".join(args.use_features)}.png'
+    plot_name = f'0cells_len{len(dataset_train)}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_f{"-".join(args.use_features)}_t-{ACC_TARGET}.png'
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
     val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}
     metrics = {

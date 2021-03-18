@@ -49,7 +49,7 @@ class Semantic3dPosesDataset(Dataset):
 
         assert len(self.poses) == len(self.pose_descriptions) == len(self.pose_texts) == len(self.best_cell_indices)
 
-        # print(self)
+        print(self)
 
     # CARE: Averaged among the best cells, not all cells!
     def gather_stats(self):
