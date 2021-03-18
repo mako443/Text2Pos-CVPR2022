@@ -10,8 +10,8 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-import torch_geometric.transforms as T
-from torch_geometric.data import Data as PyG_Data, DataLoader as PyG_DataLoader
+# import torch_geometric.transforms as T
+# from torch_geometric.data import Data as PyG_Data, DataLoader as PyG_DataLoader
 
 import random
 import cv2
