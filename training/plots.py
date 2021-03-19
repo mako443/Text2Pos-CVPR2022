@@ -13,7 +13,10 @@ def plot_metrics(metrics, save_path, show_plot=False, size=(16,10)):
         for k in metrics[key].keys():
             l = metrics[key][k]
             line, = plt.plot(l)
-            line.set_label(f'{k:0.6}')
+            if type(k) in (list, tuple):
+                line.set_label(k)
+            else:
+                line.set_label(f'{k:0.6}')
         plt.title(key)
         plt.gca().set_ylim(bottom=0.0) #Set the bottom to 0.0
         plt.legend()
