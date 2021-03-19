@@ -87,7 +87,16 @@ class Semantic3dObjectReferanceMockDataset(Dataset):
             batch[key] = [data[i][key] for i in range(len(data))]
         return batch        
 
+    def get_known_classes(self):
+        return self.classes
 
+    def get_known_words(self):
+        known_words = []
+        for i in range(10):
+            data = self[0]
+            for hint in data['hint_descriptions']:
+                known_words.extend(hint.replace('.','').replace(',','').lower().split())
+        return list(np.unique(known_words))
 
 class Semantic3dObjectReferanceDataset(Dataset):
     def __init__(self, path_numpy, path_scenes, num_distractors='all', split=None):

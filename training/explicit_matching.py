@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from models.superglue_matcher import SuperGlueMatch
 # from models.graph_matcher import GraphMatch
 from models.tf_matcher import TransformerMatch
-from dataloading.semantic3d import Semantic3dObjectReferanceDataset
+from dataloading.semantic3d import Semantic3dObjectReferanceDataset, Semantic3dObjectReferanceMockDataset
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -35,7 +35,7 @@ def train_epoch(model, dataloader, args):
         optimizer.zero_grad()
         # color_input = batch['objects_colors'] if args.use_color else None
         # output = model(batch['objects_classes'], batch['objects_positions'], batch['hint_descriptions'], object_colors=color_input)
-        output = model(batch['objects'], batch['hint_descriptions'], verbose=(i_batch==0))
+        output = model(batch['objects'], batch['hint_descriptions'])
 
         loss = criterion(output.P, batch['all_matches'])
         # print(f'\t\t batch {i_batch} loss {loss.item(): 0.3f}')
@@ -77,13 +77,16 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    dataset_train = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=args.num_distractors, split='train')
-    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
+    # dataset_train = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=args.num_distractors, split='train')
+    # dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
+    # dataset_val = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=args.num_distractors, split='test')
+    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
+    dataset_train = Semantic3dObjectReferanceMockDataset(args.num_mentioned, args.num_distractors, length=256)
+    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceMockDataset.collate_fn)
+    dataset_val = Semantic3dObjectReferanceMockDataset(args.num_mentioned, args.num_distractors, length=256)
+    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceMockDataset.collate_fn)    
     data0 = dataset_train[0]
     batch = next(iter(dataloader_train))
-
-    dataset_val = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=args.num_distractors, split='test')
-    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
 
     DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     print('device:', DEVICE)
@@ -92,17 +95,17 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_reates = [1e-3,] #np.logspace(-1, -3 ,3)
-    dict_loss = {lr: [] for lr in learning_reates}
-    dict_recall = {lr: [] for lr in learning_reates}
-    dict_precision = {lr: [] for lr in learning_reates}
-    dict_val_recall = {lr: [] for lr in learning_reates}
-    dict_val_precision = {lr: [] for lr in learning_reates}    
+    learning_rates = np.logspace(-3, -4 ,3)
+    dict_loss = {lr: [] for lr in learning_rates}
+    dict_recall = {lr: [] for lr in learning_rates}
+    dict_precision = {lr: [] for lr in learning_rates}
+    dict_val_recall = {lr: [] for lr in learning_rates}
+    dict_val_precision = {lr: [] for lr in learning_rates}    
     
-    for lr in learning_reates:
-        # model = SuperGlueMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args.embed_dim, args.num_layers, args.sinkhorn_iters)
+    for lr in learning_rates:
+        model = SuperGlueMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args)
         # model = GraphMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args.embed_dim, args.k, args.sinkhorn_iters, args.num_layers, args.use_features)
-        model = TransformerMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args)
+        # model = TransformerMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args)
         model.to(DEVICE)
 
         optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -129,7 +132,8 @@ if __name__ == "__main__":
     '''
     # plot_name = f'matching_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_c{args.use_color}_g{args.lr_gamma}.png'
     # plot_name = f'G-match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_k{args.k}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
-    plot_name = f'TF-match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    # plot_name = f'TF-match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    plot_name = f'SG-match_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-recall': dict_recall,
