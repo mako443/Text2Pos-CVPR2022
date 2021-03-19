@@ -16,8 +16,78 @@ from torch.utils.data import Dataset, DataLoader
 import random
 import cv2
 
-from datapreparation.imports import Object3D, DescriptionObject, COMBINED_SCENE_NAMES
+from datapreparation.imports import Object3D, DescriptionObject, COMBINED_SCENE_NAMES, COLORS, COLOR_NAMES
 from datapreparation.drawing import draw_cells
+
+'''
+Mock data for explicit matching
+'''
+class Semantic3dObjectReferanceMockDataset(Dataset):
+    def __init__(self, num_mentioned, num_distractors, length=32):
+        self.num_mentioned = num_mentioned
+        self.num_distractors = num_distractors
+        self.length = length
+
+        self.classes = ['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars']
+
+    def __getitem__(self, idx):
+        # Create random objects in the scene
+        objects = []
+        for i in range(self.num_mentioned + self.num_distractors):
+            points_w = np.random.rand(1,3) # Center is inferred from this
+            label = np.random.choice(self.classes)
+            color = np.random.rand(3)
+            objects.append(Object3D.from_mock_data({"points_w": points_w, "label": label, "color": color, "id": i}))
+
+        # Create a hint description for each mentioned object
+        hints = []
+        for i in range(self.num_mentioned):
+            obj = objects[i]
+            target = objects[0]
+            color_dists = np.linalg.norm(obj.color - COLORS, axis=1)
+            color_text = COLOR_NAMES[np.argmin(color_dists)]
+
+            if i == 0: # Target
+                hints.append(f"The target is a {color_text} {obj.label}.")
+            else: # Mentioned
+                obj_to_target = target.center - obj.center
+                if abs(obj_to_target[0])>=abs(obj_to_target[1]) and obj_to_target[0]>=0: direction='east'
+                if abs(obj_to_target[0])>=abs(obj_to_target[1]) and obj_to_target[0]<=0: direction='west'
+                if abs(obj_to_target[0])<=abs(obj_to_target[1]) and obj_to_target[1]>=0: direction='north'
+                if abs(obj_to_target[0])<=abs(obj_to_target[1]) and obj_to_target[1]<=0: direction='south' 
+
+                hints.append(f"It is {direction} of a {color_text} {obj.label}.")
+        
+        # Create <matches> and <all_matches>
+        matches = [(i, i) for i in range(self.num_mentioned)]
+        all_matches = [(i, i) for i in range(self.num_mentioned)]
+        for i in range(self.num_distractors): # Match all distractor objects to the hints-side bin
+            all_matches.append((self.num_mentioned + i, self.num_mentioned)) 
+        matches, all_matches = np.array(matches), np.array(all_matches)
+        assert len(matches) == self.num_mentioned
+        assert len(all_matches) == self.num_mentioned + self.num_distractors and np.sum(all_matches[:, 1]==self.num_mentioned) == self.num_distractors
+
+        return {
+            'target_idx': 0,
+            'objects': objects,
+            'hint_descriptions': hints,
+            'target_classes': target.label,
+            'num_mentioned': self.num_mentioned,
+            'num_distractors': self.num_distractors,
+            'matches': matches,
+            'all_matches': all_matches #Collate as list of np.ndarray because the number of matches might vary.
+        }
+
+    def __len__(self):
+        return self.length        
+
+    def collate_fn(data):
+        batch = {}
+        for key in data[0].keys():
+            batch[key] = [data[i][key] for i in range(len(data))]
+        return batch        
+
+
 
 class Semantic3dObjectReferanceDataset(Dataset):
     def __init__(self, path_numpy, path_scenes, num_distractors='all', split=None):
@@ -331,11 +401,10 @@ class Semantic3dObjectDataset(Dataset):
 
 
 if __name__ == "__main__":
-    dataset = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d')
-    dataloader = PyG_DataLoader(dataset, batch_size=2)
+    dataset = ataset = Semantic3dObjectReferanceMockDataset(6, 2)
+    dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferanceMockDataset.collate_fn)
     data = dataset[0]
     batch = next(iter(dataloader))
-    quit()
 
     #CARE which is from which ;)
     # dataset = Semantic3dCellRetrievalDataset('./data/numpy_merged/', './data/semantic3d', 'bildstein_station1_xyz_intensity_rgb', ['class', 'color', 'position'])
@@ -355,8 +424,8 @@ if __name__ == "__main__":
 
     # quit()
 
-    dataset = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=2)
-    dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
-    data = dataset[0]
-    batch = next(iter(dataloader))
+    # dataset = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=2)
+    # dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
+    # data = dataset[0]
+    # batch = next(iter(dataloader))
 
