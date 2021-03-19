@@ -85,7 +85,7 @@ class SuperGlueMatch(torch.nn.Module):
         '''
         desc0 = object_encodings.transpose(1, 2) #[B, DIM, num_obj]
         desc1 = hint_encodings.transpose(1, 2) #[B, DIM, num_hints]
-        print("desc", desc0.shape, desc1.shape)
+        # print("desc", desc0.shape, desc1.shape)
         
         matcher_output = self.superglue(desc0, desc1)
 
@@ -94,7 +94,7 @@ class SuperGlueMatch(torch.nn.Module):
         outputs.matches0 = matcher_output['matches0']
         outputs.matches1 = matcher_output['matches1']
 
-        print("P", outputs.P.shape)
+        # print("P", outputs.P.shape)
 
         return outputs
 

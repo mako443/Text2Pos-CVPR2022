@@ -22,6 +22,15 @@ COLORS=np.array([[0.15136254, 0.12655825, 0.12769653],
 
 class Object3D:
     @classmethod
+    def from_mock_data(cls, data):
+        o = Object3D()
+        o.label = data['label']
+        o.id = data['id']
+        o.points_w = data['points_w']
+        o.color = data['color']
+        return o
+
+    @classmethod
     def from_clustered_object_s3d(cls, co):
         o = Object3D()
         o.scene_name = co.scene_name
