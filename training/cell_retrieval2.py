@@ -6,10 +6,12 @@ from torch.utils.data import Dataset, DataLoader
 import time
 import numpy as np
 import matplotlib.pyplot as plt
+import cv2
 
 from models.cell_retrieval import CellRetrievalNetwork
 from dataloading.semantic3d_poses import Semantic3dPosesDataset, Semantic3dPosesDatasetMulti
 from datapreparation.imports import COMBINED_SCENE_NAMES
+from datapreparation.drawing import draw_retrieval
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -90,6 +92,7 @@ def eval_epoch(model, dataloader, args, targets='all'):
                 cell_encodings[idx, :] = np.inf
 
     accuracies = {k: [] for k in args.top_k}
+    top_retrievals = {} # Top retrievals as {query_pose_idx: sorted_indices}
     for i in range(len(pose_encodings)):
         if args.ranking_loss == 'triplet':
             dists = np.linalg.norm(cell_encodings[:] - pose_encodings[i], axis=1)
@@ -100,10 +103,12 @@ def eval_epoch(model, dataloader, args, targets='all'):
             
         for k in args.top_k:
             accuracies[k].append(correct_indices[i] in sorted_indices[0:k])
+
+        top_retrievals[i] = sorted_indices
     
     for k in args.top_k:
         accuracies[k] = np.mean(accuracies[k])
-    return accuracies 
+    return accuracies, top_retrievals
 
 if __name__ == "__main__":
     args = parse_arguments()
@@ -128,7 +133,7 @@ if __name__ == "__main__":
     dict_acc = {k: {css: [] for css in cell_sizes_strides} for k in args.top_k}
     dict_acc_val = {k: {css: [] for css in cell_sizes_strides} for k in args.top_k} 
 
-    for cell_size, cell_stride in cell_sizes_strides: 
+    for cell_size, cell_stride in [(60, 40), ]: 
         dataset_train = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d', "sg27_station1_intensity_rgb", cell_size, cell_stride, split='train')
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=args.shuffle)
         dataset_val = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d', "sg27_station1_intensity_rgb", cell_size, cell_stride, split='test')
@@ -147,7 +152,7 @@ if __name__ == "__main__":
         # dict_acc = {k: {lr: [] for lr in learning_rates} for k in args.top_k}
         # dict_acc_val = {k: {lr: [] for lr in learning_rates} for k in args.top_k}    
 
-        ACC_TARGET = 'poses'
+        ACC_TARGET = 'all'
         # for lr in learning_rates:
         for lr in (0.001,):
             model = CellRetrievalNetwork(dataset_train.get_known_classes(), dataset_train.get_known_words(), args.embed_dim, k=args.k, use_features=args.use_features)
@@ -165,9 +170,8 @@ if __name__ == "__main__":
 
             for epoch in range(args.epochs):
                 loss = train_epoch(model, dataloader_train, args)
-                train_acc = eval_epoch(model, dataloader_train, args, targets=ACC_TARGET)
-                # val_acc = {k: -1 for k in args.top_k}
-                val_acc = eval_epoch(model, dataloader_val, args, targets=ACC_TARGET)
+                train_acc, train_retrievals = eval_epoch(model, dataloader_train, args, targets=ACC_TARGET)
+                val_acc, val_retrievals = eval_epoch(model, dataloader_val, args, targets=ACC_TARGET)
 
                 key = (cell_size, cell_stride)
                 dict_loss[key].append(loss)
@@ -182,7 +186,9 @@ if __name__ == "__main__":
                 print('val-acc: ', end="")
                 for k, v in val_acc.items():
                     print(f'{k}-{v:0.2f} ', end="")            
-                print()        
+                print()    
+
+            break
 
     '''
     Save plots
@@ -195,4 +201,11 @@ if __name__ == "__main__":
         **train_accs,
         **val_accs
     }
-    plot_metrics(metrics, './plots/'+plot_name)              
+    plot_metrics(metrics, './plots/'+plot_name)    
+
+    show = 'val'
+    retrievals = val_retrievals if show=='val' else train_retrievals
+    dataset = dataset_val if show=='val' else dataset_train
+    for pose_idx in retrievals.keys():
+        img = draw_retrieval(dataset, pose_idx, retrievals[pose_idx])          
+        cv2.imwrite(f"retrievals_{show}_{pose_idx:02.0f}.png", img)

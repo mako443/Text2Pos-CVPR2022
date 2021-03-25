@@ -130,6 +130,28 @@ def draw_cells(objects, cells, highlight_indices=[], poses=[], pose_descriptions
 
     return img
 
+# To be used with Semantic3dPosesDataset
+def draw_retrieval(dataset, pose_idx, top_cell_indices, k=3):
+    scale, min_x, max_x, min_y, max_y = get_scale(dataset.scene_objects)
+    img = draw_objects_poses(dataset.scene_objects, dataset.poses[pose_idx:pose_idx+1], draw_arrows=False, pose_descriptions=dataset.pose_descriptions[pose_idx:pose_idx+1])
+    pose = dataset.poses[pose_idx]
+    pose = np.int0((pose.eye[0:2] - np.array((min_x, min_y)))*scale)
+    
+    # Draw the best cell in green
+    cell = dataset.cells[dataset.best_cell_indices[pose_idx]]
+    bbox = np.int0((cell.bbox - np.array((min_x, min_y, min_x, min_y))) * scale)
+    cv2.rectangle(img, tuple(bbox[0:2]), tuple(bbox[2:4]), (0,255,0), thickness=2)
+
+    # Draw the top retrievals in red
+    for idx in top_cell_indices[0:k]:
+            cell = dataset.cells[idx]
+            bbox = np.int0((cell.bbox - np.array((min_x, min_y, min_x, min_y))) * scale)
+            center = np.int0( 0.5*(bbox[0:2] + bbox[2:4]))
+            offset = np.random.randint(-15, 15, size=4)
+            cv2.rectangle(img, tuple(bbox[0:2] + offset[0:2]), tuple(bbox[2:4] + offset[2:4]), (0,0,255), thickness=2)
+            cv2.line(img, tuple(pose), tuple(center), (0,0,255), thickness=2)
+
+    return img
 
 def draw_viewobjects(img, view_objects):
     for v in view_objects:

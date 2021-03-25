@@ -14,7 +14,7 @@ from torch.utils.data import Dataset, DataLoader
 from datapreparation.imports import Object3D, DescriptionObject, Pose, COMBINED_SCENE_NAMES
 from datapreparation.descriptions import describe_cell
 from datapreparation.prepare_semantic3d import create_cells
-from datapreparation.drawing import draw_cells
+from datapreparation.drawing import draw_cells, draw_retrieval
 
 class Semantic3dPosesDataset(Dataset):
     def __init__(self, path_numpy, path_scenes, scene_name, cell_size, cell_stride, split=None):
@@ -185,6 +185,12 @@ class Semantic3dPosesDatasetMulti(Dataset):
         return { k: np.mean([stats[k] for stats in all_stats]) for k in all_stats[0].keys()}
 
 if __name__ == '__main__':
+    dataset = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d', "sg27_station1_intensity_rgb", 60, 40, split='test')
+    img = draw_retrieval(dataset, 0, [0,1,2])
+    cv2.imshow("", img)
+    cv2.waitKey()
+    quit()
+
     dataset = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', COMBINED_SCENE_NAMES, cell_size=65.0, cell_stride=65.0/3)
     print(dataset.gather_stats())
     quit()
