@@ -6,10 +6,12 @@ from torch.utils.data import Dataset, DataLoader
 import time
 import numpy as np
 import matplotlib.pyplot as plt
+import cv2
 
 from models.cell_retrieval import CellRetrievalNetwork
 from dataloading.semantic3d_poses import Semantic3dPosesDataset, Semantic3dPosesDatasetMulti
 from datapreparation.imports import COMBINED_SCENE_NAMES
+from datapreparation.drawing import draw_retrieval
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -90,6 +92,7 @@ def eval_epoch(model, dataloader, args, targets='all'):
                 cell_encodings[idx, :] = np.inf
 
     accuracies = {k: [] for k in args.top_k}
+    top_retrievals = {} # Top retrievals as {query_pose_idx: sorted_indices}
     for i in range(len(pose_encodings)):
         if args.ranking_loss == 'triplet':
             dists = np.linalg.norm(cell_encodings[:] - pose_encodings[i], axis=1)
@@ -100,10 +103,12 @@ def eval_epoch(model, dataloader, args, targets='all'):
             
         for k in args.top_k:
             accuracies[k].append(correct_indices[i] in sorted_indices[0:k])
+
+        top_retrievals[i] = sorted_indices
     
     for k in args.top_k:
         accuracies[k] = np.mean(accuracies[k])
-    return accuracies 
+    return accuracies, top_retrievals
 
 if __name__ == "__main__":
     args = parse_arguments()
@@ -182,4 +187,11 @@ if __name__ == "__main__":
         **train_accs,
         **val_accs
     }
-    plot_metrics(metrics, './plots/'+plot_name)              
+    plot_metrics(metrics, './plots/'+plot_name)    
+
+    # show = 'val'
+    # retrievals = val_retrievals if show=='val' else train_retrievals
+    # dataset = dataset_val if show=='val' else dataset_train
+    # for pose_idx in retrievals.keys():
+    #     img = draw_retrieval(dataset, pose_idx, retrievals[pose_idx])          
+    #     cv2.imwrite(f"retrievals_{show}_{pose_idx:02.0f}.png", img)

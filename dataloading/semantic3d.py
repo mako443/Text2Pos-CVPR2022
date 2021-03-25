@@ -20,7 +20,7 @@ from datapreparation.imports import Object3D, DescriptionObject, COMBINED_SCENE_
 from datapreparation.drawing import draw_cells
 
 '''
-Mock data for explicit matching
+Mock data for explicit matching (object reference: one object is target, some other objects are mentioned, rest are distractors)
 '''
 class Semantic3dObjectReferanceMockDataset(Dataset):
     def __init__(self, num_mentioned, num_distractors, length=32):
@@ -31,7 +31,7 @@ class Semantic3dObjectReferanceMockDataset(Dataset):
         self.classes = ['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars']
 
     def __getitem__(self, idx):
-        # Create random objects in the scene
+        # Create random objects in the cell
         objects = []
         for i in range(self.num_mentioned + self.num_distractors):
             points_w = np.random.rand(1,3) # Center is inferred from this
@@ -97,6 +97,64 @@ class Semantic3dObjectReferanceMockDataset(Dataset):
             for hint in data['hint_descriptions']:
                 known_words.extend(hint.replace('.','').replace(',','').lower().split())
         return list(np.unique(known_words))
+
+'''
+Mock data for explicit matching (pose reference: pose is described relative to some mentioned objects, rest are distractors)
+'''
+class Semantic3dPoseReferanceMockDataset(Semantic3dObjectReferanceMockDataset):
+    def __init__(self, num_mentioned, num_distractors, length=32):
+        super().__init__(num_mentioned, num_distractors, length)
+
+    def __getitem__(self, idx):
+        # Create random objects in the cell
+        objects = []
+        for i in range(self.num_mentioned + self.num_distractors):
+            points_w = np.random.rand(1,3) # Center is inferred from this
+            label = np.random.choice(self.classes)
+            color = np.random.rand(3)
+            objects.append(Object3D.from_mock_data({"points_w": points_w, "label": label, "color": color, "id": i}))
+
+        # create the pose somewhere in the cell
+        pose = np.random.rand(3)
+
+        # Give hints for the <num_mentioned> closest objects
+        hints = []
+        matches = [] # (i,j) entry means obj-i matches hint-j
+        distances = np.linalg.norm(pose[0:2] - np.array([obj.center for obj in objects])[:, 0:2], axis=1) # Distance only x&y
+        sorted_indices = np.argsort(distances)
+        for hint_idx, obj_idx in enumerate(sorted_indices[0 : self.num_mentioned]):
+            obj = objects[obj_idx]
+            color_dists = np.linalg.norm(obj.color - COLORS, axis=1)
+            color_text = COLOR_NAMES[np.argmin(color_dists)]
+            
+            obj_to_pose = pose - obj.center
+            if abs(obj_to_pose[0])>=abs(obj_to_pose[1]) and obj_to_pose[0]>=0: direction='east'
+            if abs(obj_to_pose[0])>=abs(obj_to_pose[1]) and obj_to_pose[0]<=0: direction='west'
+            if abs(obj_to_pose[0])<=abs(obj_to_pose[1]) and obj_to_pose[1]>=0: direction='north'
+            if abs(obj_to_pose[0])<=abs(obj_to_pose[1]) and obj_to_pose[1]<=0: direction='south' 
+
+            hints.append(f'The pose is {direction} of a {color_text} {obj.label}')
+            matches.append((obj_idx, hint_idx))
+
+        # Create <matches> and <all_matches>
+        all_matches = matches.copy()
+        matches = np.array(matches)
+        for obj_idx in range(len(objects)):
+            if obj_idx not in matches[:, 0]: # If the object is not mentioned, i.e. in matches
+                all_matches.append((obj_idx, self.num_mentioned)) # Then match it to the hints-side bin
+        all_matches = np.array(all_matches)
+        assert len(matches) == self.num_mentioned
+        assert len(all_matches) == self.num_mentioned + self.num_distractors and np.sum(all_matches[:, 1]==self.num_mentioned) == self.num_distractors
+
+        return {
+            'objects': objects,
+            'hint_descriptions': hints,
+            'num_mentioned': self.num_mentioned,
+            'num_distractors': self.num_distractors,
+            'matches': matches,
+            'all_matches': all_matches,
+            'poses': pose
+        }
 
 class Semantic3dObjectReferanceDataset(Dataset):
     def __init__(self, path_numpy, path_scenes, num_distractors='all', split=None):
@@ -410,7 +468,7 @@ class Semantic3dObjectDataset(Dataset):
 
 
 if __name__ == "__main__":
-    dataset = ataset = Semantic3dObjectReferanceMockDataset(6, 2)
+    dataset = ataset = Semantic3dPoseReferanceMockDataset(6, 2)
     dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferanceMockDataset.collate_fn)
     data = dataset[0]
     batch = next(iter(dataloader))
