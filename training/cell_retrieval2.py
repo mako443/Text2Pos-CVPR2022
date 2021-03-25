@@ -18,7 +18,6 @@ from training.losses import MatchingLoss, PairwiseRankingLoss, HardestRankingLos
 '''
 TODO:
 - what about same best cells?!
-- cell size and stride
 - max-dist for descriptions?
 '''
 
