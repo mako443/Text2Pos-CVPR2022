@@ -27,8 +27,8 @@ def parse_arguments():
     parser.add_argument('--margin', type=float, default=0.5)
     parser.add_argument('--top_k', type=int, nargs='+', default=[1, 3, 5])
     parser.add_argument('--ranking_loss', type=str, default='pairwise')
-    parser.add_argument('--cell_size', type=float, default=65.0)
-    parser.add_argument('--cell_stride', type=float, default=65.0/3)
+    parser.add_argument('--cell_size', type=float, default=60)
+    parser.add_argument('--cell_stride', type=float, default=40)
 
     parser.add_argument('--epochs', type=int, default=16)
     parser.add_argument('--alpha_obj_ref', type=float, default=2.0)
