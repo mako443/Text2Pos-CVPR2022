@@ -433,42 +433,9 @@ class Semantic3dCellRetrievalDatasetMulti(Dataset):
             known_classes.extend(ds.get_known_classes())
         return list(np.unique(known_classes))
 
-class Semantic3dObjectDataset(Dataset):
-    def __init__(self, path_numpy, path_scenes, split=None, num_points=2048):
-        self.path_numpy = path_numpy
-        self.path_scenes = path_scenes
-        self.split = split  
-
-        self.scene_name = 'bildstein_station1_xyz_intensity_rgb'
-
-        #Load objects
-        self.scene_objects = pickle.load(open(osp.join(self.path_scenes,'train',self.scene_name,'objects.pkl'), 'rb')) 
-        random.shuffle(self.scene_objects)
-
-        self.known_classes = list(np.unique([obj.label for obj in self.scene_objects]))
-        self.class_to_index = {c: i for (i,c) in enumerate(self.known_classes)}
-
-        self.transform = T.Compose([T.NormalizeScale(), T.FixedPoints(num_points)])
-
-        print(f'Semantic3dObjectDataset: {len(self)} objects, using {num_points} points')
-
-    def __len__(self):
-        return len(self.scene_objects)
-
-    def __getitem__(self, idx):
-        obj = self.scene_objects[idx]
-        points = torch.tensor(np.float32(obj.points_w))
-        colors = torch.tensor(np.float32(obj.points_w_color))
-        label = self.class_to_index[obj.label]
-        
-        data = PyG_Data(x=colors, y=label, pos=points)
-
-        data = self.transform(data)
-        return data
-
 
 if __name__ == "__main__":
-    dataset = ataset = Semantic3dPoseReferanceMockDataset(6, 2)
+    dataset = Semantic3dPoseReferanceMockDataset(6, 2)
     dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferanceMockDataset.collate_fn)
     data = dataset[0]
     batch = next(iter(dataloader))

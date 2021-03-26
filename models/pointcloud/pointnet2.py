@@ -51,13 +51,6 @@ class GlobalAbstractionLayer(nn.Module):
 class PointNet2(nn.Module):
     def __init__(self, num_classes):
         super(PointNet2, self).__init__()
-        # self.sa1 = SetAbstractionLayer(0.5, 0.2, get_mlp([3 + 3, 16, 32], add_batchnorm=True))
-        # self.sa2 = SetAbstractionLayer(0.25, 0.4, get_mlp([32 + 3, 64, 128], add_batchnorm=True))
-        # self.ga = GlobalAbstractionLayer(get_mlp([128 + 3, 256, 512], add_batchnorm=True))
-
-        # self.lin1 = nn.Linear(512, 256)
-        # self.lin2 = nn.Linear(256, num_classes)
-
         self.sa1 = SetAbstractionLayer(0.5, 0.2, get_mlp([3 + 3, 32, 64], add_batchnorm=True))
         self.sa2 = SetAbstractionLayer(0.25, 0.4, get_mlp([64 + 3, 128, 256], add_batchnorm=True))
         self.ga = GlobalAbstractionLayer(get_mlp([256 + 3, 512, 1024], add_batchnorm=True))
