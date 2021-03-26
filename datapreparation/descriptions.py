@@ -122,7 +122,7 @@ def describe_object(scene_objects, idx, max_mentioned_objects=5, max_dist=25):
 
     return description, text, hints
 
-#TODO: use new "Cell" class
+#TODO: use mask to get number of points in cell but still save *all* points (shifted by mean), see Semantic3dPoseReferanceDataset
 def describe_cell(scene_objects, cell_bbox, min_fraction=0.33, min_objects=2):
     """Describe a cell by finding the objects inside it
 

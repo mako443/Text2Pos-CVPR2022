@@ -92,7 +92,7 @@ class Semantic3dObjectReferanceMockDataset(Dataset):
 
     def get_known_words(self):
         known_words = []
-        for i in range(10):
+        for i in range(50):
             data = self[0]
             for hint in data['hint_descriptions']:
                 known_words.extend(hint.replace('.','').replace(',','').lower().split())
@@ -102,17 +102,24 @@ class Semantic3dObjectReferanceMockDataset(Dataset):
 Mock data for explicit matching (pose reference: pose is described relative to some mentioned objects, rest are distractors)
 '''
 class Semantic3dPoseReferanceMockDataset(Semantic3dObjectReferanceMockDataset):
-    def __init__(self, num_mentioned, num_distractors, length=32):
-        super().__init__(num_mentioned, num_distractors, length)
+    def __init__(self, num_mentioned, pad_size, length=32):
+        super().__init__(num_mentioned, -1, length)
+        self.pad_size = pad_size
+
+        self.classes = ['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars'] # Added <pad> 
+
+    def get_known_classes(self):
+        return self.classes + ['pad', ]        
 
     def __getitem__(self, idx):
         # Create random objects in the cell
+        num_distractors = np.random.randint(self.pad_size - self.num_mentioned) if self.pad_size > self.num_mentioned else 0
         objects = []
-        for i in range(self.num_mentioned + self.num_distractors):
+        for i in range(self.num_mentioned + num_distractors):
             points_w = np.random.rand(1,3) # Center is inferred from this
             label = np.random.choice(self.classes)
             color = np.random.rand(3)
-            objects.append(Object3D.from_mock_data({"points_w": points_w, "label": label, "color": color, "id": i}))
+            objects.append(Object3D.from_mock_data({"points_w": points_w, "label": label, "color": color, "id": i}))              
 
         # create the pose somewhere in the cell
         pose = np.random.rand(3)
@@ -136,6 +143,13 @@ class Semantic3dPoseReferanceMockDataset(Semantic3dObjectReferanceMockDataset):
             hints.append(f'The pose is {direction} of a {color_text} {obj.label}')
             matches.append((obj_idx, hint_idx))
 
+        # Create pad objects
+        while len(objects) < self.pad_size:
+            points_w = np.zeros((1, 3))
+            label = 'pad'
+            color = np.zeros((1, 3))
+            objects.append(Object3D.from_mock_data({"points_w": points_w, "label": label, "color": color, "id": -1}))              
+
         # Create <matches> and <all_matches>
         all_matches = matches.copy()
         matches = np.array(matches)
@@ -144,7 +158,7 @@ class Semantic3dPoseReferanceMockDataset(Semantic3dObjectReferanceMockDataset):
                 all_matches.append((obj_idx, self.num_mentioned)) # Then match it to the hints-side bin
         all_matches = np.array(all_matches)
         assert len(matches) == self.num_mentioned
-        assert len(all_matches) == self.num_mentioned + self.num_distractors and np.sum(all_matches[:, 1]==self.num_mentioned) == self.num_distractors
+        # assert len(all_matches) == self.num_mentioned + .num_distractors and np.sum(all_matches[:, 1]==self.num_mentioned) == self.num_distractors
 
         return {
             'objects': objects,
@@ -156,6 +170,144 @@ class Semantic3dPoseReferanceMockDataset(Semantic3dObjectReferanceMockDataset):
             'poses': pose
         }
 
+'''
+Currently uses cell-oracle: cell is placed so that it exactly fits all mentioned objects, retains all distractors
+'''
+class Semantic3dPoseReferanceDataset(Dataset):
+    def __init__(self, path_numpy, path_scenes, scene_name, pad_size, split=None):
+        self.path_numpy = path_numpy
+        self.path_scenes = path_scenes
+        self.split = split
+        self.pad_size = pad_size
+    
+        self.scene_name = scene_name
+
+        #Load objects
+        self.scene_objects = pickle.load(open(osp.join(self.path_scenes,'train',self.scene_name,'objects.pkl'), 'rb'))
+        self.poses = pickle.load(open(osp.join(self.path_scenes,'train',self.scene_name,'poses.pkl'), 'rb'))
+        self.pose_descriptions = pickle.load(open(osp.join(self.path_scenes,'train',self.scene_name,'pose_descriptions.pkl'), 'rb'))
+        assert len(self.poses)==len(self.pose_descriptions)      
+
+        if split is not None:
+            assert split in ('train', 'test')
+            test_indices = (np.arange(len(self.poses)) % 5) == 0
+            indices = test_indices if split=='test' else np.bitwise_not(test_indices)
+            self.poses = [p for (i, p) in enumerate(self.poses) if indices[i]]            
+            self.pose_descriptions = [p for (i, p) in enumerate(self.pose_descriptions) if indices[i]]
+
+        self.create_hint_descriptions() # Create here to have known words
+
+    def get_known_classes(self):
+        classes = [obj.label for obj in self.scene_objects]
+        classes.append('pad')
+        return list(np.unique(classes))
+
+    def get_known_words(self):
+        words = []
+        for hints in self.hint_descriptions:
+            for hint in hints:
+                words.extend(hint.replace('.','').replace(',','').lower().split())
+        return list(np.unique(words))
+
+    def create_hint_descriptions(self):
+        self.hint_descriptions = []
+        for pose_description in self.pose_descriptions:
+            hints = []
+            for do in pose_description:
+                hints.append(f'The pose is {do.direction} of a {do.color_text} {do.label}.')
+            self.hint_descriptions.append(hints)
+
+    def __getitem__(self, idx):
+        pose, pose_description, hint_descriptions = self.poses[idx], self.pose_descriptions[idx], self.hint_descriptions[idx]
+        objects_dict = {obj.id: obj for obj in self.scene_objects}
+        mentioned_ids = [do.id for do in pose_description]
+        mentioned_objects = [objects_dict[id] for id in mentioned_ids]
+
+        # Build cell on the fly - currently as oracle that perfectly fits all mentioned objects
+        mentioned_bboxes = [obj.aligned_bbox for obj in mentioned_objects]
+        mentioned_bboxes = np.array(mentioned_bboxes)
+        mentioned_bboxes[:, 3:6] += mentioned_bboxes[:, 0:3] # now [x0, y0, z0, x1, y1, z1]
+        cell_bbox = np.hstack((np.min(mentioned_bboxes[:, 0:3], axis=0), np.max(mentioned_bboxes[:, 3:6], axis=0)))
+        # cell_mean = 0.5 * (cell_bbox[0:3] + cell_bbox[3:6])
+        cell_sizes = cell_bbox[3:6] - cell_bbox[0:3]
+        assert np.all(cell_sizes>0)
+
+        cell_objects = []
+
+        # Gather the mentioned objects
+        # CARE: using "mock" Object3D here, not cell objects
+        for obj in mentioned_objects:
+            cell_object = Object3D.from_mock_data({'label': obj.label,  'id': obj.id, 'points_w': obj.points_w, 'color': obj.color})
+            cell_objects.append(cell_object)
+
+        # Gather the distractors (objects that are at least 1/3 in cell)
+        for obj in self.scene_objects:
+            if obj.id in mentioned_ids:
+                continue # Only gathering distractors
+            if len(cell_objects) == self.pad_size: # CARE: removing some distractors if over pad_size, this uses ground-truth data!
+                break 
+
+            mask = np.bitwise_and.reduce((
+                obj.points_w[:, 0] >= cell_bbox[0],
+                obj.points_w[:, 1] >= cell_bbox[1],
+                obj.points_w[:, 2] >= cell_bbox[2],
+                obj.points_w[:, 0] <= cell_bbox[3],
+                obj.points_w[:, 1] <= cell_bbox[4],
+                obj.points_w[:, 2] <= cell_bbox[5],
+            ))
+            points_in_cell = obj.points_w[mask]
+            points_in_cell_color = obj.points_w_color[mask]
+
+            if len(points_in_cell) / len(obj.points_w) >= 1/3:
+                cell_object = Object3D.from_mock_data({'label': obj.label,  'id': obj.id, 'points_w': obj.points_w, 'color': obj.color})
+                cell_objects.append(cell_object)
+
+        # Norming all points to [0, 1] relative to cell
+        # CARE: not all [0, 1] because distractors could be partially outside
+        for obj in cell_objects:
+            obj.points_w = (obj.points_w - cell_bbox[0:3]) / cell_sizes
+        pose = (pose.eye - cell_bbox[0:3]) / cell_sizes
+
+        # Padding objects (care: after norming)
+        # Create pad objects
+        while len(cell_objects) < self.pad_size:
+            points_w = np.zeros((1, 3))
+            label = 'pad'
+            color = np.zeros((1, 3))
+            cell_objects.append(Object3D.from_mock_data({"points_w": points_w, "label": label, "color": color, "id": -1}))            
+
+        # Create <matches> and <all_matches>
+        matches = [(i, i) for i in range(len(mentioned_objects))]
+        all_matches = [(i, i) for i in range(len(mentioned_objects))]
+        for i in range(len(cell_objects)):
+            if i<len(matches):
+                continue
+            all_matches.append((i, len(mentioned_objects))) # Assign distractors to hints-side bin
+
+        matches, all_matches = np.array(matches), np.array(all_matches)
+        assert np.sum(all_matches[:, 1]==len(mentioned_objects)) == len(cell_objects)-len(mentioned_objects)
+
+        return {
+            'objects': cell_objects,
+            'hint_descriptions': hint_descriptions,
+            'matches': matches,
+            'all_matches': all_matches,
+            'poses': pose
+        }
+
+    def __len__(self):
+        return len(self.poses)
+
+    def collate_fn(data):
+        batch = {}
+        for key in data[0].keys():
+            batch[key] = [data[i][key] for i in range(len(data))]
+        return batch
+
+'''
+DEPRECATED
+Use free-form poses datasets instead
+'''
 class Semantic3dObjectReferanceDataset(Dataset):
     def __init__(self, path_numpy, path_scenes, num_distractors='all', split=None):
         self.path_numpy = path_numpy
@@ -435,10 +587,16 @@ class Semantic3dCellRetrievalDatasetMulti(Dataset):
 
 
 if __name__ == "__main__":
-    dataset = Semantic3dPoseReferanceMockDataset(6, 2)
-    dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferanceMockDataset.collate_fn)
-    data = dataset[0]
-    batch = next(iter(dataloader))
+    dataset1 = Semantic3dPoseReferanceDataset('./data/numpy_merged/', './data/semantic3d', "bildstein_station1_xyz_intensity_rgb", pad_size=8)
+    data1 = dataset1[0]
+    dataset2 = Semantic3dPoseReferanceMockDataset(6, pad_size=8)
+    data2 = dataset2[0]
+    quit()
+
+    # dataset = Semantic3dPoseReferanceMockDataset(6, pad_size=8)
+    # dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferanceMockDataset.collate_fn)
+    # data = dataset[0]
+    # batch = next(iter(dataloader))
 
     #CARE which is from which ;)
     # dataset = Semantic3dCellRetrievalDataset('./data/numpy_merged/', './data/semantic3d', 'bildstein_station1_xyz_intensity_rgb', ['class', 'color', 'position'])
