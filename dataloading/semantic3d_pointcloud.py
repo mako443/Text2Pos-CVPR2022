@@ -19,13 +19,36 @@ from torch_geometric.data import Data, DataLoader
 from datapreparation.imports import Object3D, DescriptionObject, COMBINED_SCENE_NAMES, COLORS, COLOR_NAMES
 from datapreparation.drawing import draw_cells
 
+class Semantic3dObjectDatasetMulti(Dataset):
+    def __init__(self, path_numpy, path_scenes, scene_names, split=None, num_points=2048):
+        self.path_numpy = path_numpy
+        self.path_scenes = path_scenes
+        self.split = split
+        self.scene_names = scene_names
+
+        self.datasets = [Semantic3dObjectDataset(path_numpy, path_scenes, scene_name, split, num_points) for scene_name in self.scene_names]
+
+        self.known_classes = self.datasets[0].known_classes
+
+    def __len__(self):
+        return np.sum([len(ds) for ds in self.datasets])
+
+    def __getitem__(self, idx):
+        count = 0
+        for dataset in self.datasets:
+            idx_in_dataset = idx - count
+            if idx_in_dataset < len(dataset):
+                return dataset[idx_in_dataset]
+            else:
+                count += len(dataset)
+        assert False
+
 class Semantic3dObjectDataset(Dataset):
-    def __init__(self, path_numpy, path_scenes, split=None, num_points=2048):
+    def __init__(self, path_numpy, path_scenes, scene_name, split=None, num_points=2048):
         self.path_numpy = path_numpy
         self.path_scenes = path_scenes
         self.split = split  
-
-        self.scene_name = 'neugasse_station1_xyz_intensity_rgb'
+        self.scene_name = scene_name
 
         #Load objects
         self.scene_objects = pickle.load(open(osp.join(self.path_scenes,'train',self.scene_name,'objects.pkl'), 'rb')) 
@@ -38,12 +61,15 @@ class Semantic3dObjectDataset(Dataset):
 
         random.shuffle(self.scene_objects) # Prevent objects from being in order by classes
 
-        self.known_classes = list(np.unique([obj.label for obj in self.scene_objects]))
-        self.class_to_index = {c: i for (i,c) in enumerate(self.known_classes)}
+        self.class_to_index = {'unlabeled': 0, 'man-made terrain': 1, 'natural terrain': 2, 'high vegetation': 3, 'low vegetation': 4, 'buildings': 5, 'hard scape': 6, 'scanning artefacts': 7, 'cars': 8}
+        self.known_classes = list(self.class_to_index.keys())
+
+        # self.known_classes = list(np.unique([obj.label for obj in self.scene_objects]))
+        # self.class_to_index = {c: i for (i,c) in enumerate(self.known_classes)}
 
         self.transform = T.Compose([T.NormalizeScale(), T.FixedPoints(num_points)])
 
-        print(f'Semantic3dObjectDataset: {len(self)} objects, using {num_points} points')
+        print(f'Semantic3dObjectDataset ({self.scene_name}): {len(self)} objects, using {num_points} points')
 
     def __len__(self):
         return len(self.scene_objects)

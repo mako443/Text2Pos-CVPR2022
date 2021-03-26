@@ -36,6 +36,7 @@ def parse_arguments():
     parser.add_argument('--alpha_obj_class', type=float, default=1.0)
     parser.add_argument('--alpha_offset', type=float, default=0.01)
     parser.add_argument('--lr_gamma', type=float, default=1.0)
+    parser.add_argument('--scene_names', nargs='+', default=[])
     
 
     args = parser.parse_args()

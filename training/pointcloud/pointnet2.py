@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from models.pointcloud.pointnet2 import PointNet2
-from dataloading.semantic3d_pointcloud import Semantic3dObjectDataset
+from dataloading.semantic3d_pointcloud import Semantic3dObjectDataset, Semantic3dObjectDatasetMulti
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -50,7 +50,7 @@ def train_epoch(model, dataloader, args):
 
 @torch.no_grad()
 def val_epoch(model, dataloader, args):
-    # model.eval() #TODO: yes/no?
+    model.eval() #TODO: yes/no?
     epoch_accs = []
 
     for i_batch, batch in enumerate(dataloader):
@@ -68,9 +68,12 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    dataset_train = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='train')
+    scene_names = ['bildstein_station1_xyz_intensity_rgb','domfountain_station1_xyz_intensity_rgb','neugasse_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb','untermaederbrunnen_station1_xyz_intensity_rgb']
+    # dataset_train = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='train')
+    dataset_train = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='train')
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)
-    dataset_val = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='test')
+    # dataset_val = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='test')
+    dataset_val = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='test')
     dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)    
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -80,7 +83,7 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_reates = np.logspace(-3.0, -4.0, 3)
+    learning_reates = np.logspace(-3.0, -4.0, 5)
     dict_loss = {lr: [] for lr in learning_reates}    
     dict_acc = {lr: [] for lr in learning_reates}
     dict_acc_val = {lr: [] for lr in learning_reates}
@@ -109,7 +112,7 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'PN2_bs{args.batch_size}_mb{args.max_batches}_s{args.shuffle}.png'
+    plot_name = f'PN2_len{len(dataset_train)}_bs{args.batch_size}_mb{args.max_batches}_s{args.shuffle}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-acc': dict_acc,

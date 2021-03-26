@@ -18,6 +18,7 @@ from training.losses import MatchingLoss, calc_recall_precision
 
 '''
 TODO:
+- VARY NUMBER OF OBJECTS (pad)
 - if not working: mock-train texts to texts (english - german)
 - regress offsets: classify, discretized vector, actual vector
 '''
@@ -122,7 +123,8 @@ if __name__ == "__main__":
             dict_val_recall[lr].append(val_recall)
             dict_val_precision[lr].append(val_precision)            
 
-            scheduler.step()
+            if scheduler: 
+                scheduler.step()
 
             print(f'\t lr {lr:0.6} epoch {epoch} loss {loss:0.3f} t-recall {train_recall:0.2f} t-precision {train_precision:0.2f} v-recall {val_recall:0.2f} v-precision {val_precision:0.2f} time {epoch_time:0.3f}')
         print()
