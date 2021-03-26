@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from models.superglue_matcher import SuperGlueMatch
 # from models.graph_matcher import GraphMatch
 from models.tf_matcher import TransformerMatch
-from dataloading.semantic3d import Semantic3dObjectReferanceDataset, Semantic3dObjectReferanceMockDataset, Semantic3dPoseReferanceMockDataset
+from dataloading.semantic3d import Semantic3dPoseReferanceMockDataset, Semantic3dPoseReferanceDataset
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -78,14 +78,15 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    # dataset_train = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=args.num_distractors, split='train')
-    # dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
-    # dataset_val = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=args.num_distractors, split='test')
-    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
-    dataset_train = Semantic3dPoseReferanceMockDataset(args.num_mentioned, args.num_distractors, length=1024)
+    dataset_train = Semantic3dPoseReferanceMockDataset(6, pad_size=args.pad_size)
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferanceMockDataset.collate_fn)
-    dataset_val = Semantic3dPoseReferanceMockDataset(args.num_mentioned, args.num_distractors, length=256)
-    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferanceMockDataset.collate_fn)    
+    # dataset_val = Semantic3dObjectReferanceMockDataset(args.num_mentioned, args.num_distractors, length=256)
+    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceMockDataset.collate_fn)  
+    dataset_val = Semantic3dPoseReferanceDataset('./data/numpy_merged/', './data/semantic3d', "bildstein_station1_xyz_intensity_rgb", pad_size=args.pad_size)
+    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferanceDataset.collate_fn)  
+
+    assert sorted(dataset_train.get_known_classes()) == sorted(dataset_val.get_known_classes()) and sorted(dataset_train.get_known_words()) == sorted(dataset_val.get_known_words())
+    
     data0 = dataset_train[0]
     batch = next(iter(dataloader_train))
 
@@ -136,7 +137,7 @@ if __name__ == "__main__":
     # plot_name = f'G-match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_k{args.k}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     # plot_name = f'TF-match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     # plot_name = f'SG-match_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
-    plot_name = f'SG-Pose_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    plot_name = f'SG-Pose_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-recall': dict_recall,

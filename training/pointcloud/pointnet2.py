@@ -83,7 +83,11 @@ if __name__ == "__main__":
     '''
     Start training
     '''
+<<<<<<< HEAD
     learning_reates = np.logspace(-3.0, -4.0, 5)
+=======
+    learning_reates = np.logspace(-2.5, -3.5, 3)
+>>>>>>> efa938ff36606d68b271ccb431263d12d9e53e22
     dict_loss = {lr: [] for lr in learning_reates}    
     dict_acc = {lr: [] for lr in learning_reates}
     dict_acc_val = {lr: [] for lr in learning_reates}

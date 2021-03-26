@@ -16,6 +16,10 @@ from datapreparation.descriptions import describe_cell
 from datapreparation.prepare_semantic3d import create_cells
 from datapreparation.drawing import draw_cells, draw_retrieval
 
+'''
+Datasets for cell-retrieval
+'''
+
 class Semantic3dPosesDataset(Dataset):
     def __init__(self, path_numpy, path_scenes, scene_name, cell_size, cell_stride, split=None):
         self.path_numpy = path_numpy

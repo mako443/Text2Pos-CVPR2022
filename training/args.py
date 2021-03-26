@@ -22,6 +22,7 @@ def parse_arguments():
     # SuperGlue
     parser.add_argument('--sinkhorn_iters', type=int, default=40)
     parser.add_argument('--num_mentioned', type=int, default=6)
+    parser.add_argument('--pad_size', type=int, default=16)
 
     # Cell retrieval
     parser.add_argument('--margin', type=float, default=0.5)
