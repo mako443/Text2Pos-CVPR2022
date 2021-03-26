@@ -117,14 +117,14 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    scene_names = ['sg27_station1_intensity_rgb','sg27_station2_intensity_rgb'] #'sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb']
+    scene_names = ['sg27_station2_intensity_rgb', ] #'sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb']
     dataset_train = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.cell_size, args.cell_stride, split='train')
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=args.shuffle)
-    # dataset_val = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', COMBINED_SCENE_NAMES, args.cell_size, args.cell_stride, split='test')
-    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
-
-    dataset_val = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d', "sg27_station1_intensity_rgb", args.cell_size, args.cell_stride, split='test')
+    dataset_val = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.cell_size, args.cell_stride, split='test')
     dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
+
+    # dataset_val = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d', "sg27_station2_intensity_rgb", args.cell_size, args.cell_stride, split='test')
+    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
     
     print("\t\t Stats: ", args.cell_size, args.cell_stride, dataset_train.gather_stats())
 
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     dict_acc = {k: {lr: [] for lr in learning_rates} for k in args.top_k}
     dict_acc_val = {k: {lr: [] for lr in learning_rates} for k in args.top_k}    
 
-    ACC_TARGET = 'poses'
+    ACC_TARGET = 'all'
     # for lr in learning_rates:
     for lr in learning_rates:
         model = CellRetrievalNetwork(dataset_train.get_known_classes(), dataset_train.get_known_words(), args.embed_dim, k=args.k, use_features=args.use_features)
@@ -158,8 +158,8 @@ if __name__ == "__main__":
 
         for epoch in range(args.epochs):
             loss = train_epoch(model, dataloader_train, args)
-            train_acc = eval_epoch(model, dataloader_train, args, targets=ACC_TARGET)
-            val_acc = eval_epoch(model, dataloader_val, args, targets=ACC_TARGET)
+            train_acc, train_retrievals = eval_epoch(model, dataloader_train, args, targets=ACC_TARGET)
+            val_acc, val_retrievals = eval_epoch(model, dataloader_val, args, targets=ACC_TARGET)
 
             key = lr
             dict_loss[key].append(loss)

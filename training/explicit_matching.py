@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from models.superglue_matcher import SuperGlueMatch
 # from models.graph_matcher import GraphMatch
 from models.tf_matcher import TransformerMatch
-from dataloading.semantic3d import Semantic3dObjectReferanceDataset, Semantic3dObjectReferanceMockDataset
+from dataloading.semantic3d import Semantic3dObjectReferanceDataset, Semantic3dObjectReferanceMockDataset, Semantic3dPoseReferanceMockDataset
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -81,10 +81,10 @@ if __name__ == "__main__":
     # dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
     # dataset_val = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=args.num_distractors, split='test')
     # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
-    dataset_train = Semantic3dObjectReferanceMockDataset(args.num_mentioned, args.num_distractors, length=1024)
-    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceMockDataset.collate_fn)
-    dataset_val = Semantic3dObjectReferanceMockDataset(args.num_mentioned, args.num_distractors, length=256)
-    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceMockDataset.collate_fn)    
+    dataset_train = Semantic3dPoseReferanceMockDataset(args.num_mentioned, args.num_distractors, length=1024)
+    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferanceMockDataset.collate_fn)
+    dataset_val = Semantic3dPoseReferanceMockDataset(args.num_mentioned, args.num_distractors, length=256)
+    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferanceMockDataset.collate_fn)    
     data0 = dataset_train[0]
     batch = next(iter(dataloader_train))
 
@@ -95,7 +95,7 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_rates = np.logspace(-2.5, -3.5 ,3)
+    learning_rates = np.logspace(-3.5, -4.5 ,3) #larger than -3 gives nan, TODO: warm-up epochs?
     dict_loss = {lr: [] for lr in learning_rates}
     dict_recall = {lr: [] for lr in learning_rates}
     dict_precision = {lr: [] for lr in learning_rates}
@@ -133,7 +133,8 @@ if __name__ == "__main__":
     # plot_name = f'matching_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_c{args.use_color}_g{args.lr_gamma}.png'
     # plot_name = f'G-match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_k{args.k}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     # plot_name = f'TF-match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
-    plot_name = f'SG-match_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    # plot_name = f'SG-match_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    plot_name = f'SG-Pose_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-recall': dict_recall,
