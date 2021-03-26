@@ -117,78 +117,64 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    # dataset_train = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', COMBINED_SCENE_NAMES, args.cell_size, args.cell_stride, split='train')
-    # dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=args.shuffle)
+    scene_names = ['sg27_station1_intensity_rgb','sg27_station2_intensity_rgb'] #'sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb']
+    dataset_train = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.cell_size, args.cell_stride, split='train')
+    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=args.shuffle)
     # dataset_val = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', COMBINED_SCENE_NAMES, args.cell_size, args.cell_stride, split='test')
     # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
 
-    # cell_sizes = np.random.randint(low=50, high=75, size=6)
-    # cell_strides = [np.random.randint(cs//4, cs//2) for cs in cell_sizes]
-    # cell_sizes_strides = list(zip(cell_sizes, cell_strides))
-    cell_sizes_strides = [(50, 50//2), (50, 50*2//3), (60, 60//2), (60, 60*2//3), (70, 70//2), (70, 70*2//3)]
-    # cell_sizes_strides = [(20, 20), (20, 20*2//3), (30, 30), (30, 30*2//3), (40, 40), (40, 40*2//3)]
-    print(cell_sizes_strides)
+    dataset_val = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d', "sg27_station1_intensity_rgb", args.cell_size, args.cell_stride, split='test')
+    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
+    
+    print("\t\t Stats: ", args.cell_size, args.cell_stride, dataset_train.gather_stats())
 
-    dict_loss = {css: [] for css in cell_sizes_strides}
-    dict_acc = {k: {css: [] for css in cell_sizes_strides} for k in args.top_k}
-    dict_acc_val = {k: {css: [] for css in cell_sizes_strides} for k in args.top_k} 
+    data = dataset_train[0]        
+    batch = next(iter(dataloader_train))
 
-    for cell_size, cell_stride in [(60, 40), ]: 
-        dataset_train = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d', "sg27_station1_intensity_rgb", cell_size, cell_stride, split='train')
-        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=args.shuffle)
-        dataset_val = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d', "sg27_station1_intensity_rgb", cell_size, cell_stride, split='test')
-        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
-        print("\t\t",cell_size, cell_stride, dataset_val.gather_stats())
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    print('device:', device)
+    torch.autograd.set_detect_anomaly(True)     
 
-        data = dataset_train[0]        
-        batch = next(iter(dataloader_train))
+    learning_rates = np.logspace(-2, -4, 5)
+    dict_loss = {lr: [] for lr in learning_rates}
+    dict_acc = {k: {lr: [] for lr in learning_rates} for k in args.top_k}
+    dict_acc_val = {k: {lr: [] for lr in learning_rates} for k in args.top_k}    
 
-        device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-        print('device:', device)
-        torch.autograd.set_detect_anomaly(True)     
+    ACC_TARGET = 'poses'
+    # for lr in learning_rates:
+    for lr in learning_rates:
+        model = CellRetrievalNetwork(dataset_train.get_known_classes(), dataset_train.get_known_words(), args.embed_dim, k=args.k, use_features=args.use_features)
+        model.to(device)    
 
-        # learning_rates = np.logspace(-1.5,-4,6)[1:-1]
-        # dict_loss = {lr: [] for lr in learning_rates}
-        # dict_acc = {k: {lr: [] for lr in learning_rates} for k in args.top_k}
-        # dict_acc_val = {k: {lr: [] for lr in learning_rates} for k in args.top_k}    
+        optimizer = optim.Adam(model.parameters(), lr=lr)
+        if args.ranking_loss == 'pairwise':
+            criterion = PairwiseRankingLoss(margin=args.margin)
+        if args.ranking_loss == 'hardest':
+            criterion = HardestRankingLoss(margin=args.margin)
+        if args.ranking_loss == 'triplet':
+            criterion = nn.TripletMarginLoss(margin=args.margin)
 
-        ACC_TARGET = 'all'
-        # for lr in learning_rates:
-        for lr in (0.001,):
-            model = CellRetrievalNetwork(dataset_train.get_known_classes(), dataset_train.get_known_words(), args.embed_dim, k=args.k, use_features=args.use_features)
-            model.to(device)    
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)
 
-            optimizer = optim.Adam(model.parameters(), lr=lr)
-            if args.ranking_loss == 'pairwise':
-                criterion = PairwiseRankingLoss(margin=args.margin)
-            if args.ranking_loss == 'hardest':
-                criterion = HardestRankingLoss(margin=args.margin)
-            if args.ranking_loss == 'triplet':
-                criterion = nn.TripletMarginLoss(margin=args.margin)
+        for epoch in range(args.epochs):
+            loss = train_epoch(model, dataloader_train, args)
+            train_acc = eval_epoch(model, dataloader_train, args, targets=ACC_TARGET)
+            val_acc = eval_epoch(model, dataloader_val, args, targets=ACC_TARGET)
 
-            scheduler = optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)
+            key = lr
+            dict_loss[key].append(loss)
+            for k in args.top_k:
+                dict_acc[k][key].append(train_acc[k])
+                dict_acc_val[k][key].append(val_acc[k])
 
-            for epoch in range(args.epochs):
-                loss = train_epoch(model, dataloader_train, args)
-                train_acc, train_retrievals = eval_epoch(model, dataloader_train, args, targets=ACC_TARGET)
-                val_acc, val_retrievals = eval_epoch(model, dataloader_val, args, targets=ACC_TARGET)
-
-                key = (cell_size, cell_stride)
-                dict_loss[key].append(loss)
-                for k in args.top_k:
-                    dict_acc[k][key].append(train_acc[k])
-                    dict_acc_val[k][key].append(val_acc[k])
-
-                scheduler.step()
-                print(f'\t lr {lr:0.4} loss {loss:0.2f} epoch {epoch} train-acc: ', end="")
-                for k, v in train_acc.items():
-                    print(f'{k}-{v:0.2f} ', end="")
-                print('val-acc: ', end="")
-                for k, v in val_acc.items():
-                    print(f'{k}-{v:0.2f} ', end="")            
-                print()    
-
-            break
+            scheduler.step()
+            print(f'\t lr {lr:0.4} loss {loss:0.2f} epoch {epoch} train-acc: ', end="")
+            for k, v in train_acc.items():
+                print(f'{k}-{v:0.2f} ', end="")
+            print('val-acc: ', end="")
+            for k, v in val_acc.items():
+                print(f'{k}-{v:0.2f} ', end="")            
+            print()        
 
     '''
     Save plots
@@ -203,9 +189,9 @@ if __name__ == "__main__":
     }
     plot_metrics(metrics, './plots/'+plot_name)    
 
-    show = 'val'
-    retrievals = val_retrievals if show=='val' else train_retrievals
-    dataset = dataset_val if show=='val' else dataset_train
-    for pose_idx in retrievals.keys():
-        img = draw_retrieval(dataset, pose_idx, retrievals[pose_idx])          
-        cv2.imwrite(f"retrievals_{show}_{pose_idx:02.0f}.png", img)
+    # show = 'val'
+    # retrievals = val_retrievals if show=='val' else train_retrievals
+    # dataset = dataset_val if show=='val' else dataset_train
+    # for pose_idx in retrievals.keys():
+    #     img = draw_retrieval(dataset, pose_idx, retrievals[pose_idx])          
+    #     cv2.imwrite(f"retrievals_{show}_{pose_idx:02.0f}.png", img)

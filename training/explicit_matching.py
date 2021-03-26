@@ -95,7 +95,7 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_rates = np.logspace(-3, -4 ,3)
+    learning_rates = np.logspace(-2.5, -3.5 ,3)
     dict_loss = {lr: [] for lr in learning_rates}
     dict_recall = {lr: [] for lr in learning_rates}
     dict_precision = {lr: [] for lr in learning_rates}
