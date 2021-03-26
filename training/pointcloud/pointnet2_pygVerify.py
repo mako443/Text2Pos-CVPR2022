@@ -9,7 +9,7 @@ import torch_geometric.transforms as T
 from torch_geometric.data import DataLoader
 from torch_geometric.nn import PointConv, fps, radius, global_max_pool
 
-from dataloading.semantic3d import Semantic3dObjectDataset
+from dataloading.semantic3d_pointcloud import Semantic3dObjectDataset
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
