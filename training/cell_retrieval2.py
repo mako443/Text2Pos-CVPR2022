@@ -66,6 +66,8 @@ def eval_epoch(model, dataloader, args, targets='all'):
         args : Global arguments
         targets: <all> or <poses> to use all available cells as targets or only those matching a pose
     """
+    global print_targets
+
     assert targets in ('all', 'poses')
     dataset = dataloader.dataset
     

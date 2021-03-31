@@ -20,13 +20,13 @@ from datapreparation.imports import Object3D, DescriptionObject, COMBINED_SCENE_
 from datapreparation.drawing import draw_cells
 
 class Semantic3dObjectDatasetMulti(Dataset):
-    def __init__(self, path_numpy, path_scenes, scene_names, split=None, num_points=2048):
+    def __init__(self, path_numpy, path_scenes, scene_names, split=None, transform=T.Compose([T.FixedPoints(2048), T.NormalizeScale()])):
         self.path_numpy = path_numpy
         self.path_scenes = path_scenes
         self.split = split
         self.scene_names = scene_names
 
-        self.datasets = [Semantic3dObjectDataset(path_numpy, path_scenes, scene_name, split, num_points) for scene_name in self.scene_names]
+        self.datasets = [Semantic3dObjectDataset(path_numpy, path_scenes, scene_name, split=split, transform=transform) for scene_name in self.scene_names]
 
         self.known_classes = self.datasets[0].known_classes
 
@@ -44,7 +44,7 @@ class Semantic3dObjectDatasetMulti(Dataset):
         assert False
 
 class Semantic3dObjectDataset(Dataset):
-    def __init__(self, path_numpy, path_scenes, scene_name, split=None, num_points=2048):
+    def __init__(self, path_numpy, path_scenes, scene_name, split=None, transform=T.Compose([T.FixedPoints(2048), T.NormalizeScale()])):
         self.path_numpy = path_numpy
         self.path_scenes = path_scenes
         self.split = split  
@@ -67,9 +67,10 @@ class Semantic3dObjectDataset(Dataset):
         # self.known_classes = list(np.unique([obj.label for obj in self.scene_objects]))
         # self.class_to_index = {c: i for (i,c) in enumerate(self.known_classes)}
 
-        self.transform = T.Compose([T.NormalizeScale(), T.FixedPoints(num_points)])
+        # self.transform = T.Compose([T.NormalizeScale(), T.FixedPoints(num_points)])
+        self.transform = transform
 
-        print(f'Semantic3dObjectDataset ({self.scene_name}): {len(self)} objects, using {num_points} points')
+        print(f'Semantic3dObjectDataset ({self.scene_name}): {len(self)} objects')
 
     def __len__(self):
         return len(self.scene_objects)
