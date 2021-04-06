@@ -200,6 +200,42 @@ class Semantic3dPoseReferanceMockDataset(Dataset):
 '''
 Currently uses cell-oracle: cell is placed so that it exactly fits all mentioned objects, retains all distractors
 '''
+class Semantic3dPoseReferanceDatasetMulti(Dataset):
+    def __init__(self, path_numpy, path_scenes, scene_names, pad_size, split=None):
+        self.scene_names = scene_names
+        self.split = split
+        self.datasets = [Semantic3dPoseReferanceDataset(path_numpy, path_scenes, scene_name, pad_size, split) for scene_name in scene_names]
+
+        print(str(self))
+
+    def __len__(self):
+        return np.sum([len(ds) for ds in self.datasets])
+
+    def __getitem__(self, idx):
+        count = 0
+        for dataset in self.datasets:
+            idx_in_dataset = idx - count
+            if idx_in_dataset < len(dataset):
+                return dataset[idx_in_dataset]
+            else:
+                count += len(dataset)
+        assert False
+
+    def __repr__(self):
+        return f'Semantic3dPoseReferanceDatasetMulti: {len(self.scene_names)} scenes, split: {self.split}'
+
+    def get_known_words(self):
+        known_words = []
+        for ds in self.datasets:
+            known_words.extend(ds.get_known_words())
+        return list(np.unique(known_words))
+
+    def get_known_classes(self):
+        known_classes = []
+        for ds in self.datasets:
+            known_classes.extend(ds.get_known_classes())
+        return list(np.unique(known_classes))
+
 class Semantic3dPoseReferanceDataset(Dataset):
     def __init__(self, path_numpy, path_scenes, scene_name, pad_size, split=None):
         self.path_numpy = path_numpy
@@ -598,7 +634,7 @@ class Semantic3dCellRetrievalDatasetMulti(Dataset):
         assert False
 
     def __repr__(self):
-        return f'Semantic3dCellRetrievalDatasetMulti: {len(self.scene_names)} scenes, {len(self)} cells, {self.mean_obj: 0.2f} mean objects, split: {self.split}'
+        return f'Semantic3dCellRetrievalDatasetMulti: {len(self.scene_names)} scenes, {len(self)} poses, {self.mean_obj: 0.2f} mean objects, split: {self.split}'
 
     def get_known_words(self):
         known_words = []

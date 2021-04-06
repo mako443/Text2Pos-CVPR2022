@@ -16,11 +16,11 @@ from training.plots import plot_metrics
 
 '''
 TODO:
-- Only normalize along largest dim?
 - why shuffle bad?
 
 NOTES:
 - more points not helpful, but might be if better sampling earlier in pipeline
+- Only normalize along largest dim -> Already how NormalizeScale works ✓
 '''
 
 
