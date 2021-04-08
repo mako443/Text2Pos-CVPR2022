@@ -196,4 +196,3 @@ def describe_pose(scene_objects: List[Object3D], pose: Pose, max_mentioned_objec
         description.append(do)
     
     return description
-

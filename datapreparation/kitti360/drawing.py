@@ -1,7 +1,8 @@
 from typing import List
 import numpy as np
 import pptk
-from datapreparation.kitti360.imports import Object3d
+import cv2
+from datapreparation.kitti360.imports import Object3d, Cell, Description
 from datapreparation.kitti360.utils import CLASS_TO_COLOR
 
 def show_pptk(xyz, rgb):
@@ -16,7 +17,8 @@ def show_pptk(xyz, rgb):
 
     return viewer
 
-def show_objects(objects: List[Object3d]):
+# Use scale=100 for cell-objects
+def show_objects(objects: List[Object3d], scale=1.0):
     xyz = np.zeros((0,3), dtype=np.float)
     
     rgb1 = np.zeros((0,3), dtype=np.uint8)
@@ -24,11 +26,29 @@ def show_objects(objects: List[Object3d]):
     rgb3 = np.zeros((0,3), dtype=np.uint8)
 
     for obj in objects:
-        obj_color = np.random.randint(low=0, high=256, size=3)
+        rand_color = np.random.randint(low=0, high=256, size=3)
         xyz = np.vstack((xyz, obj.xyz))
-        rgb1 = np.vstack((rgb1, np.ones((len(obj.xyz), 3))*obj_color ))
+        rgb1 = np.vstack((rgb1, np.ones((len(obj.xyz), 3))*rand_color ))
         rgb2 = np.vstack((rgb2, obj.rgb))
         c = CLASS_TO_COLOR[obj.label]
         rgb3 = np.vstack((rgb3, np.ones((len(obj.xyz), 3))*np.array(c) ))
 
-    return show_pptk(xyz, [rgb1, rgb2, rgb3])
+    return show_pptk(xyz*scale, [rgb1, rgb2, rgb3])
+
+def plot_cell(cell: Cell, scale=1024):
+    img = np.zeros((scale, scale, 3), dtype=np.uint8)
+    # Draw points of each object
+    for obj in cell.objects:
+        c = CLASS_TO_COLOR[obj.label]
+        for point in obj.xyz*scale:
+            point = np.int0(point[0:2])
+            cv2.circle(img, tuple(point), 1, (c[2],c[1],c[0]))
+    # Draw pose
+    point = np.int0(cell.pose[0:2]*scale)
+    cv2.circle(img, tuple(point), 10, (0,0,255), thickness=3)
+    # Draw lines
+    objects_dict = {obj.id: obj for obj in cell.objects}
+    for descr in cell.descriptions:
+        target = np.int0(objects_dict[descr.object_id].get_closest_point(cell.pose)[0:2]*scale)
+        cv2.arrowedLine(img, tuple(point), tuple(target), (0,0,255), thickness=2)
+    return cv2.flip(img, 0) # Flip for correct north/south
