@@ -272,6 +272,8 @@ class SuperGlue(nn.Module):
         scores = torch.einsum('bdn,bdm->bnm', mdesc0, mdesc1)
         scores = scores / self.config['descriptor_dim']**.5
 
+        #TODO: better with L2?
+
         # Run the optimal transport.
         scores = log_optimal_transport(
             scores, self.bin_score,

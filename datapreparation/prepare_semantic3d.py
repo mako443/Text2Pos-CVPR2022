@@ -10,8 +10,8 @@ from datapreparation.drawing import draw_cells, draw_objects_poseDescription
 from datapreparation.descriptions import get_text_description, describe_object, describe_cell, describe_pose
 
 import sys
-sys.path.append('/home/imanox/Documents/Text2Image/Semantic3D-Net')
-# sys.path.append('/usr/stud/kolmet/thesis/semantic3d')
+# sys.path.append('/home/imanox/Documents/Text2Image/Semantic3D-Net')
+sys.path.append('/usr/stud/kolmet/thesis/semantic3d')
 from semantic.imports import ClusteredObject as ClusteredObject_S3D, ViewObject as ViewObject_S3D, COLORS, COLOR_NAMES
 from graphics.imports import CLASSES_COLORS, Pose as Pose_S3D
 

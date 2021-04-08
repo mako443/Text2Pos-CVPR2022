@@ -24,6 +24,7 @@ class SuperGlueMatch(torch.nn.Module):
         self.embed_dim = args.embed_dim
         self.num_layers = args.num_layers
         self.sinkhorn_iters = args.sinkhorn_iters
+        self.use_features = args.use_features
 
         # Set idx=0 for padding
         self.known_classes = {c: (i+1) for i,c in enumerate(known_classes)}
@@ -64,18 +65,24 @@ class SuperGlueMatch(torch.nn.Module):
             for j in range(num_objects):
                 class_indices[i, j] = self.known_classes.get(objects[i][j].label, 0)
         class_embeddings = self.class_embedding(class_indices) # [B, num_obj, DIM]
+        if 'class' not in self.use_features:
+            class_embeddings = torch.zeros_like(class_embeddings)
 
         pos_embeddings = torch.zeros((batch_size, num_objects, 3), dtype=torch.float, device=self.device)
         for i in range(batch_size):
             for j in range(num_objects):
                 pos_embeddings[i, j, :] = torch.from_numpy(objects[i][j].center)
         pos_embeddings = self.pos_embedding(pos_embeddings) # [B, num_obj, DIM]
+        if 'position' not in self.use_features:
+            pos_embeddings = torch.zeros_like(pos_embeddings)
         
         color_embeddings = torch.zeros((batch_size, num_objects, 3), dtype=torch.float, device=self.device)
         for i in range(batch_size):
             for j in range(num_objects):
                 color_embeddings[i, j, :] = torch.from_numpy(objects[i][j].color)
         color_embeddings = self.color_embedding(color_embeddings) # [B, num_obj, DIM]
+        if 'color' not in self.use_features:
+            color_embeddings = torch.zeros_like(color_embeddings)
 
         object_encodings = self.mlp_merge(torch.cat((class_embeddings, pos_embeddings, color_embeddings), dim=-1)) # [B, num_obj, DIM]
         object_encodings = F.normalize(object_encodings, dim=-1) # [B, num_obj, DIM]

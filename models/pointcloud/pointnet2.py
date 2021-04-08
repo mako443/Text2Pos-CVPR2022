@@ -13,13 +13,13 @@ from easydict import EasyDict
 
 # from models.modules import get_mlp
 
+# This one proved best (with BN and before ReLU), but not too much difference
 def get_mlp(channels, add_batchnorm=True):
     return nn.Sequential(*[
-        # nn.Sequential(nn.Linear(channels[i - 1], channels[i]), nn.ReLU(), nn.BatchNorm1d(channels[i]))
         nn.Sequential(nn.Linear(channels[i - 1], channels[i]), nn.BatchNorm1d(channels[i]), nn.ReLU())
         for i in range(1, len(channels))
     ])
-
+      
 class SetAbstractionLayer(nn.Module):
     def __init__(self, ratio, radius, mlp):
         super(SetAbstractionLayer, self).__init__()
@@ -49,27 +49,41 @@ class GlobalAbstractionLayer(nn.Module):
         return x
 
 class PointNet2(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, args):
         super(PointNet2, self).__init__()
-        self.sa1 = SetAbstractionLayer(0.5, 0.2, get_mlp([3 + 3, 32, 64], add_batchnorm=True))
-        self.sa2 = SetAbstractionLayer(0.25, 0.4, get_mlp([64 + 3, 128, 256], add_batchnorm=True))
-        self.ga = GlobalAbstractionLayer(get_mlp([256 + 3, 512, 1024], add_batchnorm=True))
+        assert args.num_layers == 3 and args.variation in (0,1,2)
+        # self.num_layers = args.num_layers   
+        # self.variation = args.variation                
+       
+        self.sa1 = SetAbstractionLayer(0.5, 0.2, get_mlp([3 + 3, 32, 64]))
+        self.sa2 = SetAbstractionLayer(0.5, 0.3, get_mlp([64 + 3, 128, 128]))
+        self.sa3 = SetAbstractionLayer(0.5, 0.4, get_mlp([128 + 3, 256, 256]))   
+        self.ga = GlobalAbstractionLayer(get_mlp([256 + 3, 512, 1024]))
 
         self.lin1 = nn.Linear(1024, 512)
         self.lin2 = nn.Linear(512, 256)
-        self.lin3 = nn.Linear(256, num_classes)
-
+        self.lin3 = nn.Linear(256, num_classes)                     
+        
+        # Slightly better but larger:
+            # self.sa1 = SetAbstractionLayer(0.5, 0.2, get_mlp([3 + 3, 32, 64], add_batchnorm=True))
+            # self.sa2 = SetAbstractionLayer(0.5, 0.3, get_mlp([64 + 3, 128, 256], add_batchnorm=True))
+            # self.sa3 = SetAbstractionLayer(0.5, 0.4, get_mlp([256 + 3, 512, 512], add_batchnorm=True))   
+            # self.ga = GlobalAbstractionLayer(get_mlp([512 + 3, 1024, 2048], add_batchnorm=True))
+            # self.lin1 = nn.Linear(2048, 1024)
+            # self.lin2 = nn.Linear(1024, 512)
+            # self.lin3 = nn.Linear(512, num_classes)            
+            
     def forward(self, data):
         data.to(self.device)
 
         x, pos, batch = self.sa1(data.x, data.pos, data.batch)
         x, pos, batch = self.sa2(x, pos, batch)
+        x, pos, batch = self.sa3(x, pos, batch)
         x = self.ga(x, pos, batch)
 
-        x = F.relu(self.lin1(x))
-        # x = F.dropout(x, p=0.25, training=self.training)
+        # Dropout did not seem helpful
+        x = F.relu(self.lin1(x))           
         x = F.relu(self.lin2(x))
-        # x = F.dropout(x, p=0.25, training=self.training)
         x = self.lin3(x)
 
         return x

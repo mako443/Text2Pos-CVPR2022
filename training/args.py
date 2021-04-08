@@ -14,13 +14,14 @@ def parse_arguments():
     # parser.add_argument('--use_color', action='store_true')
     parser.add_argument('--use_features', nargs='+', default=['class', 'color', 'position'])
     parser.add_argument('--shuffle', action='store_true')
+    parser.add_argument('--variation', type=int, default=0)
     
     # DGCNN
     parser.add_argument('--use_layers', type=str, default='all')
     parser.add_argument('--k', type=int, default=4)
 
     # SuperGlue
-    parser.add_argument('--sinkhorn_iters', type=int, default=40)
+    parser.add_argument('--sinkhorn_iters', type=int, default=50)
     parser.add_argument('--num_mentioned', type=int, default=6)
     parser.add_argument('--pad_size', type=int, default=16)
 
@@ -37,6 +38,7 @@ def parse_arguments():
     parser.add_argument('--alpha_obj_class', type=float, default=1.0)
     parser.add_argument('--alpha_offset', type=float, default=0.01)
     parser.add_argument('--lr_gamma', type=float, default=1.0)
+    parser.add_argument('--scene_names', nargs='+', default=[])
     
 
     args = parser.parse_args()

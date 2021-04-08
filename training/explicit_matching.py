@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from models.superglue_matcher import SuperGlueMatch
 # from models.graph_matcher import GraphMatch
 from models.tf_matcher import TransformerMatch
-from dataloading.semantic3d import Semantic3dPoseReferanceMockDataset, Semantic3dPoseReferanceDataset
+from dataloading.semantic3d import Semantic3dPoseReferanceMockDataset, Semantic3dPoseReferanceDataset, Semantic3dPoseReferanceDatasetMulti
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -18,9 +18,14 @@ from training.losses import MatchingLoss, calc_recall_precision
 
 '''
 TODO:
-- if not working: mock-train texts to texts (english - german)
+- Check vs. real-world validation set
 - regress offsets: classify, discretized vector, actual vector
+- Variable num_mentioned?
+
+NOTES:
+- Random number of pads/distractors: acc. improved ✓
 '''
+
 
 def train_epoch(model, dataloader, args):
     model.train()
@@ -56,7 +61,7 @@ def train_epoch(model, dataloader, args):
 
 @torch.no_grad()
 def val_epoch(model, dataloader, args):
-    model.eval() #TODO/CARE: set eval() or not?
+    # model.eval() #TODO/CARE: set eval() or not?
     epoch_recalls = []
     epoch_precisions = []
     for i_batch, batch in enumerate(dataloader):
@@ -77,12 +82,20 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    dataset_train = Semantic3dPoseReferanceMockDataset(6, pad_size=args.pad_size)
+    dataset_train = Semantic3dPoseReferanceMockDataset(args, length=1024)
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferanceMockDataset.collate_fn)
-    # dataset_val = Semantic3dObjectReferanceMockDataset(args.num_mentioned, args.num_distractors, length=256)
-    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dObjectReferanceMockDataset.collate_fn)  
-    dataset_val = Semantic3dPoseReferanceDataset('./data/numpy_merged/', './data/semantic3d', "bildstein_station1_xyz_intensity_rgb", pad_size=args.pad_size)
+    # dataset_val = Semantic3dPoseReferanceMockDataset(args, length=256)
+    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferanceMockDataset.collate_fn)  
+    # dataset_val = Semantic3dPoseReferanceDataset('./data/numpy_merged/', './data/semantic3d', "domfountain_station1_xyz_intensity_rgb", pad_size=args.pad_size)
+    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferanceDataset.collate_fn)  
+    scene_names = ('bildstein_station1_xyz_intensity_rgb','domfountain_station1_xyz_intensity_rgb','neugasse_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb','untermaederbrunnen_station1_xyz_intensity_rgb')
+    dataset_val = Semantic3dPoseReferanceDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.pad_size, split=None)
     dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferanceDataset.collate_fn)  
+
+    # print(sorted(dataset_train.get_known_classes()))
+    # print(sorted(dataset_val.get_known_classes()))
+    # print(sorted(dataset_train.get_known_words()))
+    # print(sorted(dataset_val.get_known_words()))
 
     assert sorted(dataset_train.get_known_classes()) == sorted(dataset_val.get_known_classes()) and sorted(dataset_train.get_known_words()) == sorted(dataset_val.get_known_words())
     
@@ -96,7 +109,7 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_rates = np.logspace(-2.5, -3.5 ,3)
+    learning_rates = np.logspace(-3.5, -4.5 ,3) #larger than -3 gives nan, TODO: warm-up epochs?
     dict_loss = {lr: [] for lr in learning_rates}
     dict_recall = {lr: [] for lr in learning_rates}
     dict_precision = {lr: [] for lr in learning_rates}
@@ -123,7 +136,8 @@ if __name__ == "__main__":
             dict_val_recall[lr].append(val_recall)
             dict_val_precision[lr].append(val_precision)            
 
-            scheduler.step()
+            if scheduler: 
+                scheduler.step()
 
             print(f'\t lr {lr:0.6} epoch {epoch} loss {loss:0.3f} t-recall {train_recall:0.2f} t-precision {train_precision:0.2f} v-recall {val_recall:0.2f} v-precision {val_precision:0.2f} time {epoch_time:0.3f}')
         print()
@@ -135,7 +149,8 @@ if __name__ == "__main__":
     # plot_name = f'G-match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_k{args.k}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     # plot_name = f'TF-match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     # plot_name = f'SG-match_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
-    plot_name = f'SG-Pose_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    # plot_name = f'SG-PosePad_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    plot_name = f'SG-PosePad-all_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-recall': dict_recall,

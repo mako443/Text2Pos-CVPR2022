@@ -1,12 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_metrics(metrics, save_path, show_plot=False, size=(16,10)):
+def plot_metrics(metrics, save_path, title="", show_plot=False, size=(16,10)):
     rows = int(np.round(np.sqrt(len(metrics))))
     cols = int(np.ceil(len(metrics)/rows))
 
     fig = plt.figure()
     fig.set_size_inches(*size)
+    plt.title(title)
 
     for i, key in enumerate(metrics.keys()):
         plt.subplot(rows, cols, i+1)

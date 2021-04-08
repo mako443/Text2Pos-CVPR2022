@@ -19,6 +19,7 @@ from training.losses import MatchingLoss, PairwiseRankingLoss, HardestRankingLos
 
 '''
 TODO:
+- REMOVE "identical negative"!!
 - what about same best cells?!
 - max-dist for descriptions?
 '''
@@ -52,6 +53,8 @@ def train_epoch(model, dataloader, args):
 
     return np.mean(epoch_losses)
 
+print_targets = True
+
 @torch.no_grad()
 def eval_epoch(model, dataloader, args, targets='all'):
     """Top-k retrieval for each pose against all cells in the dataset.
@@ -63,6 +66,8 @@ def eval_epoch(model, dataloader, args, targets='all'):
         args : Global arguments
         targets: <all> or <poses> to use all available cells as targets or only those matching a pose
     """
+    global print_targets
+
     assert targets in ('all', 'poses')
     dataset = dataloader.dataset
     
@@ -91,6 +96,10 @@ def eval_epoch(model, dataloader, args, targets='all'):
             if idx not in correct_indices:
                 cell_encodings[idx, :] = np.inf
 
+    if print_targets:
+        print('# targets: ', len(np.unique(correct_indices)))
+        print_targets = False
+
     accuracies = {k: [] for k in args.top_k}
     top_retrievals = {} # Top retrievals as {query_pose_idx: sorted_indices}
     for i in range(len(pose_encodings)):
@@ -117,14 +126,15 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    scene_names = ['sg27_station1_intensity_rgb','sg27_station2_intensity_rgb'] #'sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb']
+    scene_names = args.scene_names #['sg27_station2_intensity_rgb', 'sg27_station4_intensity_rgb', 'sg27_station5_intensity_rgb'] #'sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb']
     dataset_train = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.cell_size, args.cell_stride, split='train')
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=args.shuffle)
-    # dataset_val = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', COMBINED_SCENE_NAMES, args.cell_size, args.cell_stride, split='test')
-    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
-
-    dataset_val = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d', "sg27_station1_intensity_rgb", args.cell_size, args.cell_stride, split='test')
+    dataset_val = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.cell_size, args.cell_stride, split='test')
     dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
+    print('Scene names:', scene_names)
+
+    # dataset_val = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d', "sg27_station2_intensity_rgb", args.cell_size, args.cell_stride, split='test')
+    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
     
     print("\t\t Stats: ", args.cell_size, args.cell_stride, dataset_train.gather_stats())
 
@@ -158,8 +168,8 @@ if __name__ == "__main__":
 
         for epoch in range(args.epochs):
             loss = train_epoch(model, dataloader_train, args)
-            train_acc = eval_epoch(model, dataloader_train, args, targets=ACC_TARGET)
-            val_acc = eval_epoch(model, dataloader_val, args, targets=ACC_TARGET)
+            train_acc, train_retrievals = eval_epoch(model, dataloader_train, args, targets=ACC_TARGET)
+            val_acc, val_retrievals = eval_epoch(model, dataloader_val, args, targets=ACC_TARGET)
 
             key = lr
             dict_loss[key].append(loss)
@@ -179,7 +189,7 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'0cells_len{len(dataset_train)}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_c{int(args.cell_size)}-{int(args.cell_stride)}_f{"-".join(args.use_features)}_t-{ACC_TARGET}.png'
+    plot_name = f'0cells_id{len(dataset_train.cells)}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_c{int(args.cell_size)}-{int(args.cell_stride)}_f{"-".join(args.use_features)}_t-{ACC_TARGET}.png'
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
     val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}
     metrics = {

@@ -18,6 +18,7 @@ def get_mlp(dims, add_batchnorm=False):
                 mlp.append(nn.BatchNorm1d(dims[i+1]))
     return nn.Sequential(*mlp)
 
+
 class LanguageEncoder(torch.nn.Module):
     def __init__(self, known_words, embedding_dim, bi_dir):
         super(LanguageEncoder, self).__init__()

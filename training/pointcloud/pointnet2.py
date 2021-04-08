@@ -2,24 +2,25 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch_geometric.data import DataLoader
+import torch_geometric.transforms as T
 
 import time
 import numpy as np
 import matplotlib.pyplot as plt
 
 from models.pointcloud.pointnet2 import PointNet2
-from dataloading.semantic3d_pointcloud import Semantic3dObjectDataset
+from dataloading.semantic3d_pointcloud import Semantic3dObjectDataset, Semantic3dObjectDatasetMulti
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
 
 '''
 TODO:
-- compare to PyG example -> Not better...
-- check dropout, PyG-MLP
-- BN before ReLU?
-- optimize ratio and radius (random search!)
 - why shuffle bad?
+
+NOTES:
+- more points not helpful, but might be if better sampling earlier in pipeline
+- Only normalize along largest dim -> Already how NormalizeScale works ✓
 '''
 
 
@@ -50,7 +51,7 @@ def train_epoch(model, dataloader, args):
 
 @torch.no_grad()
 def val_epoch(model, dataloader, args):
-    # model.eval() #TODO: yes/no?
+    model.eval() #TODO: yes/no?
     epoch_accs = []
 
     for i_batch, batch in enumerate(dataloader):
@@ -68,9 +69,14 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    dataset_train = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='train')
+    transform = T.Compose([T.FixedPoints(2048), T.NormalizeScale(), T.RandomFlip(0), T.RandomFlip(1), T.RandomFlip(2), T.NormalizeScale()])
+
+    scene_names = ['bildstein_station1_xyz_intensity_rgb','domfountain_station1_xyz_intensity_rgb','neugasse_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb','untermaederbrunnen_station1_xyz_intensity_rgb']
+    # dataset_train = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='train')
+    dataset_train = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='train', transform=transform)
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)
-    dataset_val = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='test')
+    # dataset_val = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='test')
+    dataset_val = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='test')
     dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)    
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -80,13 +86,13 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_reates = np.logspace(-2.5, -3.5, 3)
+    learning_reates = np.logspace(-2, -4.0, 5)[1:-1]
     dict_loss = {lr: [] for lr in learning_reates}    
     dict_acc = {lr: [] for lr in learning_reates}
     dict_acc_val = {lr: [] for lr in learning_reates}
 
     for lr in learning_reates:
-        model = PointNet2(num_classes=len(dataset_train.known_classes))
+        model = PointNet2(num_classes=len(dataset_train.known_classes), args=args)
         model.to(device)
 
         optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -109,7 +115,7 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'PN2_bs{args.batch_size}_mb{args.max_batches}_s{args.shuffle}.png'
+    plot_name = f'PN2_len{len(dataset_train)}_bs{args.batch_size}_mb{args.max_batches}_l{args.num_layers}_v{args.variation}_s{args.shuffle}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-acc': dict_acc,
