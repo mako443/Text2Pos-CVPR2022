@@ -18,10 +18,10 @@ DONE:
 - Use closest point instead of center for description and plot?? Say 'on-top' if small distance => Seems good ✓
 
 TODO:
+- What about corrupted (?) scenes? Use bounding-boxes for instance objects?!
 - Per-class voxel-sizes; will I be using FixedPoints w/ duplicates?
 - How to handle multiple identical objects in matching? Remove from cell?
 - Use "smarter" colors? E.g. top 1 or 2 histogram-buckets
-- Feasible to have 
 """
 
 def load_points(filepath):
@@ -131,6 +131,7 @@ def create_cells(objects, poses, scene_name, cell_size=30):
         if cell is not None:
             cells.append(cell)
         else:
+            # print(f'\n None at {i_pose}\n')
             nones += 1
     print()
     
@@ -142,7 +143,7 @@ if __name__ == '__main__':
     np.random.seed(4096) # Set seed to re-produce results
 
     base_path = './data/kitti360'
-    folder_name = '2013_05_28_drive_0000_sync'
+    folder_name = '2013_05_28_drive_0002_sync'
 
     poses, pose_objects = create_poses(base_path, folder_name, return_pose_objects=True)
 

@@ -67,7 +67,7 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose, scene_name, inside_
         else:
             if np.sum(mask) / len(mask) < inside_fraction:
                 continue
-            cell_objects.append(obj) # DEBUG
+            cell_objects.append(obj) # DEBUG: comment out
 
     # assert len(cell_objects) >= num_mentioned
     if len(cell_objects) < num_mentioned:

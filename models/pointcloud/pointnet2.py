@@ -51,7 +51,7 @@ class GlobalAbstractionLayer(nn.Module):
 class PointNet2(nn.Module):
     def __init__(self, num_classes, args):
         super(PointNet2, self).__init__()
-        assert args.num_layers == 3 and args.variation in (0,1,2)
+        assert args.num_layers == 3 and args.variation == 0
         # self.num_layers = args.num_layers   
         # self.variation = args.variation                
        
