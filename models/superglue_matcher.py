@@ -101,7 +101,7 @@ class SuperGlueMatch(torch.nn.Module):
         Predict offsets from hints
         '''
         offsets = self.mlp_offsets(hint_encodings) # [B, num_hints, 2]
-        offsets = F.normalize(offsets, dim=-1)
+        # offsets = F.normalize(offsets, dim=-1)
 
         outputs = EasyDict()
         outputs.P = matcher_output['P']

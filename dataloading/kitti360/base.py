@@ -56,7 +56,7 @@ class Kitti360BaseDataset(Dataset):
         return list(np.unique(words))        
 
     def __len__(self):
-        return len(self.cells)
+        raise Exception('Not implemented: abstract class.')
 
     def collate_fn(data):
         batch = {}
@@ -64,24 +64,9 @@ class Kitti360BaseDataset(Dataset):
             batch[key] = [data[i][key] for i in range(len(data))]
         return batch
 
-class Kitti360CellDataset(Kitti360BaseDataset):
-    def __getitem__(self, idx):
-        cell = self.cells[idx]
-        hints = self.hint_descriptions[idx]
-        text = ' '.join(hints)
-        return {
-            'cells': cell,
-            'texts': text,
-            'cell_indices': idx,
-            'scene_names': self.scene_name
-        }      
 
 if __name__ == '__main__':
     base_path = './data/kitti360'
     folder_name = '2013_05_28_drive_0000_sync'    
     
-    dataset = Kitti360CellDataset(base_path, folder_name)          
-    data = dataset[0]
-
-    dataloader = DataLoader(dataset, batch_size=2, collate_fn=Kitti360BaseDataset.collate_fn)
-    batch = next(iter(dataloader))
+    dataset = Kitti360BaseDataset(base_path, folder_name)          

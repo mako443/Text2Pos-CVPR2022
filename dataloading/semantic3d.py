@@ -158,7 +158,7 @@ class Semantic3dPoseReferanceMockDataset(Dataset):
             hints.append(f'The pose is {direction} of a {color_text} {obj.label}')
             matches.append((obj_idx, hint_idx))
 
-        offset_vectors = np.array(offset_vectors) / np.linalg.norm(offset_vectors, axis=1).reshape((-1,1)) # Norm to have offset directions (for now)
+        # offset_vectors = np.array(offset_vectors) / np.linalg.norm(offset_vectors, axis=1).reshape((-1,1)) # Norm to have offset directions (for now)
 
         # Create <matches> and <all_matches>
         all_matches = matches.copy()
@@ -178,7 +178,7 @@ class Semantic3dPoseReferanceMockDataset(Dataset):
             'matches': matches,
             'all_matches': all_matches,
             'poses': pose,
-            'offsets': offset_vectors
+            'offsets': np.array(offset_vectors)
         }
 
     def collate_fn(data):

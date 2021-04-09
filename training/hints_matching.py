@@ -15,12 +15,12 @@ from dataloading.semantic3d import Semantic3dPoseReferanceMockDataset, Semantic3
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
-from training.losses import MatchingLoss, calc_recall_precision
+from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
 TODO:
-- Check vs. real-world validation set
-- regress offsets: classify, discretized vector, actual vector
+- regress offsets: direction or magnitude error? optimize?
+- Pad at (0.5,0.5) for less harmfull miss-matches?
 - Variable num_mentioned?
 
 NOTES:
@@ -33,7 +33,9 @@ def train_epoch(model, dataloader, args):
     epoch_losses = []
     epoch_recalls = []
     epoch_precisions = []
-    epoch_offsets = []
+    epoch_pose_mid = []
+    epoch_pose_mean = []
+    epoch_pose_offsets = []
     t0 = time.time()
     printed=False
     for i_batch, batch in enumerate(dataloader):
@@ -50,23 +52,29 @@ def train_epoch(model, dataloader, args):
             print(f'{loss_matching.item():0.2f} - {loss_offsets.item():0.2f}')
             printed = True
 
-        loss = loss_matching + loss_offsets # TODO/CARE: balance between? Currently on same magnitude (normed)
+        loss = loss_matching + loss_offsets # TODO/CARE: balance between? Currently on same magnitude (w/ and w/o norm, but cell ∈ [0,1])
 
         loss.backward()
         optimizer.step()
 
-        epoch_losses.append(loss.item())
         recall, precision = calc_recall_precision(batch['matches'], output.matches0.cpu().detach().numpy(), output.matches1.cpu().detach().numpy())
+
+        epoch_losses.append(loss.item())
         epoch_recalls.append(recall)
         epoch_precisions.append(precision)
-        epoch_offsets.append(loss_offsets.item())
+
+        epoch_pose_mid.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=output.offsets.detach().cpu().numpy(), use_mid_pred=True))
+        epoch_pose_mean.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=None))
+        epoch_pose_offsets.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=output.offsets.detach().cpu().numpy()))
 
     # return np.mean(epoch_losses), np.mean(epoch_recalls), np.mean(epoch_precisions), time.time()-t0
     return EasyDict(
         loss=np.mean(epoch_losses), 
         recall=np.mean(epoch_recalls), 
         precision=np.mean(epoch_precisions), 
-        offsets=np.mean(epoch_offsets), 
+        pose_mid=np.mean(epoch_pose_mid), 
+        pose_mean=np.mean(epoch_pose_mean), 
+        pose_offsets=np.mean(epoch_pose_offsets), 
         time=time.time()-t0
     )
 
@@ -75,6 +83,9 @@ def val_epoch(model, dataloader, args):
     # model.eval() #TODO/CARE: set eval() or not?
     epoch_recalls = []
     epoch_precisions = []
+    epoch_pose_mid = []
+    epoch_pose_mean = []
+    epoch_pose_offsets = []    
     for i_batch, batch in enumerate(dataloader):
         # color_input = batch['objects_colors'] if args.use_color else None
         # output = model(batch['objects_classes'], batch['objects_positions'], batch['hint_descriptions'], object_colors=color_input)
@@ -84,7 +95,18 @@ def val_epoch(model, dataloader, args):
         epoch_recalls.append(recall)
         epoch_precisions.append(precision)
 
-    return np.mean(epoch_recalls), np.mean(epoch_precisions)
+        epoch_pose_mid.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=output.offsets.detach().cpu().numpy(), use_mid_pred=True))
+        epoch_pose_mean.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=None))
+        epoch_pose_offsets.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=output.offsets.detach().cpu().numpy()))        
+
+    # return np.mean(epoch_recalls), np.mean(epoch_precisions)
+    return EasyDict(
+        recall=np.mean(epoch_recalls), 
+        precision=np.mean(epoch_precisions), 
+        pose_mid=np.mean(epoch_pose_mid), 
+        pose_mean=np.mean(epoch_pose_mean), 
+        pose_offsets=np.mean(epoch_pose_offsets), 
+    )    
 
 if __name__ == "__main__":
     args = parse_arguments()
@@ -124,9 +146,14 @@ if __name__ == "__main__":
     dict_loss = {lr: [] for lr in learning_rates}
     dict_recall = {lr: [] for lr in learning_rates}
     dict_precision = {lr: [] for lr in learning_rates}
-    dict_offsets = {lr: [] for lr in learning_rates}
+    dict_pose_mid = {lr: [] for lr in learning_rates}
+    dict_pose_mean = {lr: [] for lr in learning_rates}
+    dict_pose_offsets = {lr: [] for lr in learning_rates}
     dict_val_recall = {lr: [] for lr in learning_rates}
     dict_val_precision = {lr: [] for lr in learning_rates}    
+    dict_val_pose_mid = {lr: [] for lr in learning_rates}
+    dict_val_pose_mean = {lr: [] for lr in learning_rates}
+    dict_val_pose_offsets = {lr: [] for lr in learning_rates}    
     
     for lr in learning_rates:
         model = SuperGlueMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args)
@@ -145,16 +172,22 @@ if __name__ == "__main__":
             dict_loss[lr].append(train_out.loss)
             dict_recall[lr].append(train_out.recall)
             dict_precision[lr].append(train_out.precision)
-            dict_offsets[lr].append(train_out.offsets)
+            dict_pose_mid[lr].append(train_out.pose_mid)
+            dict_pose_mean[lr].append(train_out.pose_mean)
+            dict_pose_offsets[lr].append(train_out.pose_offsets)
 
-            val_recall, val_precision = val_epoch(model, dataloader_val, args) #CARE: which loader for val!
-            dict_val_recall[lr].append(val_recall)
-            dict_val_precision[lr].append(val_precision)            
+            # val_recall, val_precision = val_epoch(model, dataloader_val, args) #CARE: which loader for val!
+            val_out = val_epoch(model, dataloader_val, args) #CARE: which loader for val!
+            dict_val_recall[lr].append(val_out.recall)
+            dict_val_precision[lr].append(val_out.precision)     
+            dict_val_pose_mid[lr].append(val_out.pose_mid)
+            dict_val_pose_mean[lr].append(val_out.pose_mean)
+            dict_val_pose_offsets[lr].append(val_out.pose_offsets)                   
 
             if scheduler: 
                 scheduler.step()
 
-            print(f'\t lr {lr:0.6} epoch {epoch} loss {train_out.loss:0.3f} t-recall {train_out.recall:0.2f} t-precision {train_out.precision:0.2f} v-recall {val_recall:0.2f} v-precision {val_precision:0.2f} time {train_out.time:0.3f}')
+            print(f'\t lr {lr:0.6} epoch {epoch} loss {train_out.loss:0.3f} t-recall {train_out.recall:0.2f} t-precision {train_out.precision:0.2f} v-recall {val_out.recall:0.2f} v-precision {val_out.precision:0.2f} time {train_out.time:0.3f}')
         print()
 
     '''
@@ -165,14 +198,20 @@ if __name__ == "__main__":
     # plot_name = f'TF-match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     # plot_name = f'SG-match_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     # plot_name = f'SG-PosePad_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
-    plot_name = f'SG-PosePad-offset_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    plot_name = f'SG-Offsets_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-recall': dict_recall,
         'train-precision': dict_precision,
-        'train-offsets': dict_offsets,
+        'train-pose-mid': dict_pose_mid,
+        'train-pose-mean': dict_pose_mean,
+        'train-pose-offsets': dict_pose_offsets,
         'val-recall': dict_val_recall,
         'val-precision': dict_val_precision,        
+        'val-precision-2': dict_val_precision,
+        'val-pose-mid': dict_val_pose_mid,
+        'val-pose-mean': dict_val_pose_mean,
+        'val-pose-offsets': dict_val_pose_offsets,        
     }
     plot_metrics(metrics, './plots/'+plot_name)        
 

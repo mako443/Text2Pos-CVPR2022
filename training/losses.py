@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+from easydict import EasyDict
 
 class MatchingLoss(nn.Module):
     def __init__(self):
@@ -44,6 +45,44 @@ def calc_recall_precision(batch_gt_matches, batch_matches0, batch_matches1):
         all_precisions.append(precision)
 
     return np.mean(all_recalls), np.mean(all_precisions)
+
+def calc_pose_error(objects, matches0, poses, offsets=None, use_mid_pred=False):
+    """Calculates the mean error by adding offset ("obj-to-pose") to every corresponding, matched object
+    Uses simple matched-objects-average if offsets not given
+    CARE: error only in x-y-plane
+
+    Args:
+        objects
+        matches0: matches0[i] = [j] <-> object[i] matches hint/offset[j]]
+        poses
+        offsets (optional): Predicted offsets. Defaults to None.
+        use_mid_pred (optional): Use cell-mid (0.5,0.5) as prediction, discarding objects and matches for debugging.
+
+    Returns:
+        [float]: mean error
+    """
+    assert len(objects) == len(matches0) == len(poses)
+    batch_size, pad_size = matches0.shape
+    poses = np.array(poses)[:, 0:2]
+
+    if offsets is not None:
+        assert len(objects) == len(offsets)     
+    else:
+        offsets = np.zeros((batch_size, pad_size, 2)) # Set zero offsets to just predict the mean of matched-objects' centers
+
+    errors = []
+    for i_batch in range(batch_size):
+        preds = []
+        for obj_idx, hint_idx in enumerate(matches0[i_batch]):
+            if hint_idx == -1:
+                continue
+            preds.append(objects[i_batch][obj_idx].center[0:2] + offsets[i_batch][hint_idx])
+        if use_mid_pred:
+            pose_prediction = np.array((0.5,0.5))
+        else:
+            pose_prediction = np.mean(preds, axis=0)
+        errors.append(np.linalg.norm(poses[i_batch] - pose_prediction))
+    return np.mean(errors)
 
 class PairwiseRankingLoss(torch.nn.Module):
     def __init__(self, margin=1.0):
@@ -100,3 +139,16 @@ class HardestRankingLoss(torch.nn.Module):
 
         cost= cost_images+cost_captions      
         return cost     
+
+if __name__ == '__main__':
+    objects = [
+        [EasyDict(center=np.array([0,0])), EasyDict(center=np.array([10,10])), EasyDict(center=np.array([99,99]))],
+    ]
+    matches0 = np.array((0, 1, -1)).reshape((1,3))
+    poses = np.array((0,10)).reshape((1,2))
+    offsets = np.array([(2,10), (-10,0)]).reshape((1,2,2))
+
+    err = calc_pose_error(objects, matches0, poses, offsets=None)
+    print(err)
+    err = calc_pose_error(objects, matches0, poses, offsets=offsets)
+    print(err)    

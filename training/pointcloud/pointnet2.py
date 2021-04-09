@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 
 from models.pointcloud.pointnet2 import PointNet2
 from dataloading.semantic3d_pointcloud import Semantic3dObjectDataset, Semantic3dObjectDatasetMulti
+from dataloading.kitti360.objects import Kitti360ObjectsDataset
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -22,7 +23,6 @@ NOTES:
 - more points not helpful, but might be if better sampling earlier in pipeline
 - Only normalize along largest dim -> Already how NormalizeScale works ✓
 '''
-
 
 def train_epoch(model, dataloader, args):
     model.train()
@@ -71,13 +71,22 @@ if __name__ == "__main__":
     '''    
     transform = T.Compose([T.FixedPoints(2048), T.NormalizeScale(), T.RandomFlip(0), T.RandomFlip(1), T.RandomFlip(2), T.NormalizeScale()])
 
-    scene_names = ['bildstein_station1_xyz_intensity_rgb','domfountain_station1_xyz_intensity_rgb','neugasse_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb','untermaederbrunnen_station1_xyz_intensity_rgb']
-    # dataset_train = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='train')
-    dataset_train = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='train', transform=transform)
-    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)
-    # dataset_val = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='test')
-    dataset_val = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='test')
-    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)    
+    # S3D
+    # scene_names = ['bildstein_station1_xyz_intensity_rgb','domfountain_station1_xyz_intensity_rgb','neugasse_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb','untermaederbrunnen_station1_xyz_intensity_rgb']
+    # # dataset_train = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='train')
+    # dataset_train = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='train', transform=transform)
+    # dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)
+    # # dataset_val = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='test')
+    # dataset_val = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='test')
+    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)    
+
+    # Kitti360
+    base_path = './data/kitti360'
+    folder_name = '2013_05_28_drive_0000_sync'    
+    dataset_train = Kitti360ObjectsDataset(base_path, folder_name, split='train', transform=transform)
+    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle)
+    dataset_val = Kitti360ObjectsDataset(base_path, folder_name, split='test')
+    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False)
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     print('device:', device)
@@ -92,7 +101,7 @@ if __name__ == "__main__":
     dict_acc_val = {lr: [] for lr in learning_reates}
 
     for lr in learning_reates:
-        model = PointNet2(num_classes=len(dataset_train.known_classes), args=args)
+        model = PointNet2(num_classes=len(dataset_train.get_known_classes()), args=args)
         model.to(device)
 
         optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -115,7 +124,8 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'PN2_len{len(dataset_train)}_bs{args.batch_size}_mb{args.max_batches}_l{args.num_layers}_v{args.variation}_s{args.shuffle}_g{args.lr_gamma}.png'
+    # plot_name = f'PN2_len{len(dataset_train)}_bs{args.batch_size}_mb{args.max_batches}_l{args.num_layers}_v{args.variation}_s{args.shuffle}_g{args.lr_gamma}.png'
+    plot_name = f'PN2-Kitti_bs{args.batch_size}_mb{args.max_batches}_l{args.num_layers}_v{args.variation}_s{args.shuffle}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-acc': dict_acc,

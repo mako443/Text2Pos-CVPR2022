@@ -126,8 +126,6 @@ if __name__ == "__main__":
     data = dataset[0]        
     batch = next(iter(dataloader))
 
-    
-
     # dataset = Semantic3dCellRetrievalDataset('./data/numpy_merged/', './data/semantic3d', ['class', 'color', 'position'])
     # dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dCellRetrievalDataset.collate_fn)
     # data = dataset[0]
