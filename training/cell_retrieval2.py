@@ -22,6 +22,7 @@ TODO:
 - REMOVE "identical negative"!!
 - what about same best cells?!
 - max-dist for descriptions?
+- some form of augmentation?
 '''
 
 def train_epoch(model, dataloader, args):
@@ -126,7 +127,8 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    scene_names = args.scene_names #['sg27_station2_intensity_rgb', 'sg27_station4_intensity_rgb', 'sg27_station5_intensity_rgb'] #'sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb']
+    # Currently: large-outdoor scenes
+    scene_names = ('bildstein_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb')
     dataset_train = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.cell_size, args.cell_stride, split='train')
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=args.shuffle)
     dataset_val = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.cell_size, args.cell_stride, split='test')

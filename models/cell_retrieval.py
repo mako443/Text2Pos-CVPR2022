@@ -17,7 +17,9 @@ from dataloading.semantic3d_poses import Semantic3dPosesDataset
 
 '''
 TODO:
-
+- optimize k?
+- more layers?
+- generally other architecture?
 '''
 
 class CellRetrievalNetwork(torch.nn.Module):
@@ -36,8 +38,8 @@ class CellRetrievalNetwork(torch.nn.Module):
         self.known_classes['<unk>'] = 0
         self.class_embedding = nn.Embedding(len(self.known_classes), embed_dim, padding_idx=0)
 
-        self.pos_embedding = get_mlp([3,32, embed_dim]) #OPTION: pos_embedding layers
-        self.color_embedding = get_mlp([3,32, embed_dim]) #OPTION: color_embedding layers
+        self.pos_embedding = get_mlp([3, 64, embed_dim]) #OPTION: pos_embedding layers
+        self.color_embedding = get_mlp([3, 64, embed_dim]) #OPTION: color_embedding layers
 
         self.mlp_merge = get_mlp([len(use_features)*embed_dim, embed_dim])
 

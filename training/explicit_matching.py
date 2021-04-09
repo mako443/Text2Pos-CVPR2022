@@ -150,7 +150,7 @@ if __name__ == "__main__":
     # plot_name = f'TF-match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     # plot_name = f'SG-match_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     # plot_name = f'SG-PosePad_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
-    plot_name = f'SG-PosePad-all_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    plot_name = f'SG-PosePad-offset_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-recall': dict_recall,
