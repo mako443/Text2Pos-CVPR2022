@@ -74,7 +74,7 @@ def gather_objects(base_path, folder_name):
     scene_objects = {}
 
     for i_file_name, file_name in enumerate(file_names):
-        print(f'\t loading file {file_name}, {i_file_name} / {len(file_names)}')
+        # print(f'\t loading file {file_name}, {i_file_name} / {len(file_names)}')
         xyz, rgb, lbl, iid = load_points(osp.join(path, file_name))
         file_objects = extract_objects(xyz, rgb, lbl, iid)
 
@@ -125,16 +125,16 @@ def create_cells(objects, poses, scene_name, cell_size=30):
     cells = []
     nones = 0
     for i_pose, pose in enumerate(poses):
-        print(f'\r \t pose {i_pose} / {len(poses)}', end='')
+        # print(f'\r \t pose {i_pose} / {len(poses)}', end='')
         bbox = np.hstack((pose - cell_size/2, pose + cell_size/2))
         cell = describe_cell(bbox, objects, pose, scene_name)
         if cell is not None:
             cells.append(cell)
         else:
             nones += 1
-    print()
+    # print()
     
-    assert nones < len(poses)/5, f'Too many nones ({nones}), are all objects gathered?'
+    assert nones < len(poses)/5, 'Too many nones ({} / {}), are all objects gathered?'.format(nones, len(poses))
 
     return cells
     
@@ -142,33 +142,42 @@ if __name__ == '__main__':
     np.random.seed(4096) # Set seed to re-produce results
 
     base_path = './data/kitti360'
-    folder_name = '2013_05_28_drive_0000_sync'
+    # folder_name = '2013_05_28_drive_0000_sync'
+    for folder_name in ('2013_05_28_drive_0000_sync','2013_05_28_drive_0002_sync','2013_05_28_drive_0003_sync','2013_05_28_drive_0004_sync','2013_05_28_drive_0005_sync','2013_05_28_drive_0006_sync','2013_05_28_drive_0007_sync','2013_05_28_drive_0009_sync','2013_05_28_drive_0010_sync'):
+        try:
+            print(f'Folder: {folder_name}')
 
-    poses, pose_objects = create_poses(base_path, folder_name, return_pose_objects=True)
+            poses, pose_objects = create_poses(base_path, folder_name, return_pose_objects=True)
 
-    path_objects = osp.join(base_path, 'objects', f'{folder_name}.pkl')
-    path_cells = osp.join(base_path, 'cells', f'{folder_name}.pkl')
+            path_objects = osp.join(base_path, 'objects', f'{folder_name}.pkl')
+            path_cells = osp.join(base_path, 'cells', f'{folder_name}.pkl')
 
-    # Load or gather objects
-    if not osp.isfile(path_objects): # Build if not cached
-        objects = gather_objects(base_path, folder_name)
-        pickle.dump(objects, open(path_objects, 'wb'))
-        print(f'Saved objects to {path_objects}')  
-    else:
-        objects = pickle.load(open(path_objects, 'rb'))
+            # Load or gather objects
+            if not osp.isfile(path_objects): # Build if not cached
+                objects = gather_objects(base_path, folder_name)
+                pickle.dump(objects, open(path_objects, 'wb'))
+                print(f'Saved objects to {path_objects}')  
+            else:
+                objects = pickle.load(open(path_objects, 'rb'))
 
-    cells = create_cells(objects, poses, folder_name)
-    pickle.dump(cells, open(path_cells, 'wb'))
-    print(f'Saved cells to {path_cells} \n')   
+            cells = create_cells(objects, poses, folder_name)
+            pickle.dump(cells, open(path_cells, 'wb'))
+            print(f'Saved cells to {path_cells}')   
 
-    # Debugging 
-    idx = np.random.randint(len(cells))
-    idx = 0
-    cell = cells[idx]
-    print(cell.get_text())
+            # Debugging 
+            idx = np.random.randint(len(cells))
+            cell = cells[idx]
+            print('idx', idx)
+            print(cell.get_text())
 
-    img = plot_cell(cell)
-    cv2.imwrite(f'cell_demo_idx{idx}.png', img)
+            img = plot_cell(cell)
+            cv2.imwrite(f'cell_demo_idx{idx}.png', img)
+
+        except:
+            print(f'Scene {folder_name} failed, removing objects again')
+            os.remove(path_objects)
+        
+        print('--- \n')
 
 
     # show_objects(cell.objects, scale=100)
