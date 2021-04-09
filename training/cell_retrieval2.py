@@ -9,9 +9,12 @@ import matplotlib.pyplot as plt
 import cv2
 
 from models.cell_retrieval import CellRetrievalNetwork
+
 from dataloading.semantic3d_poses import Semantic3dPosesDataset, Semantic3dPosesDatasetMulti
 from datapreparation.imports import COMBINED_SCENE_NAMES
 from datapreparation.drawing import draw_retrieval
+
+from dataloading.kitti360.kitti360 import Kitti360CellDataset
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -19,7 +22,7 @@ from training.losses import MatchingLoss, PairwiseRankingLoss, HardestRankingLos
 
 '''
 TODO:
-- REMOVE "identical negative"!!
+- remove "identical negative" (currently does not occur in Kitti)
 - what about same best cells?!
 - max-dist for descriptions?
 '''
@@ -126,17 +129,24 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    scene_names = args.scene_names #['sg27_station2_intensity_rgb', 'sg27_station4_intensity_rgb', 'sg27_station5_intensity_rgb'] #'sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb']
-    dataset_train = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.cell_size, args.cell_stride, split='train')
-    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=args.shuffle)
-    dataset_val = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.cell_size, args.cell_stride, split='test')
-    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
-    print('Scene names:', scene_names)
+    # S3d
+    # scene_names = args.scene_names #['sg27_station2_intensity_rgb', 'sg27_station4_intensity_rgb', 'sg27_station5_intensity_rgb'] #'sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb']
+    # dataset_train = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.cell_size, args.cell_stride, split='train')
+    # dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=args.shuffle)
+    # dataset_val = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.cell_size, args.cell_stride, split='test')
+    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
+    # print('Scene names:', scene_names)
 
     # dataset_val = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d', "sg27_station2_intensity_rgb", args.cell_size, args.cell_stride, split='test')
     # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
     
-    print("\t\t Stats: ", args.cell_size, args.cell_stride, dataset_train.gather_stats())
+    # print("\t\t Stats: ", args.cell_size, args.cell_stride, dataset_train.gather_stats())
+
+    # Kitti360 
+    dataset_train = Kitti360CellDataset('./data/kitti360', '2013_05_28_drive_0000_sync', split='train')
+    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=args.shuffle)
+    dataset_val = Kitti360CellDataset('./data/kitti360', '2013_05_28_drive_0000_sync', split='test')
+    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=False)    
 
     data = dataset_train[0]        
     batch = next(iter(dataloader_train))
@@ -189,7 +199,7 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'0cells_id{len(dataset_train.cells)}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_c{int(args.cell_size)}-{int(args.cell_stride)}_f{"-".join(args.use_features)}_t-{ACC_TARGET}.png'
+    plot_name = f'cells-Kitti_len{len(dataset_train.cells)}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_c{int(args.cell_size)}-{int(args.cell_stride)}_f{"-".join(args.use_features)}_t-{ACC_TARGET}.png'
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
     val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}
     metrics = {

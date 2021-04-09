@@ -14,10 +14,17 @@ from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 
 class Kitti360BaseDataset(Dataset):
-    def __init__(self, base_path, scene_name):
+    def __init__(self, base_path, scene_name, split=None):
         self.scene_name = scene_name
         self.objects = pickle.load(open(osp.join(base_path, 'objects', f'{scene_name}.pkl'), 'rb'))
         self.cells = pickle.load(open(osp.join(base_path, 'cells', f'{scene_name}.pkl'), 'rb'))
+
+        if split is not None: # CARE: selects cells and objects, which aren't necessarily related!
+            assert split in ('train', 'test')
+            test_indices = (np.arange(np.max((len(self.objects), len(self.cells)))) % 5) == 0
+            indices = test_indices if split=='test' else np.bitwise_not(test_indices)
+            self.objects = [o for (i,o) in enumerate(self.objects) if indices[i]]      
+            self.cells = [c for (i,c) in enumerate(self.cells) if indices[i]]      
 
         self.hint_descriptions = self.create_hint_descriptions(self.cells) # Gather here for get_known_words()
 
@@ -37,7 +44,7 @@ class Kitti360BaseDataset(Dataset):
         return hint_descriptions
 
     def get_known_classes(self):
-        classes = [obj.label for obj in self.scene_objects]
+        classes = [obj.label for obj in self.objects]
         classes.append('pad')
         return list(np.unique(classes))
 
@@ -63,8 +70,9 @@ class Kitti360CellDataset(Kitti360BaseDataset):
         hints = self.hint_descriptions[idx]
         text = ' '.join(hints)
         return {
-            'objects': cell.objects,
-            'descriptions': text,
+            'cells': cell,
+            'texts': text,
+            'cell_indices': idx,
             'scene_names': self.scene_name
         }      
 

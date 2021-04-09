@@ -6,6 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 import time
 import numpy as np
 import matplotlib.pyplot as plt
+from easydict import EasyDict
 
 from models.superglue_matcher import SuperGlueMatch
 # from models.graph_matcher import GraphMatch
@@ -32,18 +33,24 @@ def train_epoch(model, dataloader, args):
     epoch_losses = []
     epoch_recalls = []
     epoch_precisions = []
+    epoch_offsets = []
     t0 = time.time()
+    printed=False
     for i_batch, batch in enumerate(dataloader):
         if args.max_batches is not None and i_batch >= args.max_batches:
             break
 
         optimizer.zero_grad()
-        # color_input = batch['objects_colors'] if args.use_color else None
-        # output = model(batch['objects_classes'], batch['objects_positions'], batch['hint_descriptions'], object_colors=color_input)
         output = model(batch['objects'], batch['hint_descriptions'])
 
-        loss = criterion(output.P, batch['all_matches'])
-        # print(f'\t\t batch {i_batch} loss {loss.item(): 0.3f}')
+        loss_matching = criterion_matching(output.P, batch['all_matches'])
+        loss_offsets = criterion_offsets(output.offsets, torch.tensor(batch['offsets'], dtype=torch.float, device=DEVICE))
+        
+        if not printed:
+            print(f'{loss_matching.item():0.2f} - {loss_offsets.item():0.2f}')
+            printed = True
+
+        loss = loss_matching + loss_offsets # TODO/CARE: balance between? Currently on same magnitude (normed)
 
         loss.backward()
         optimizer.step()
@@ -52,12 +59,16 @@ def train_epoch(model, dataloader, args):
         recall, precision = calc_recall_precision(batch['matches'], output.matches0.cpu().detach().numpy(), output.matches1.cpu().detach().numpy())
         epoch_recalls.append(recall)
         epoch_precisions.append(precision)
+        epoch_offsets.append(loss_offsets.item())
 
-        # if i_batch == args.max_batches - 1:
-        #     print('P')
-        #     print(output.P.cpu().detach().numpy().astype(np.float16))
-
-    return np.mean(epoch_losses), np.mean(epoch_recalls), np.mean(epoch_precisions), time.time()-t0
+    # return np.mean(epoch_losses), np.mean(epoch_recalls), np.mean(epoch_precisions), time.time()-t0
+    return EasyDict(
+        loss=np.mean(epoch_losses), 
+        recall=np.mean(epoch_recalls), 
+        precision=np.mean(epoch_precisions), 
+        offsets=np.mean(epoch_offsets), 
+        time=time.time()-t0
+    )
 
 @torch.no_grad()
 def val_epoch(model, dataloader, args):
@@ -109,10 +120,11 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_rates = np.logspace(-3.5, -4.5 ,3) #larger than -3 gives nan, TODO: warm-up epochs?
+    learning_rates = np.logspace(-3.5, -4.5 ,3)[0:1] #larger than -3 gives nan, TODO: warm-up epochs?
     dict_loss = {lr: [] for lr in learning_rates}
     dict_recall = {lr: [] for lr in learning_rates}
     dict_precision = {lr: [] for lr in learning_rates}
+    dict_offsets = {lr: [] for lr in learning_rates}
     dict_val_recall = {lr: [] for lr in learning_rates}
     dict_val_precision = {lr: [] for lr in learning_rates}    
     
@@ -123,14 +135,17 @@ if __name__ == "__main__":
         model.to(DEVICE)
 
         optimizer = optim.Adam(model.parameters(), lr=lr)
-        criterion = MatchingLoss()
+        criterion_matching = MatchingLoss()
+        criterion_offsets = nn.MSELoss()
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)
 
         for epoch in range(args.epochs):
-            loss, train_recall, train_precision, epoch_time = train_epoch(model, dataloader_train, args)
-            dict_loss[lr].append(loss)
-            dict_recall[lr].append(train_recall)
-            dict_precision[lr].append(train_precision)
+            # loss, train_recall, train_precision, epoch_time = train_epoch(model, dataloader_train, args)
+            train_out = train_epoch(model, dataloader_train, args)
+            dict_loss[lr].append(train_out.loss)
+            dict_recall[lr].append(train_out.recall)
+            dict_precision[lr].append(train_out.precision)
+            dict_offsets[lr].append(train_out.offsets)
 
             val_recall, val_precision = val_epoch(model, dataloader_val, args) #CARE: which loader for val!
             dict_val_recall[lr].append(val_recall)
@@ -139,7 +154,7 @@ if __name__ == "__main__":
             if scheduler: 
                 scheduler.step()
 
-            print(f'\t lr {lr:0.6} epoch {epoch} loss {loss:0.3f} t-recall {train_recall:0.2f} t-precision {train_precision:0.2f} v-recall {val_recall:0.2f} v-precision {val_precision:0.2f} time {epoch_time:0.3f}')
+            print(f'\t lr {lr:0.6} epoch {epoch} loss {train_out.loss:0.3f} t-recall {train_out.recall:0.2f} t-precision {train_out.precision:0.2f} v-recall {val_recall:0.2f} v-precision {val_precision:0.2f} time {train_out.time:0.3f}')
         print()
 
     '''
@@ -155,6 +170,7 @@ if __name__ == "__main__":
         'train-loss': dict_loss,
         'train-recall': dict_recall,
         'train-precision': dict_precision,
+        'train-offsets': dict_offsets,
         'val-recall': dict_val_recall,
         'val-precision': dict_val_precision,        
     }

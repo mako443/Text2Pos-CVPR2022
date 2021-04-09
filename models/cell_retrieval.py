@@ -90,7 +90,8 @@ class CellRetrievalNetwork(torch.nn.Module):
         if 'position' in self.use_features:
             positions = []
             for objects_sample in objects:
-                positions.extend([obj.center_in_cell for obj in objects_sample])
+                # positions.extend([obj.center_in_cell for obj in objects_sample])
+                positions.extend([obj.closest_point for obj in objects_sample])
             pos_embedding = self.pos_embedding(torch.tensor(positions, dtype=torch.float, device=self.device))
             embeddings.append(F.normalize(pos_embedding, dim=-1))
 

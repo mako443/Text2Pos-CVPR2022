@@ -139,12 +139,16 @@ class Semantic3dPoseReferanceMockDataset(Dataset):
         distances = np.linalg.norm(pose[0:2] - np.array([obj.center for obj in objects])[:, 0:2], axis=1) # Distance only x&y
         distances[self.num_mentioned + num_distractors : ] = np.inf # Remove the padding objects
         sorted_indices = np.argsort(distances)
+
+        offset_vectors = []
+
         for hint_idx, obj_idx in enumerate(sorted_indices[0 : self.num_mentioned]):
             obj = objects[obj_idx]
             color_dists = np.linalg.norm(obj.color - COLORS, axis=1)
             color_text = COLOR_NAMES[np.argmin(color_dists)]
             
             obj_to_pose = pose - obj.center
+            offset_vectors.append(obj_to_pose[0:2])
             if abs(obj_to_pose[0])>=abs(obj_to_pose[1]) and obj_to_pose[0]>=0: direction='east'
             if abs(obj_to_pose[0])>=abs(obj_to_pose[1]) and obj_to_pose[0]<=0: direction='west'
             if abs(obj_to_pose[0])<=abs(obj_to_pose[1]) and obj_to_pose[1]>=0: direction='north'
@@ -153,12 +157,7 @@ class Semantic3dPoseReferanceMockDataset(Dataset):
             hints.append(f'The pose is {direction} of a {color_text} {obj.label}')
             matches.append((obj_idx, hint_idx))
 
-        # # Create pad objects
-        # while len(objects) < self.pad_size:
-        #     points_w = np.zeros((1, 3))
-        #     label = 'pad'
-        #     color = np.zeros((1, 3))
-        #     objects.append(Object3D.from_mock_data({"points_w": points_w, "label": label, "color": color, "id": -1}))              
+        offset_vectors = np.array(offset_vectors) / np.linalg.norm(offset_vectors, axis=1).reshape((-1,1)) # Norm to have offset directions (for now)
 
         # Create <matches> and <all_matches>
         all_matches = matches.copy()
@@ -177,7 +176,8 @@ class Semantic3dPoseReferanceMockDataset(Dataset):
             'num_distractors': num_distractors,
             'matches': matches,
             'all_matches': all_matches,
-            'poses': pose
+            'poses': pose,
+            'offsets': offset_vectors
         }
 
     def collate_fn(data):
