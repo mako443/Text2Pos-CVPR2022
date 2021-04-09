@@ -13,6 +13,7 @@ from easydict import EasyDict
 from models.modules import get_mlp, LanguageEncoder
 from models.superglue import SuperGlue
 from dataloading.semantic3d import Semantic3dObjectReferanceDataset
+from dataloading.semantic3d import Semantic3dPoseReferanceMockDataset
 
 '''
 TODO:
@@ -37,8 +38,8 @@ class SuperGlueMatch(torch.nn.Module):
         self.mlp_merge = get_mlp([3*self.embed_dim, self.embed_dim])
 
         self.language_encoder = LanguageEncoder(known_words, self.embed_dim, bi_dir=True)  
+        self.mlp_offsets = get_mlp([self.embed_dim, self.embed_dim //2, 2])
 
-        # print('CARE: ONLY SELF LAYERS!')
         config = {
             'descriptor_dim': self.embed_dim,
             'GNN_layers': ['self', 'cross'] * self.num_layers,
@@ -96,10 +97,17 @@ class SuperGlueMatch(torch.nn.Module):
         
         matcher_output = self.superglue(desc0, desc1)
 
+        '''
+        Predict offsets from hints
+        '''
+        offsets = self.mlp_offsets(hint_encodings) # [B, num_hints, 2]
+        offsets = F.normalize(offsets, dim=-1)
+
         outputs = EasyDict()
         outputs.P = matcher_output['P']
         outputs.matches0 = matcher_output['matches0']
         outputs.matches1 = matcher_output['matches1']
+        outputs.offsets = offsets
 
         # print("P", outputs.P.shape)
 
@@ -115,13 +123,16 @@ if __name__ == "__main__":
     args.embed_dim = 16
     args.num_layers = 2
     args.sinkhorn_iters = 10
+    args.num_mentioned = 4
+    args.pad_size = 8
+    args.use_features = ['class', 'color', 'position']
 
-    model = SuperGlueMatch(['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars'], 'a b c d e'.split(), args)
+    dataset_train = Semantic3dPoseReferanceMockDataset(args, length=1024)
+    dataloader_train = DataLoader(dataset_train, batch_size=2, collate_fn=Semantic3dPoseReferanceMockDataset.collate_fn)    
+    data = dataset_train[0]
+    batch = next(iter(dataloader_train))
 
-    dataset = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=2)
-    dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
-    data = dataset[0]
-    batch = next(iter(dataloader))    
+    model = SuperGlueMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args)   
 
     out = model(batch['objects'], batch['hint_descriptions'])
 

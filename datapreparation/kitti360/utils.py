@@ -10,6 +10,16 @@ CLASS_TO_LABEL = {
     'trash bin':39,
     'vending machine':40,
     'box':41,
+    'road': 7,
+    'sidewalk':8,
+    'parking':9,
+    'wall': 12,
+    'fence': 13,
+    'guard rail': 14,
+    'bridge': 15,
+    'tunnel': 16,
+    'vegetation': 21,
+    'terrain': 22,
 }
 
 CLASS_TO_COLOR = {
@@ -24,6 +34,17 @@ CLASS_TO_COLOR = {
     'trash bin': (0,  128,192),
     'vending machine': (128, 64,  0),
     'box': (64,  64,128),
+    'sidewalk': (244, 35,232),
+    'road': (128, 64,128),
+    'parking': (250,170,160),
+    'wall': (102,102,156),
+    'fence': (190,153,153),
+    'guard rail': (180,165,180),
+    'bridge': (150,100,100),
+    'tunnel': (150,120, 90),
+    'vegetation': (107,142, 35),
+    'terrain': (152,251,152), 
+    '_pose': (255, 255, 255)   
 }
 
 CLASS_TO_MINPOINTS = {
@@ -39,5 +60,7 @@ CLASS_TO_MINPOINTS = {
     'vending machine': 500,
     'box': 500,
 }
+
+STUFF_CLASSES = ['sidewalk', 'road', 'parking', 'wall', 'fence', 'guard rail', 'bridge', 'tunnel', 'vegetation', 'terrain']
 
 LABEL_TO_CLASS = {v: k for k, v in CLASS_TO_LABEL.items()}
