@@ -30,6 +30,7 @@ def train_epoch(model, dataloader, args):
     epoch_accs = []
     
     for i_batch, batch in enumerate(dataloader):
+        print('\t batch', i_batch)
         if args.max_batches is not None and i_batch >= args.max_batches:
             break
 
@@ -95,7 +96,7 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_reates = np.logspace(-2, -4.0, 5)[1:-1]
+    learning_reates = np.logspace(-2, -4.0, 5)[2:-1]
     dict_loss = {lr: [] for lr in learning_reates}    
     dict_acc = {lr: [] for lr in learning_reates}
     dict_acc_val = {lr: [] for lr in learning_reates}
@@ -118,7 +119,7 @@ if __name__ == "__main__":
 
             scheduler.step()
 
-            print(f'\t lr {lr:0.6f} epoch {epoch} loss {loss: 0.3f} acc-train {acc_train: 0.2f} acc-val {acc_val:0.2f}')
+            print(f'\t lr {lr:0.6f} epoch {epoch} loss {loss:0.3f} acc-train {acc_train:0.2f} acc-val {acc_val:0.2f}')
         print()
 
     '''
