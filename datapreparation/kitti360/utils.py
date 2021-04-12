@@ -1,3 +1,5 @@
+import numpy as np
+
 CLASS_TO_LABEL = {
     'building':11,
     'pole':17,
@@ -64,3 +66,31 @@ CLASS_TO_MINPOINTS = {
 STUFF_CLASSES = ['sidewalk', 'road', 'parking', 'wall', 'fence', 'guard rail', 'bridge', 'tunnel', 'vegetation', 'terrain']
 
 LABEL_TO_CLASS = {v: k for k, v in CLASS_TO_LABEL.items()}
+
+COLORS = np.array([
+    [0, 0, 0],
+    [128, 128, 128],
+    [255, 255, 255],
+    [255, 0, 0],
+    [0, 255, 0],
+    [0, 0, 255],
+    [255, 255, 0],
+    [255, 0, 255],
+    [0, 255, 255]
+])
+COLOR_NAMES = [
+    'black',
+    'grey',
+    'white',
+    'red',
+    'green',
+    'blue',
+    'yellow',
+    'purple',
+    'turquoise'
+]
+
+def get_color_histogram():
+    dists = cdist(colors, anchors)
+    indices = np.argmin(dists, axis=1)
+    unique, counts = np.unique(indices, return_counts=True)
