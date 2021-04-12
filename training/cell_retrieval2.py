@@ -125,6 +125,8 @@ def eval_epoch(model, dataloader, args, targets='all'):
 if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
+
+    WEITER: find color-scheme, compare features importance
     
     '''
     Create data loaders

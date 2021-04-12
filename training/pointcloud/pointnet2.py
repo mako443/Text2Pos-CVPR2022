@@ -30,7 +30,6 @@ def train_epoch(model, dataloader, args):
     epoch_accs = []
     
     for i_batch, batch in enumerate(dataloader):
-        print('\t batch', i_batch)
         if args.max_batches is not None and i_batch >= args.max_batches:
             break
 
@@ -67,6 +66,8 @@ if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
 
+    # WEITER: Debug instability, remove small, smaller LR?
+
     '''
     Create data loaders
     '''    
@@ -86,8 +87,10 @@ if __name__ == "__main__":
     folder_name = '2013_05_28_drive_0000_sync'    
     dataset_train = Kitti360ObjectsDataset(base_path, folder_name, split='train', transform=transform)
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle)
-    dataset_val = Kitti360ObjectsDataset(base_path, folder_name, split='test')
-    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False)
+    # dataset_val = Kitti360ObjectsDataset(base_path, folder_name, split='test')
+    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False)
+    dataset_val = dataset_train
+    dataloader_val = dataloader_train
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     print('device:', device)
@@ -102,7 +105,7 @@ if __name__ == "__main__":
     dict_acc_val = {lr: [] for lr in learning_reates}
 
     for lr in learning_reates:
-        model = PointNet2(num_classes=len(dataset_train.get_known_classes()), args=args)
+        model = PointNet2(num_classes=len(dataset_train.class_to_index), args=args)
         model.to(device)
 
         optimizer = optim.Adam(model.parameters(), lr=lr)

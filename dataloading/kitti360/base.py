@@ -19,6 +19,8 @@ class Kitti360BaseDataset(Dataset):
         self.objects = pickle.load(open(osp.join(base_path, 'objects', f'{scene_name}.pkl'), 'rb'))
         self.cells = pickle.load(open(osp.join(base_path, 'cells', f'{scene_name}.pkl'), 'rb'))
 
+        self.class_to_index = {c: i for (i, c) in enumerate(self.get_known_classes())} # Build here so that all classes are captured, base num_classes on this!
+        
         if split is not None: # CARE: selects cells and objects, which aren't necessarily related!
             assert split in ('train', 'test')
             test_indices = (np.arange(np.max((len(self.objects), len(self.cells)))) % 5) == 0

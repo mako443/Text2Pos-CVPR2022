@@ -23,7 +23,10 @@ class Kitti360ObjectsDataset(Kitti360BaseDataset):
     def __init__(self, base_path, scene_name, split=None, transform=T.Compose([T.FixedPoints(2048), T.NormalizeScale()])):
         super().__init__(base_path, scene_name, split)
         self.transform = transform
-        self.class_to_index = {c: i for (i, c) in enumerate(self.get_known_classes())}
+
+        # print('Before', len(self))
+        # self.objects = [obj for obj in self.objects if len(obj.xyz) >=2048]
+        # print('After', len(self))        
         
         print(self)
 
