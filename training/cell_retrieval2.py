@@ -126,6 +126,8 @@ def eval_epoch(model, dataloader, args, targets='all'):
 if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
+
+    WEITER: Colors, compare features
     
     '''
     Create data loaders
@@ -144,10 +146,10 @@ if __name__ == "__main__":
     # print("\t\t Stats: ", args.cell_size, args.cell_stride, dataset_train.gather_stats())
 
     # Kitti360 
-    scene_name = '2013_05_28_drive_0000_sync'
-    dataset_train = Kitti360CellDataset('./data/kitti360', '2013_05_28_drive_0000_sync', split='train')
+    scene_name = args.scene_names[0] #'2013_05_28_drive_0000_sync'
+    dataset_train = Kitti360CellDataset('./data/kitti360', scene_name, split='train')
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=args.shuffle)
-    dataset_val = Kitti360CellDataset('./data/kitti360', '2013_05_28_drive_0000_sync', split='test')
+    dataset_val = Kitti360CellDataset('./data/kitti360', scene_name, split='test')
     dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=False)    
 
     data = dataset_train[0]        
@@ -201,8 +203,9 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
+    scene_name = scene_name.split('_')[-2]
     #plot_name = f'cells-Kitti_len{len(dataset_train.cells)}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_c{int(args.cell_size)}-{int(args.cell_stride)}_f{"-".join(args.use_features)}_t-{ACC_TARGET}.png'
-    plot_name = f'cells-Kitti_len{len(dataset_train.cells)}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_c{int(args.cell_size)}-{int(args.cell_stride)}_f{"-".join(args.use_features)}.png'
+    plot_name = f'cells-Kitti_s{scene_name}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_c{int(args.cell_size)}-{int(args.cell_stride)}_f{"-".join(args.use_features)}.png'
 
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
     val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}

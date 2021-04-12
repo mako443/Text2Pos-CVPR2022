@@ -261,7 +261,7 @@ class Semantic3dPoseReferanceDataset(Dataset):
         hint_ids = [do.id for do in pose_description]
         mentioned_objects = [objects_dict[id] for id in hint_ids]
 
-        # Build cell on the fly - currently as oracle that perfectly fits all mentioned objects
+        # Build cell on the fly - currently as oracle that perfectly fits all mentioned objects (augmentation below)
         mentioned_bboxes = [obj.aligned_bbox for obj in mentioned_objects]
         mentioned_bboxes = np.array(mentioned_bboxes)
         mentioned_bboxes[:, 3:6] += mentioned_bboxes[:, 0:3] # now [x0, y0, z0, x1, y1, z1]
