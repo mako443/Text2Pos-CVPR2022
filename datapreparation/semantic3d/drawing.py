@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 
-from datapreparation.imports import Object3D, ViewObject, Pose, CLASSES_COLORS
+from datapreparation.semantic3d.imports import Object3D, ViewObject, Pose, CLASSES_COLORS
 
 '''
 Module to draw objects, poses and pose-descriptions onto a 2D map. CARE: these images have to be x-flipped to be consistent with world coordinates!

@@ -1,5 +1,8 @@
 import numpy as np
 
+# CARE: scene-names incomplete because some where corrupted ?
+SCENE_NAMES = ('2013_05_28_drive_0000_sync','2013_05_28_drive_0003_sync','2013_05_28_drive_0005_sync','2013_05_28_drive_0006_sync','2013_05_28_drive_0009_sync','2013_05_28_drive_0010_sync')
+
 CLASS_TO_LABEL = {
     'building':11,
     'pole':17,
@@ -67,19 +70,6 @@ STUFF_CLASSES = ['sidewalk', 'road', 'parking', 'wall', 'fence', 'guard rail', '
 
 LABEL_TO_CLASS = {v: k for k, v in CLASS_TO_LABEL.items()}
 
-COLORS_HSV = np.array([
-        [  0,   32, 32],
-        [  15, 128, 128],
-        [ 25, 128, 128],
-        [ 35, 128, 128],
-        [ 45, 128, 128],
-        [ 60, 128, 128],
-        [ 90, 128, 128],
-        [120, 128, 128],
-       ], dtype=np.uint8)
-
-COLOR_NAMES = ['black', 'darkbrown', 'brown', 'greenbrown', 'olive', 'green', 'blue', 'purple']
-
 # COLORS = np.array([
 #     [0, 0, 0],
 #     [128, 128, 128],
@@ -103,7 +93,20 @@ COLOR_NAMES = ['black', 'darkbrown', 'brown', 'greenbrown', 'olive', 'green', 'b
 #     'turquoise'
 # ]
 
-def get_color_histogram():
-    dists = cdist(colors, anchors)
-    indices = np.argmin(dists, axis=1)
-    unique, counts = np.unique(indices, return_counts=True)
+COLORS = np.array([
+       [ 47.2579917 ,  49.75368454,  42.4153065 ],
+       [136.32696657, 136.95241796, 126.02741229],
+       [ 87.49822126,  91.69058836,  80.14558512],
+       [213.91030679, 216.25033052, 207.24611073],
+       [110.39218852, 112.91977458, 103.68638249],
+       [ 27.47505158,  28.43996795,  25.16840296],
+       [ 66.65951839,  70.22342483,  60.20395996],
+       [171.00852191, 170.05737735, 155.00130334]
+    ])
+
+COLOR_NAMES = ['color-0', 'color-1', 'color-2', 'color-3', 'color-4', 'color-5', 'color-6', 'color-7']
+
+# def get_color_histogram():
+    # dists = cdist(colors, anchors)
+    # indices = np.argmin(dists, axis=1)
+    # unique, counts = np.unique(indices, return_counts=True)

@@ -10,7 +10,7 @@ import torch
 import torch_geometric.transforms as T
 from torch_geometric.data import Data, DataLoader
 
-from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS
+from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, SCENE_NAMES, COLORS, COLOR_NAMES
 from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
@@ -23,6 +23,8 @@ class Kitti360ObjectsDataset(Kitti360BaseDataset):
     def __init__(self, base_path, scene_name, split=None, transform=T.Compose([T.FixedPoints(2048), T.NormalizeScale()])):
         super().__init__(base_path, scene_name, split)
         self.transform = transform
+
+        self.objects = [obj for cell in self.cells for obj in cell.objects]
 
         # print('Before', len(self))
         # self.objects = [obj for obj in self.objects if len(obj.xyz) >=2048]
@@ -49,9 +51,13 @@ class Kitti360ObjectsDataset(Kitti360BaseDataset):
 if __name__ == '__main__':
     base_path = './data/kitti360'
     folder_name = '2013_05_28_drive_0000_sync'    
-    
-    dataset = Kitti360ObjectsDataset(base_path, folder_name)          
-    data = dataset[0]
 
-    dataloader = DataLoader(dataset, batch_size=2)
-    batch = next(iter(dataloader))
+    datasets = [Kitti360ObjectsDataset(base_path, sn) for sn in SCENE_NAMES]
+    objects = [obj for ds in datasets for obj in ds.objects]
+    
+    # dataset = Kitti360ObjectsDataset(base_path, folder_name)          
+    # data = dataset[0]
+
+    # dataloader = DataLoader(dataset, batch_size=2)
+    # batch = next(iter(dataloader))
+    unique,counts=np.unique([obj.get_color() for obj in objects if obj.label=='road'],return_counts=True)

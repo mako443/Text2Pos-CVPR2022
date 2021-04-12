@@ -15,9 +15,14 @@ from torch.utils.data import Dataset, DataLoader
 
 import random
 import cv2
+from easydict import EasyDict
 
-from datapreparation.imports import Object3D, DescriptionObject, COMBINED_SCENE_NAMES, COLORS, COLOR_NAMES
-from datapreparation.drawing import draw_cells
+from datapreparation.semantic3d.imports import Object3D, DescriptionObject #, COMBINED_SCENE_NAMES, COLORS, COLOR_NAMES
+from datapreparation.semantic3d.drawing import draw_cells
+
+from datapreparation.semantic3d.imports import COLORS as COLORS_S3D, COLOR_NAMES as COLOR_NAMES_S3D
+from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360
+
 
 '''
 Mock data for explicit matching (object reference: one object is target, some other objects are mentioned, rest are distractors)
@@ -28,7 +33,7 @@ class Semantic3dObjectReferenceMockDataset(Dataset):
         self.num_distractors = num_distractors
         self.length = length
 
-        self.classes = ['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars']
+        # self.classes = ['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars']
 
     def __getitem__(self, idx):
         # Create random objects in the cell
@@ -103,7 +108,7 @@ Mock data for explicit matching (pose reference: pose is described relative to s
 '''
 # TODO: add out-of-cell hint-objects that are then unmatched. Strategy: generate objects [-0.25, 1.25], match to closest objects, 
 class Semantic3dPoseReferenceMockDataset(Dataset):
-    def __init__(self, args, classes, length=1024):
+    def __init__(self, args, classes, colors, color_names, length=1024):
         self.pad_size = args.pad_size
         # self.num_distractors = args.num_distractors
         self.num_mentioned = args.num_mentioned
@@ -111,6 +116,8 @@ class Semantic3dPoseReferenceMockDataset(Dataset):
 
         # self.classes = ['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars']    
         self.classes = [c for c in classes if c!='pad']
+        self.colors = colors
+        self.color_names = color_names
 
     def __len__(self):
         return self.length
@@ -146,9 +153,11 @@ class Semantic3dPoseReferenceMockDataset(Dataset):
 
         for hint_idx, obj_idx in enumerate(sorted_indices[0 : self.num_mentioned]):
             obj = objects[obj_idx]
-            color_dists = np.linalg.norm(obj.color - COLORS, axis=1)
-            color_text = COLOR_NAMES[np.argmin(color_dists)]
-            
+            # color_dists = np.linalg.norm(obj.color - COLORS, axis=1)
+            # color_text = COLOR_NAMES[np.argmin(color_dists)]
+            color_dists = np.linalg.norm(obj.color - self.colors, axis=1)
+            color_text = self.color_names[np.argmin(color_dists)]            
+
             obj_to_pose = pose - obj.center
             offset_vectors.append(obj_to_pose[0:2])
             if abs(obj_to_pose[0])>=abs(obj_to_pose[1]) and obj_to_pose[0]>=0: direction='east'
@@ -690,15 +699,16 @@ class Semantic3dCellRetrievalDatasetMulti(Dataset):
 
 if __name__ == "__main__":
     dataset1 = Semantic3dPoseReferenceDataset('./data/numpy_merged/', './data/semantic3d', "bildstein_station1_xyz_intensity_rgb", pad_size=8)
-    data1 = dataset1[0]
+    # data1 = dataset1[0]
     # dataset2 = Semantic3dPoseReferenceMockDataset(6, pad_size=8)
     # data2 = dataset2[0]
-    quit()
 
-    # dataset = Semantic3dPoseReferenceMockDataset(6, pad_size=8)
-    # dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferenceMockDataset.collate_fn)
-    # data = dataset[0]
-    # batch = next(iter(dataloader))
+    args = EasyDict(num_mentioned=6, pad_size=8)
+
+    dataset = Semantic3dPoseReferenceMockDataset(args, dataset1.get_known_classes(), COLORS_S3D, COLOR_NAMES_S3D)
+    dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferenceMockDataset.collate_fn)
+    data = dataset[0]
+    batch = next(iter(dataloader))
 
     #CARE which is from which ;)
     # dataset = Semantic3dCellRetrievalDataset('./data/numpy_merged/', './data/semantic3d', 'bildstein_station1_xyz_intensity_rgb', ['class', 'color', 'position'])

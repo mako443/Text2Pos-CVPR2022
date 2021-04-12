@@ -12,8 +12,8 @@ from easydict import EasyDict
 
 from models.modules import get_mlp, LanguageEncoder
 from models.superglue import SuperGlue
-from dataloading.semantic3d import Semantic3dObjectReferanceDataset
-from dataloading.semantic3d import Semantic3dPoseReferanceMockDataset
+from dataloading.semantic3d.semantic3d import Semantic3dObjectReferenceDataset
+from dataloading.semantic3d.semantic3d import Semantic3dPoseReferenceMockDataset
 
 '''
 TODO:

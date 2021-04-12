@@ -2,20 +2,28 @@ from typing import List
 import numpy as np
 import cv2
 
+from datapreparation.kitti360.utils import COLORS, COLOR_NAMES
+
 class Object3d:
-    def __init__(self, xyz, rgb, label, id, color_text=None):
+    def __init__(self, xyz, rgb, label, id):
         self.xyz = xyz
         self.rgb = rgb
         self.label = label
         self.id = id
         self.closest_point = None # Set in get_closest_point for cell-object
-        self.color_text = color_text # Set in set_color during prepare()
 
-    def set_color(self, colors_hsv, color_names):
-        rgb = np.mean(self.rgb, axis=0).reshape((1,1,3)).astype(np.uint8)
-        hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
-        dists = np.linalg.norm(colors_hsv - hsv, axis=1)
-        self.color_text = color_names[np.argmin(dists)]
+    # def set_color(self, colors_hsv, color_names):
+    #     rgb = np.mean(self.rgb, axis=0).reshape((1,1,3)).astype(np.uint8)
+    #     hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+    #     dists = np.linalg.norm(colors_hsv - hsv, axis=1)
+    #     self.color_text = color_names[np.argmin(dists)]
+
+    def get_color(self):
+        """Get the color as text based on the closest (L2) discrete color-center.
+        CARE: Can change during downsampling or masking
+        """
+        dists = np.linalg.norm(np.mean(self.rgb, axis=0) - COLORS, axis=1)
+        return COLOR_NAMES[np.argmin(dists)]
 
     def __repr__(self):
         return f'Object3d: {self.label}'

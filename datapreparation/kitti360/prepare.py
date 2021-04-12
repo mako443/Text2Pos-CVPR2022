@@ -9,7 +9,7 @@ import pptk
 from plyfile import PlyData, PlyElement
 
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
-from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, COLORS_HSV, COLOR_NAMES
+from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, COLORS_HSV, COLOR_NAMES, SCENE_NAMES
 from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.descriptions import describe_cell
 
@@ -120,9 +120,9 @@ def create_poses(base_path, folder_name, sample_dist=75, return_pose_objects=Fal
     else:
         return sampled_poses
 
-def set_object_colors(objects):
-    for obj in objects:
-        obj.set_color(COLORS_HSV, COLOR_NAMES)
+# def set_object_colors(objects):
+#     for obj in objects:
+#         obj.set_color(COLORS_HSV, COLOR_NAMES)
 
 def create_cells(objects, poses, scene_name, cell_size=30):
     print('Creating cells...')
@@ -148,7 +148,7 @@ if __name__ == '__main__':
 
     base_path = './data/kitti360'
     # Incomplete folders: 3 corrupted...
-    for folder_name in ('2013_05_28_drive_0000_sync','2013_05_28_drive_0003_sync','2013_05_28_drive_0005_sync','2013_05_28_drive_0006_sync','2013_05_28_drive_0009_sync','2013_05_28_drive_0010_sync'):
+    for folder_name in SCENE_NAMES:
         print(f'Folder: {folder_name}')
 
         poses, pose_objects = create_poses(base_path, folder_name, return_pose_objects=True)
@@ -165,8 +165,8 @@ if __name__ == '__main__':
             print(f'Loaded objects from {path_objects}')
             objects = pickle.load(open(path_objects, 'rb'))
 
-        # Set colors
-        set_object_colors(objects)
+        # # Set colors
+        # set_object_colors(objects)
 
         # Create cells
         cells = create_cells(objects, poses, folder_name)

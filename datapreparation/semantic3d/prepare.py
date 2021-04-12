@@ -4,13 +4,13 @@ import os.path as osp
 import pickle
 import cv2
 
-from datapreparation.imports import Object3D, ViewObject, Pose, DescriptionObject, calc_angle_diff, COMBINED_SCENE_NAMES, Cell, CellObject
-from datapreparation.drawing import draw_objects_poses, draw_objects_poses_viewObjects, draw_viewobjects, draw_objects_objectDescription, combine_images
-from datapreparation.drawing import draw_cells, draw_objects_poseDescription
-from datapreparation.descriptions import get_text_description, describe_object, describe_cell, describe_pose
+from datapreparation.semantic3d.imports import Object3D, ViewObject, Pose, DescriptionObject, calc_angle_diff, COMBINED_SCENE_NAMES, Cell, CellObject
+from datapreparation.semantic3d.drawing import draw_objects_poses, draw_objects_poses_viewObjects, draw_viewobjects, draw_objects_objectDescription, combine_images
+from datapreparation.semantic3d.drawing import draw_cells, draw_objects_poseDescription
+from datapreparation.semantic3d.descriptions import get_text_description, describe_object, describe_cell, describe_pose
 
 import sys
-# sys.path.append('/home/imanox/Documents/Text2Image/Semantic3D-Net')
+sys.path.append('/home/imanox/Documents/Text2Image/Semantic3D-Net')
 sys.path.append('/usr/stud/kolmet/thesis/semantic3d')
 from semantic.imports import ClusteredObject as ClusteredObject_S3D, ViewObject as ViewObject_S3D, COLORS, COLOR_NAMES
 from graphics.imports import CLASSES_COLORS, Pose as Pose_S3D

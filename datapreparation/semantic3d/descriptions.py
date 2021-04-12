@@ -6,8 +6,8 @@ import cv2
 
 from typing import List
 
-from datapreparation.imports import Object3D, ViewObject, Pose, DescriptionObject, DIRECTIONS, DIRECTIONS_COMPASS, IMAGE_WIDHT, calc_angle_diff, Cell, CellObject, COLORS, COLOR_NAMES
-from datapreparation.drawing import draw_objects_poses, draw_objects_poses_viewObjects
+from datapreparation.semantic3d.imports import Object3D, ViewObject, Pose, DescriptionObject, DIRECTIONS, DIRECTIONS_COMPASS, IMAGE_WIDHT, calc_angle_diff, Cell, CellObject, COLORS, COLOR_NAMES
+from datapreparation.semantic3d.drawing import draw_objects_poses, draw_objects_poses_viewObjects
 
 '''
 Module to describe the Semantic3D poses based on their view-objects

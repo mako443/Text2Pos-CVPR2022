@@ -9,23 +9,23 @@ import cv2
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS
+from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, SCENE_NAMES
 from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 
 class Kitti360BaseDataset(Dataset):
     def __init__(self, base_path, scene_name, split=None):
         self.scene_name = scene_name
-        self.objects = pickle.load(open(osp.join(base_path, 'objects', f'{scene_name}.pkl'), 'rb'))
+        self.scene_objects = pickle.load(open(osp.join(base_path, 'objects', f'{scene_name}.pkl'), 'rb')) # CARE: created before segmentation - do not use for object classification
         self.cells = pickle.load(open(osp.join(base_path, 'cells', f'{scene_name}.pkl'), 'rb'))
 
         self.class_to_index = {c: i for (i, c) in enumerate(self.get_known_classes())} # Build here so that all classes are captured, base num_classes on this!
         
-        if split is not None: # CARE: selects cells and objects, which aren't necessarily related!
+        if split is not None: # CARE: Selection only done on cells; scene_objects are not really used anymore
             assert split in ('train', 'test')
-            test_indices = (np.arange(np.max((len(self.objects), len(self.cells)))) % 5) == 0
+            test_indices = (np.arange(np.max((len(self.scene_objects), len(self.cells)))) % 5) == 0
             indices = test_indices if split=='test' else np.bitwise_not(test_indices)
-            self.objects = [o for (i,o) in enumerate(self.objects) if indices[i]]      
+            # self.scene_objects = [o for (i,o) in enumerate(self.scene_objects) if indices[i]]      
             self.cells = [c for (i,c) in enumerate(self.cells) if indices[i]]      
 
         self.hint_descriptions = self.create_hint_descriptions(self.cells) # Gather here for get_known_words()
@@ -40,14 +40,13 @@ class Kitti360BaseDataset(Dataset):
             cell_objects_dict = {obj.id: obj for obj in cell.objects}
             for descr in cell.descriptions:
                 obj = cell_objects_dict[descr.object_id]
-                assert obj.color_text is not None
-                hints.append(f'The pose is {descr.direction} of a {obj.color_text} {obj.label}.')
+                hints.append(f'The pose is {descr.direction} of a {obj.get_color()} {obj.label}.')
             hint_descriptions.append(hints)
 
         return hint_descriptions
 
     def get_known_classes(self):
-        classes = [obj.label for obj in self.objects]
+        classes = [obj.label for obj in self.scene_objects]
         classes.append('pad')
         return list(np.unique(classes))
 
@@ -72,7 +71,6 @@ if __name__ == '__main__':
     folder_name = '2013_05_28_drive_0000_sync'    
     
     dataset = Kitti360BaseDataset(base_path, folder_name)
-
 
     # color_indices = []
     # for obj in dataset.objects:

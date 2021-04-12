@@ -11,7 +11,12 @@ from easydict import EasyDict
 from models.superglue_matcher import SuperGlueMatch
 # from models.graph_matcher import GraphMatch
 from models.tf_matcher import TransformerMatch
-from dataloading.semantic3d import Semantic3dPoseReferenceMockDataset, Semantic3dPoseReferenceDataset, Semantic3dPoseReferenceDatasetMulti
+
+from dataloading.semantic3d.semantic3d import Semantic3dPoseReferenceMockDataset, Semantic3dPoseReferenceDataset, Semantic3dPoseReferenceDatasetMulti
+from dataloading.kitti360.poses import Kitti360PoseReferenceDataset
+
+from datapreparation.semantic3d.imports import COLORS as COLORS_S3D, COLOR_NAMES as COLOR_NAMES_S3D
+from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -115,15 +120,19 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    dataset_train = Semantic3dPoseReferenceMockDataset(args, length=1024)
-    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)
-    # dataset_val = Semantic3dPoseReferenceMockDataset(args, length=256)
-    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)  
-    # dataset_val = Semantic3dPoseReferenceDataset('./data/numpy_merged/', './data/semantic3d', "domfountain_station1_xyz_intensity_rgb", pad_size=args.pad_size)
-    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceDataset.collate_fn)  
+    # S3D
     scene_names = ('bildstein_station1_xyz_intensity_rgb','domfountain_station1_xyz_intensity_rgb','neugasse_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb','untermaederbrunnen_station1_xyz_intensity_rgb')
     dataset_val = Semantic3dPoseReferenceDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.pad_size, split=None)
     dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceDataset.collate_fn)  
+    
+    dataset_train = Semantic3dPoseReferenceMockDataset(args, dataset_val.get_known_classes(), COLORS_S3D, COLOR_NAMES_S3D)
+    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)
+
+    # Kitti360
+    # dataset_val = Kitti360PoseReferenceDataset('./data/kitti360', '2013_05_28_drive_0000_sync', args)
+    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceDataset.collate_fn)  
+    # dataset_train = Semantic3dPoseReferenceMockDataset(args, dataset_val.get_known_classes(), length=1024)
+    # dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)
 
     # print(sorted(dataset_train.get_known_classes()))
     # print(sorted(dataset_val.get_known_classes()))

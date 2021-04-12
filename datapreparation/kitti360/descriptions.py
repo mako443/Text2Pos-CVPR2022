@@ -101,7 +101,7 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose, scene_name, inside_
             if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]>=0: direction='north'
             if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]<=0: direction='south' 
 
-        descriptions.append(Description(obj.id, direction, obj.label, obj.color_text))
+        descriptions.append(Description(obj.id, direction, obj.label, obj.get_color()))
 
     return Cell(scene_name, cell_objects, descriptions, pose)
 
