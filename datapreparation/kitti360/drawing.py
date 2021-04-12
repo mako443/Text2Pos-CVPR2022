@@ -1,9 +1,13 @@
 from typing import List
 import numpy as np
-import pptk
 import cv2
 from datapreparation.kitti360.imports import Object3d, Cell, Description
 from datapreparation.kitti360.utils import CLASS_TO_COLOR
+
+try:
+    import pptk
+except:
+    pass
 
 def show_pptk(xyz, rgb):
     viewer = pptk.viewer(xyz)

@@ -17,6 +17,7 @@ from dataloading.semantic3d import Semantic3dPoseReferanceMockDataset
 
 '''
 TODO:
+- are L2-based distances better?
 '''
 
 class SuperGlueMatch(torch.nn.Module):

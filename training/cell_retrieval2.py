@@ -14,7 +14,7 @@ from dataloading.semantic3d_poses import Semantic3dPosesDataset, Semantic3dPoses
 from datapreparation.imports import COMBINED_SCENE_NAMES
 from datapreparation.drawing import draw_retrieval
 
-from dataloading.kitti360.kitti360 import Kitti360CellDataset
+from dataloading.kitti360.cells import Kitti360CellDataset
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -25,6 +25,7 @@ TODO:
 - remove "identical negative" (currently does not occur in Kitti)
 - what about same best cells?!
 - max-dist for descriptions?
+- some form of augmentation?
 '''
 
 def train_epoch(model, dataloader, args):
@@ -56,7 +57,7 @@ def train_epoch(model, dataloader, args):
 
     return np.mean(epoch_losses)
 
-print_targets = True
+print_targets = False
 
 @torch.no_grad()
 def eval_epoch(model, dataloader, args, targets='all'):
@@ -126,7 +127,7 @@ if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
 
-    WEITER: find color-scheme, compare features importance
+    # WEITER: Colors, compare features
     
     '''
     Create data loaders
@@ -145,9 +146,10 @@ if __name__ == "__main__":
     # print("\t\t Stats: ", args.cell_size, args.cell_stride, dataset_train.gather_stats())
 
     # Kitti360 
-    dataset_train = Kitti360CellDataset('./data/kitti360', '2013_05_28_drive_0000_sync', split='train')
+    scene_name = args.scene_names[0] #'2013_05_28_drive_0000_sync'
+    dataset_train = Kitti360CellDataset('./data/kitti360', scene_name, split='train')
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=args.shuffle)
-    dataset_val = Kitti360CellDataset('./data/kitti360', '2013_05_28_drive_0000_sync', split='test')
+    dataset_val = Kitti360CellDataset('./data/kitti360', scene_name, split='test')
     dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=False)    
 
     data = dataset_train[0]        
@@ -162,7 +164,7 @@ if __name__ == "__main__":
     dict_acc = {k: {lr: [] for lr in learning_rates} for k in args.top_k}
     dict_acc_val = {k: {lr: [] for lr in learning_rates} for k in args.top_k}    
 
-    ACC_TARGET = 'poses'
+    ACC_TARGET = 'all'
     # for lr in learning_rates:
     for lr in learning_rates:
         model = CellRetrievalNetwork(dataset_train.get_known_classes(), dataset_train.get_known_words(), args.embed_dim, k=args.k, use_features=args.use_features)
@@ -201,7 +203,10 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'cells-Kitti_len{len(dataset_train.cells)}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_c{int(args.cell_size)}-{int(args.cell_stride)}_f{"-".join(args.use_features)}_t-{ACC_TARGET}.png'
+    scene_name = scene_name.split('_')[-2]
+    #plot_name = f'cells-Kitti_len{len(dataset_train.cells)}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_c{int(args.cell_size)}-{int(args.cell_stride)}_f{"-".join(args.use_features)}_t-{ACC_TARGET}.png'
+    plot_name = f'cells-Kitti_s{scene_name}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_c{int(args.cell_size)}-{int(args.cell_stride)}_f{"-".join(args.use_features)}.png'
+
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
     val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}
     metrics = {
