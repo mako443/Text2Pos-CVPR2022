@@ -127,7 +127,7 @@ if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
 
-    WEITER: Colors, compare features
+    # WEITER: Colors, compare features
     
     '''
     Create data loaders
