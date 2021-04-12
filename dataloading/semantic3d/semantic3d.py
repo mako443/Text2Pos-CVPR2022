@@ -22,7 +22,7 @@ from datapreparation.drawing import draw_cells
 '''
 Mock data for explicit matching (object reference: one object is target, some other objects are mentioned, rest are distractors)
 '''
-class Semantic3dObjectReferanceMockDataset(Dataset):
+class Semantic3dObjectReferenceMockDataset(Dataset):
     def __init__(self, num_mentioned, num_distractors, length=32):
         self.num_mentioned = num_mentioned
         self.num_distractors = num_distractors
@@ -102,14 +102,15 @@ class Semantic3dObjectReferanceMockDataset(Dataset):
 Mock data for explicit matching (pose reference: pose is described relative to some mentioned objects, rest are distractors/paddings)
 '''
 # TODO: add out-of-cell hint-objects that are then unmatched. Strategy: generate objects [-0.25, 1.25], match to closest objects, 
-class Semantic3dPoseReferanceMockDataset(Dataset):
-    def __init__(self, args, length=1024):
+class Semantic3dPoseReferenceMockDataset(Dataset):
+    def __init__(self, args, classes, length=1024):
         self.pad_size = args.pad_size
         # self.num_distractors = args.num_distractors
         self.num_mentioned = args.num_mentioned
         self.length = length
 
-        self.classes = ['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars']    
+        # self.classes = ['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars']    
+        self.classes = [c for c in classes if c!='pad']
 
     def __len__(self):
         return self.length
@@ -201,7 +202,7 @@ class Semantic3dPoseReferanceMockDataset(Dataset):
 '''
 Currently uses cell-oracle: cell is placed so that it exactly fits all mentioned objects, retains all distractors
 '''
-class Semantic3dPoseReferanceDataset(Dataset):
+class Semantic3dPoseReferenceDataset(Dataset):
     def __init__(self, path_numpy, path_scenes, scene_name, pad_size, split=None):
         self.path_numpy = path_numpy
         self.path_scenes = path_scenes
@@ -369,11 +370,11 @@ class Semantic3dPoseReferanceDataset(Dataset):
             batch[key] = [data[i][key] for i in range(len(data))]
         return batch
 
-class Semantic3dPoseReferanceDatasetMulti(Dataset):
+class Semantic3dPoseReferenceDatasetMulti(Dataset):
     def __init__(self, path_numpy, path_scenes, scene_names, pad_size, split=None):
         self.scene_names = scene_names
         self.split = split
-        self.datasets = [Semantic3dPoseReferanceDataset(path_numpy, path_scenes, scene_name, pad_size, split) for scene_name in scene_names]
+        self.datasets = [Semantic3dPoseReferenceDataset(path_numpy, path_scenes, scene_name, pad_size, split) for scene_name in scene_names]
 
         print(str(self))
 
@@ -391,7 +392,7 @@ class Semantic3dPoseReferanceDatasetMulti(Dataset):
         assert False
 
     def __repr__(self):
-        return f'Semantic3dPoseReferanceDatasetMulti: {len(self.scene_names)} scenes, split: {self.split}'
+        return f'Semantic3dPoseReferenceDatasetMulti: {len(self.scene_names)} scenes, split: {self.split}'
 
     def get_known_words(self):
         known_words = []
@@ -409,7 +410,7 @@ class Semantic3dPoseReferanceDatasetMulti(Dataset):
 DEPRECATED
 Use free-form poses datasets instead
 '''
-class Semantic3dObjectReferanceDataset(Dataset):
+class Semantic3dObjectReferenceDataset(Dataset):
     def __init__(self, path_numpy, path_scenes, num_distractors='all', split=None):
         self.path_numpy = path_numpy
         self.path_scenes = path_scenes
@@ -532,7 +533,7 @@ class Semantic3dObjectReferanceDataset(Dataset):
         return len(self.list_descriptions)
 
     def __repr__(self):
-        return f'Semantic3dObjectReferanceDataset: {len(self.scene_objects)} objects and {len(self.text_descriptions)} text descriptions, <{self.num_distractors}> distractors, split {self.split}.'
+        return f'Semantic3dObjectReferenceDataset: {len(self.scene_objects)} objects and {len(self.text_descriptions)} text descriptions, <{self.num_distractors}> distractors, split {self.split}.'
 
     def get_known_classes(self):
         classes = [obj.label for obj in self.scene_objects]
@@ -688,14 +689,14 @@ class Semantic3dCellRetrievalDatasetMulti(Dataset):
 
 
 if __name__ == "__main__":
-    dataset1 = Semantic3dPoseReferanceDataset('./data/numpy_merged/', './data/semantic3d', "bildstein_station1_xyz_intensity_rgb", pad_size=8)
+    dataset1 = Semantic3dPoseReferenceDataset('./data/numpy_merged/', './data/semantic3d', "bildstein_station1_xyz_intensity_rgb", pad_size=8)
     data1 = dataset1[0]
-    # dataset2 = Semantic3dPoseReferanceMockDataset(6, pad_size=8)
+    # dataset2 = Semantic3dPoseReferenceMockDataset(6, pad_size=8)
     # data2 = dataset2[0]
     quit()
 
-    # dataset = Semantic3dPoseReferanceMockDataset(6, pad_size=8)
-    # dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferanceMockDataset.collate_fn)
+    # dataset = Semantic3dPoseReferenceMockDataset(6, pad_size=8)
+    # dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferenceMockDataset.collate_fn)
     # data = dataset[0]
     # batch = next(iter(dataloader))
 
@@ -717,8 +718,8 @@ if __name__ == "__main__":
 
     # quit()
 
-    # dataset = Semantic3dObjectReferanceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=2)
-    # dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferanceDataset.collate_fn)
+    # dataset = Semantic3dObjectReferenceDataset('./data/numpy_merged/', './data/semantic3d', num_distractors=2)
+    # dataloader = DataLoader(dataset, batch_size=2, collate_fn=Semantic3dObjectReferenceDataset.collate_fn)
     # data = dataset[0]
     # batch = next(iter(dataloader))
 

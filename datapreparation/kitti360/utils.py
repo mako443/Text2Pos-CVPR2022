@@ -67,28 +67,41 @@ STUFF_CLASSES = ['sidewalk', 'road', 'parking', 'wall', 'fence', 'guard rail', '
 
 LABEL_TO_CLASS = {v: k for k, v in CLASS_TO_LABEL.items()}
 
-COLORS = np.array([
-    [0, 0, 0],
-    [128, 128, 128],
-    [255, 255, 255],
-    [255, 0, 0],
-    [0, 255, 0],
-    [0, 0, 255],
-    [255, 255, 0],
-    [255, 0, 255],
-    [0, 255, 255]
-])
-COLOR_NAMES = [
-    'black',
-    'grey',
-    'white',
-    'red',
-    'green',
-    'blue',
-    'yellow',
-    'purple',
-    'turquoise'
-]
+COLORS_HSV = np.array([
+        [  0,   32, 32],
+        [  15, 128, 128],
+        [ 25, 128, 128],
+        [ 35, 128, 128],
+        [ 45, 128, 128],
+        [ 60, 128, 128],
+        [ 90, 128, 128],
+        [120, 128, 128],
+       ], dtype=np.uint8)
+
+COLOR_NAMES = ['black', 'darkbrown', 'brown', 'greenbrown', 'olive', 'green', 'blue', 'purple']
+
+# COLORS = np.array([
+#     [0, 0, 0],
+#     [128, 128, 128],
+#     [255, 255, 255],
+#     [255, 0, 0],
+#     [0, 255, 0],
+#     [0, 0, 255],
+#     [255, 255, 0],
+#     [255, 0, 255],
+#     [0, 255, 255]
+# ])
+# COLOR_NAMES = [
+#     'black',
+#     'grey',
+#     'white',
+#     'red',
+#     'green',
+#     'blue',
+#     'yellow',
+#     'purple',
+#     'turquoise'
+# ]
 
 def get_color_histogram():
     dists = cdist(colors, anchors)

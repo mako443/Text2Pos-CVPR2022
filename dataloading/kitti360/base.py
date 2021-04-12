@@ -40,7 +40,8 @@ class Kitti360BaseDataset(Dataset):
             cell_objects_dict = {obj.id: obj for obj in cell.objects}
             for descr in cell.descriptions:
                 obj = cell_objects_dict[descr.object_id]
-                hints.append(f'The pose is {descr.direction} of a {obj.label}.')
+                assert obj.color_text is not None
+                hints.append(f'The pose is {descr.direction} of a {obj.color_text} {obj.label}.')
             hint_descriptions.append(hints)
 
         return hint_descriptions
@@ -66,9 +67,20 @@ class Kitti360BaseDataset(Dataset):
             batch[key] = [data[i][key] for i in range(len(data))]
         return batch
 
-
 if __name__ == '__main__':
     base_path = './data/kitti360'
     folder_name = '2013_05_28_drive_0000_sync'    
     
-    dataset = Kitti360BaseDataset(base_path, folder_name)          
+    dataset = Kitti360BaseDataset(base_path, folder_name)
+
+
+    # color_indices = []
+    # for obj in dataset.objects:
+    #     rgb = np.mean(obj.rgb, axis=0)
+    #     hsv = cv2.cvtColor(rgb.reshape((1,1,3)).astype(np.uint8), cv2.COLOR_RGB2HSV)
+    #     dists = np.linalg.norm(COLORS_HSV - hsv.flatten(), axis=1)
+    #     color_indices.append(np.argmin(dists))
+
+    # unique, counts = np.unique(color_indices, return_counts=True)
+
+

@@ -1,13 +1,21 @@
 from typing import List
 import numpy as np
+import cv2
 
 class Object3d:
-    def __init__(self, xyz, rgb, label, id):
+    def __init__(self, xyz, rgb, label, id, color_text=None):
         self.xyz = xyz
         self.rgb = rgb
         self.label = label
         self.id = id
         self.closest_point = None # Set in get_closest_point for cell-object
+        self.color_text = color_text # Set in set_color during prepare()
+
+    def set_color(self, colors_hsv, color_names):
+        rgb = np.mean(self.rgb, axis=0).reshape((1,1,3)).astype(np.uint8)
+        hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+        dists = np.linalg.norm(colors_hsv - hsv, axis=1)
+        self.color_text = color_names[np.argmin(dists)]
 
     def __repr__(self):
         return f'Object3d: {self.label}'
@@ -20,7 +28,7 @@ class Object3d:
         """Mask xyz and rgb, the id is retained
         """
         assert len(mask)>6 # To prevent bbox input
-        return Object3d(self.xyz[mask], self.rgb[mask], self.label, self.id)      
+        return Object3d(self.xyz[mask], self.rgb[mask], self.label, self.id, self.color_text)      
 
     # def center(self):
     #     return 1/2 * (np.min(self.xyz, axis=0) + np.max(self.xyz, axis=0)) 
@@ -41,10 +49,12 @@ class Object3d:
         )
 
 class Description:
-    def __init__(self, object_id, direction, object_label):
+    def __init__(self, object_id, direction, object_label, object_color):
         self.object_id = object_id
         self.direction = direction
         self.object_label = object_label
+        self.object_color = object_color
+        assert (object_color is not None)
 
     def __repr__(self):
         return f'Pose is {self.direction} of a {self.object_label}'

@@ -11,7 +11,7 @@ from easydict import EasyDict
 from models.superglue_matcher import SuperGlueMatch
 # from models.graph_matcher import GraphMatch
 from models.tf_matcher import TransformerMatch
-from dataloading.semantic3d import Semantic3dPoseReferanceMockDataset, Semantic3dPoseReferanceDataset, Semantic3dPoseReferanceDatasetMulti
+from dataloading.semantic3d import Semantic3dPoseReferenceMockDataset, Semantic3dPoseReferenceDataset, Semantic3dPoseReferenceDatasetMulti
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -19,7 +19,7 @@ from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
 TODO:
-- regress offsets: direction or magnitude error? optimize?
+- regress offsets: is error more in direction or magnitude? optimize?
 - Pad at (0.5,0.5) for less harmfull miss-matches?
 - Variable num_mentioned?
 
@@ -115,15 +115,15 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    dataset_train = Semantic3dPoseReferanceMockDataset(args, length=1024)
-    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferanceMockDataset.collate_fn)
-    # dataset_val = Semantic3dPoseReferanceMockDataset(args, length=256)
-    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferanceMockDataset.collate_fn)  
-    # dataset_val = Semantic3dPoseReferanceDataset('./data/numpy_merged/', './data/semantic3d', "domfountain_station1_xyz_intensity_rgb", pad_size=args.pad_size)
-    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferanceDataset.collate_fn)  
+    dataset_train = Semantic3dPoseReferenceMockDataset(args, length=1024)
+    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)
+    # dataset_val = Semantic3dPoseReferenceMockDataset(args, length=256)
+    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)  
+    # dataset_val = Semantic3dPoseReferenceDataset('./data/numpy_merged/', './data/semantic3d', "domfountain_station1_xyz_intensity_rgb", pad_size=args.pad_size)
+    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceDataset.collate_fn)  
     scene_names = ('bildstein_station1_xyz_intensity_rgb','domfountain_station1_xyz_intensity_rgb','neugasse_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb','untermaederbrunnen_station1_xyz_intensity_rgb')
-    dataset_val = Semantic3dPoseReferanceDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.pad_size, split=None)
-    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferanceDataset.collate_fn)  
+    dataset_val = Semantic3dPoseReferenceDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.pad_size, split=None)
+    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceDataset.collate_fn)  
 
     # print(sorted(dataset_train.get_known_classes()))
     # print(sorted(dataset_val.get_known_classes()))

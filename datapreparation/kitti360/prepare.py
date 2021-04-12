@@ -9,7 +9,7 @@ import pptk
 from plyfile import PlyData, PlyElement
 
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
-from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS
+from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, COLORS_HSV, COLOR_NAMES
 from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.descriptions import describe_cell
 
@@ -120,6 +120,10 @@ def create_poses(base_path, folder_name, sample_dist=75, return_pose_objects=Fal
     else:
         return sampled_poses
 
+def set_object_colors(objects):
+    for obj in objects:
+        obj.set_color(COLORS_HSV, COLOR_NAMES)
+
 def create_cells(objects, poses, scene_name, cell_size=30):
     print('Creating cells...')
     cells = []
@@ -145,38 +149,42 @@ if __name__ == '__main__':
     base_path = './data/kitti360'
     # Incomplete folders: 3 corrupted...
     for folder_name in ('2013_05_28_drive_0000_sync','2013_05_28_drive_0003_sync','2013_05_28_drive_0005_sync','2013_05_28_drive_0006_sync','2013_05_28_drive_0009_sync','2013_05_28_drive_0010_sync'):
-        try:
-            print(f'Folder: {folder_name}')
+        print(f'Folder: {folder_name}')
 
-            poses, pose_objects = create_poses(base_path, folder_name, return_pose_objects=True)
+        poses, pose_objects = create_poses(base_path, folder_name, return_pose_objects=True)
 
-            path_objects = osp.join(base_path, 'objects', f'{folder_name}.pkl')
-            path_cells = osp.join(base_path, 'cells', f'{folder_name}.pkl')
+        path_objects = osp.join(base_path, 'objects', f'{folder_name}.pkl')
+        path_cells = osp.join(base_path, 'cells', f'{folder_name}.pkl')
 
-            # Load or gather objects
-            if not osp.isfile(path_objects): # Build if not cached
-                objects = gather_objects(base_path, folder_name)
-                pickle.dump(objects, open(path_objects, 'wb'))
-                print(f'Saved objects to {path_objects}')  
-            else:
-                objects = pickle.load(open(path_objects, 'rb'))
+        # Load or gather objects
+        if not osp.isfile(path_objects): # Build if not cached
+            objects = gather_objects(base_path, folder_name)
+            pickle.dump(objects, open(path_objects, 'wb'))
+            print(f'Saved objects to {path_objects}')  
+        else:
+            print(f'Loaded objects from {path_objects}')
+            objects = pickle.load(open(path_objects, 'rb'))
 
-            cells = create_cells(objects, poses, folder_name)
-            pickle.dump(cells, open(path_cells, 'wb'))
-            print(f'Saved cells to {path_cells}')   
+        # Set colors
+        set_object_colors(objects)
 
-            # Debugging 
-            idx = np.random.randint(len(cells))
-            cell = cells[idx]
-            print('idx', idx)
-            print(cell.get_text())
+        # Create cells
+        cells = create_cells(objects, poses, folder_name)
+        pickle.dump(cells, open(path_cells, 'wb'))
+        print(f'Saved cells to {path_cells}')   
 
-            img = plot_cell(cell)
-            cv2.imwrite(f'cell_demo_idx{idx}.png', img)
+        # Debugging 
+        idx = np.random.randint(len(cells))
+        cell = cells[idx]
+        print('idx', idx)
+        print(cell.get_text())
 
-        except:
-            print(f'Scene {folder_name} failed, removing objects again')
-            os.remove(path_objects)
+        img = plot_cell(cell)
+        cv2.imwrite(f'cell_demo_idx{idx}.png', img)
+
+        # except:
+        #     print(f'Scene {folder_name} failed, removing objects again')
+        #     os.remove(path_objects)
         
         print('--- \n')
 
