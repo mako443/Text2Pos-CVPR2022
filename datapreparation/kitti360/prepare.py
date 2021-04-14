@@ -9,7 +9,8 @@ import pptk
 from plyfile import PlyData, PlyElement
 
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
-from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, COLORS_HSV, COLOR_NAMES, SCENE_NAMES
+from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, COLORS, COLOR_NAMES, SCENE_NAMES
+from datapreparation.kitti360.utils import CLASS_TO_MINPOINTS, CLASS_TO_VOXELSIZE
 from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.descriptions import describe_cell
 
@@ -19,7 +20,6 @@ DONE:
 
 TODO:
 - What about corrupted (?) scenes? Use bounding-boxes for instance objects?!
-- Per-class voxel-sizes; will I be using FixedPoints w/ duplicates?
 - How to handle multiple identical objects in matching? Remove from cell?
 - Use "smarter" colors? E.g. top 1 or 2 histogram-buckets
 """
@@ -35,8 +35,8 @@ def load_points(filepath):
 
     return xyz, rgb, lbl, iid
 
-def downsample_points(points):
-    voxel_size = 0.25
+def downsample_points(points, voxel_size):
+    # voxel_size = 0.25
     point_cloud = open3d.geometry.PointCloud()
     point_cloud.points = open3d.utility.Vector3dVector(points.copy())
     _,_,indices_list = point_cloud.voxel_down_sample_and_trace(voxel_size,point_cloud.get_min_bound(), point_cloud.get_max_bound()) 
@@ -57,8 +57,7 @@ def extract_objects(xyz, rgb, lbl, iid):
             mask = label_iid == obj_iid
             obj_xyz, obj_rgb = label_xyz[mask], label_rgb[mask]
 
-            # retained_indices = downsample_points(obj_xyz)
-            # obj_xyz, obj_rgb = obj_xyz[retained_indices], obj_rgb[retained_indices]
+            obj_rgb = obj_rgb.astype(np.float32) / 255.0 # Scale colors [0,1]
 
             objects.append(Object3d(obj_xyz, obj_rgb, label_name, obj_iid))
 
@@ -88,11 +87,27 @@ def gather_objects(base_path, folder_name):
                 scene_objects[obj.id] = obj
             
             #Downsample the new or merged object
-            indices = downsample_points(scene_objects[obj.id].xyz)
-            scene_objects[obj.id].apply_downsampling(indices)
+            voxel_size = CLASS_TO_VOXELSIZE[obj.label]
+            if voxel_size is not None:
+                indices = downsample_points(scene_objects[obj.id].xyz, voxel_size)
+                scene_objects[obj.id].apply_downsampling(indices)
         # print(f'Merged {merges} / {len(file_objects)}')
 
-    return list(scene_objects.values())
+    # Thresh objects by number of points
+    objects = list(scene_objects.values())
+    thresh_counts = {}
+    objects_threshed = []
+    for obj in objects:
+        if len(obj.xyz) < CLASS_TO_MINPOINTS[obj.label]:
+            if obj.label in thresh_counts:
+                thresh_counts[obj.label] += 1
+            else:
+                thresh_counts[obj.label] = 1
+        else:
+            objects_threshed.append(obj)
+
+    return objects_threshed
+    # return list(scene_objects.values())
 
 def create_poses(base_path, folder_name, sample_dist=75, return_pose_objects=False):
     path = osp.join(base_path, 'data_poses', folder_name, 'poses.txt')
@@ -111,7 +126,7 @@ def create_poses(base_path, folder_name, sample_dist=75, return_pose_objects=Fal
         for pose in sampled_poses:
             pose_objects.append(Object3d(
                 np.random.rand(50, 3)*3 + pose,
-                np.ones((50, 3))*255,
+                np.ones((50, 3)),
                 '_pose',
                 99
             ))
@@ -148,7 +163,8 @@ if __name__ == '__main__':
 
     base_path = './data/kitti360'
     # Incomplete folders: 3 corrupted...
-    for folder_name in SCENE_NAMES:
+    # for folder_name in SCENE_NAMES:
+    for folder_name in ['2013_05_28_drive_0010_sync', ]:
         print(f'Folder: {folder_name}')
 
         poses, pose_objects = create_poses(base_path, folder_name, return_pose_objects=True)

@@ -12,9 +12,9 @@ except:
 def show_pptk(xyz, rgb):
     viewer = pptk.viewer(xyz)
     if isinstance(rgb, np.ndarray):
-        viewer.attributes(rgb.astype(np.float32) / 255.0)
+        viewer.attributes(rgb.astype(np.float32))
     else:
-        attributes = [x.astype(np.float32)/ 255.0 for x in rgb]
+        attributes = [x.astype(np.float32) for x in rgb]
         viewer.attributes(*attributes)
 
     viewer.set(point_size=0.1)    
@@ -38,7 +38,7 @@ def show_objects(objects: List[Object3d], scale=1.0):
         # rgb3 = np.vstack((rgb3, np.ones((len(obj.xyz), 3))*np.array(c) ))
         xyz[offset : offset+len(obj.xyz)] = obj.xyz
         rgb1[offset : offset+len(obj.xyz)] = np.ones((len(obj.xyz), 3))*rand_color
-        rgb2[offset : offset+len(obj.xyz)] = obj.rgb
+        rgb2[offset : offset+len(obj.xyz)] = obj.rgb * 255
         rgb3[offset : offset+len(obj.xyz)] = np.ones((len(obj.xyz), 3))*np.array(c)
     return show_pptk(xyz*scale, [rgb1, rgb2, rgb3])
 
