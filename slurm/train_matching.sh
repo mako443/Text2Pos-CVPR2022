@@ -9,4 +9,6 @@
 #SBATCH --output=slurm-%j.out
 #SBATCH --error=slurm-%j.out
 
-srun python3 -m training.explicit_matching "$@"
+source /usr/stud/kolmet/venv/torch/bin/activate
+module load cuda/10.2
+srun python3 -m training.hints_matching "$@"

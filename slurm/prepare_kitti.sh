@@ -9,4 +9,6 @@
 #SBATCH --output=slurm-%j.out
 #SBATCH --error=slurm-%j.out
 
+source /usr/stud/kolmet/venv/torch/bin/activate
+module load cuda/10.2
 srun python3 -m datapreparation.kitti360.prepare

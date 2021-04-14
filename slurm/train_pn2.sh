@@ -9,5 +9,6 @@
 #SBATCH --output=slurm-%j.out
 #SBATCH --error=slurm-%j.out
 
-source /usr/stud/kolmet/venv_pyg/bin/activate
+source /usr/stud/kolmet/venv/pyg/bin/activate
+module load cuda/10.2
 srun python3 -m training.pointcloud.pointnet2 "$@"

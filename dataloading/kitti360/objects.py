@@ -24,6 +24,7 @@ class Kitti360ObjectsDataset(Kitti360BaseDataset):
         super().__init__(base_path, scene_name, split)
         self.transform = transform
 
+        # Note: objects are retrieved from cells, not the (un-clustered) scene-objects
         self.objects = [obj for cell in self.cells for obj in cell.objects]
 
         # print('Before', len(self))

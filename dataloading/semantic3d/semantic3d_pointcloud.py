@@ -16,8 +16,8 @@ from torch.utils.data import Dataset
 import torch_geometric.transforms as T
 from torch_geometric.data import Data, DataLoader
 
-from datapreparation.imports import Object3D, DescriptionObject, COMBINED_SCENE_NAMES, COLORS, COLOR_NAMES
-from datapreparation.drawing import draw_cells
+from datapreparation.semantic3d.imports import Object3D, DescriptionObject, COMBINED_SCENE_NAMES, COLORS, COLOR_NAMES
+from datapreparation.semantic3d.drawing import draw_cells
 
 class Semantic3dObjectDatasetMulti(Dataset):
     def __init__(self, path_numpy, path_scenes, scene_names, split=None, transform=T.Compose([T.FixedPoints(2048), T.NormalizeScale()])):

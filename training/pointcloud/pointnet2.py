@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from models.pointcloud.pointnet2 import PointNet2
-from dataloading.semantic3d_pointcloud import Semantic3dObjectDataset, Semantic3dObjectDatasetMulti
+from dataloading.semantic3d.semantic3d_pointcloud import Semantic3dObjectDataset, Semantic3dObjectDatasetMulti
 from dataloading.kitti360.objects import Kitti360ObjectsDataset
 
 from training.args import parse_arguments
@@ -84,7 +84,7 @@ if __name__ == "__main__":
 
     # Kitti360
     base_path = './data/kitti360'
-    folder_name = '2013_05_28_drive_0000_sync'    
+    folder_name = '2013_05_28_drive_0000_sync' # TODO: multi!
     dataset_train = Kitti360ObjectsDataset(base_path, folder_name, split='train', transform=transform)
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle)
     # dataset_val = Kitti360ObjectsDataset(base_path, folder_name, split='test')
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_reates = np.logspace(-2, -4.0, 5)[2:-1]
+    learning_reates = np.logspace(-2, -4.0, 5)[-2:]
     dict_loss = {lr: [] for lr in learning_reates}    
     dict_acc = {lr: [] for lr in learning_reates}
     dict_acc_val = {lr: [] for lr in learning_reates}
@@ -114,11 +114,12 @@ if __name__ == "__main__":
 
         for epoch in range(args.epochs):
             loss, acc_train = train_epoch(model, dataloader_train, args)
-            acc_val = val_epoch(model, dataloader_val, args)
+            acc_val = -1
+            # acc_val = val_epoch(model, dataloader_val, args)
 
-            dict_loss[lr].append(loss)
-            dict_acc[lr].append(acc_train)
-            dict_acc_val[lr].append(acc_val)
+            # dict_loss[lr].append(loss)
+            # dict_acc[lr].append(acc_train)
+            # dict_acc_val[lr].append(acc_val)
 
             scheduler.step()
 
