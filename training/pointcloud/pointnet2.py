@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from models.pointcloud.pointnet2 import PointNet2
-from dataloading.semantic3d_pointcloud import Semantic3dObjectDataset, Semantic3dObjectDatasetMulti
+from dataloading.semantic3d.semantic3d_pointcloud import Semantic3dObjectDataset, Semantic3dObjectDatasetMulti
 from dataloading.kitti360.objects import Kitti360ObjectsDataset
 
 from training.args import parse_arguments

@@ -53,17 +53,53 @@ CLASS_TO_COLOR = {
 }
 
 CLASS_TO_MINPOINTS = {
-    'building': 500,
-    'pole': 500,
-    'traffic light': 500,
-    'traffic sign': 500,
-    'garage': 500,
-    'stop': 500,
-    'smallpole': 500,
-    'lamp': 500,
-    'trash bin': 500,
-    'vending machine': 500,
-    'box': 500,
+    'building': 250,
+    'pole': 25,
+    'traffic light': 25,
+    'traffic sign': 25,
+    'garage': 250,
+    'stop': 25,
+    'smallpole': 25,
+    'lamp': 25,
+    'trash bin': 25,
+    'vending machine': 25,
+    'box': 25,
+    'sidewalk': 1000,
+    'road': 1000,
+    'parking': 1000,
+    'wall': 250,
+    'fence': 250,
+    'guard rail': 250,
+    'bridge': 1000,
+    'tunnel': 1000,
+    'vegetation': 250,
+    'terrain': 250, 
+    '_pose': 25   
+}
+
+CLASS_TO_VOXELSIZE = {
+    'building': 0.25,
+    'pole': None,
+    'traffic light': None,
+    'traffic sign': None,
+    'garage': 0.25,
+    'stop': None,
+    'smallpole': None,
+    'lamp': None,
+    'trash bin': None,
+    'vending machine': None,
+    'box': None,
+    'sidewalk': 0.25,
+    'road': 0.25,
+    'parking': 0.25,
+    'wall': 0.125,
+    'fence': 0.125,
+    'guard rail': 0.125,
+    'bridge': 0.25,
+    'tunnel': 0.25,
+    'vegetation': 0.25,
+    'terrain': 0.25, 
+    '_pose': None   
 }
 
 STUFF_CLASSES = ['sidewalk', 'road', 'parking', 'wall', 'fence', 'guard rail', 'bridge', 'tunnel', 'vegetation', 'terrain']
@@ -102,7 +138,7 @@ COLORS = np.array([
        [ 27.47505158,  28.43996795,  25.16840296],
        [ 66.65951839,  70.22342483,  60.20395996],
        [171.00852191, 170.05737735, 155.00130334]
-    ])
+    ]) / 255.0
 
 COLOR_NAMES = ['color-0', 'color-1', 'color-2', 'color-3', 'color-4', 'color-5', 'color-6', 'color-7']
 

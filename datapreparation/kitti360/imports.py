@@ -36,7 +36,7 @@ class Object3d:
         """Mask xyz and rgb, the id is retained
         """
         assert len(mask)>6 # To prevent bbox input
-        return Object3d(self.xyz[mask], self.rgb[mask], self.label, self.id, self.color_text)      
+        return Object3d(self.xyz[mask], self.rgb[mask], self.label, self.id)      
 
     # def center(self):
     #     return 1/2 * (np.min(self.xyz, axis=0) + np.max(self.xyz, axis=0)) 
