@@ -22,10 +22,10 @@ from training.losses import MatchingLoss, PairwiseRankingLoss, HardestRankingLos
 
 '''
 TODO:
-- remove "identical negative" (currently does not occur in Kitti)
-- what about same best cells?!
+- try all-to-all edges?
+- does it generalize? some form of augmentation? K-Fold?
 - max-dist for descriptions?
-- some form of augmentation?
+- remove "identical negative" (currently does not occur in Kitti)
 '''
 
 def train_epoch(model, dataloader, args):

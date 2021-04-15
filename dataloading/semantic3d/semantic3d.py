@@ -177,7 +177,7 @@ class Semantic3dPoseReferenceMockDataset(Dataset):
             if obj_idx not in matches[:, 0]: # If the object is not mentioned, i.e. in matches
                 all_matches.append((obj_idx, self.num_mentioned)) # Then match it to the hints-side bin
         all_matches = np.array(all_matches)
-        assert len(matches) == self.num_mentioned
+        assert len(matches) == self.num_mentioned and np.sum(all_matches[:, 1] == self.num_mentioned) == self.pad_size - self.num_mentioned
         # assert len(all_matches) == self.num_mentioned + self.num_distractors and np.sum(all_matches[:, 1]==self.num_mentioned) == self.num_distractors
 
         return {

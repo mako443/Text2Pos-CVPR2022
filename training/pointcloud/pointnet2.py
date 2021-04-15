@@ -10,7 +10,8 @@ import matplotlib.pyplot as plt
 
 from models.pointcloud.pointnet2 import PointNet2
 from dataloading.semantic3d.semantic3d_pointcloud import Semantic3dObjectDataset, Semantic3dObjectDatasetMulti
-from dataloading.kitti360.objects import Kitti360ObjectsDataset
+from dataloading.kitti360.objects import Kitti360ObjectsDataset, Kitti360ObjectsDatasetMulti
+from datapreparation.kitti360.utils import SCENE_NAMES as SCENE_NAMES_K360
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -18,6 +19,7 @@ from training.plots import plot_metrics
 '''
 TODO:
 - why shuffle bad?
+- num-points?
 
 NOTES:
 - more points not helpful, but might be if better sampling earlier in pipeline
@@ -71,26 +73,26 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    transform = T.Compose([T.FixedPoints(2048), T.NormalizeScale(), T.RandomFlip(0), T.RandomFlip(1), T.RandomFlip(2), T.NormalizeScale()])
+    transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale(), T.RandomFlip(0), T.RandomFlip(1), T.RandomFlip(2), T.NormalizeScale()])
 
-    # S3D
-    # scene_names = ['bildstein_station1_xyz_intensity_rgb','domfountain_station1_xyz_intensity_rgb','neugasse_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb','untermaederbrunnen_station1_xyz_intensity_rgb']
-    # # dataset_train = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='train')
-    # dataset_train = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='train', transform=transform)
-    # dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)
-    # # dataset_val = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='test')
-    # dataset_val = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='test')
-    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)    
+    if args.dataset == 'S3D':
+        scene_names = ['bildstein_station1_xyz_intensity_rgb','domfountain_station1_xyz_intensity_rgb','neugasse_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb','untermaederbrunnen_station1_xyz_intensity_rgb']
+        # dataset_train = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='train')
+        dataset_train = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='train', transform=transform)
+        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)
+        # dataset_val = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='test')
+        dataset_val = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='test')
+        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)    
 
-    # Kitti360
-    base_path = './data/kitti360'
-    folder_name = '2013_05_28_drive_0000_sync' # TODO: multi!
-    dataset_train = Kitti360ObjectsDataset(base_path, folder_name, split='train', transform=transform)
-    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle)
-    # dataset_val = Kitti360ObjectsDataset(base_path, folder_name, split='test')
-    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False)
-    dataset_val = dataset_train
-    dataloader_val = dataloader_train
+    if args.dataset == 'K360':
+        base_path = './data/kitti360'
+        dataset_train = Kitti360ObjectsDatasetMulti(base_path, SCENE_NAMES_K360, split='train', transform=transform)
+        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle)
+        
+        dataset_val = Kitti360ObjectsDatasetMulti(base_path, SCENE_NAMES_K360, split='test')
+        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False)
+
+    assert sorted(dataset_train.get_known_classes()) == sorted(dataset_val.get_known_classes())
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     print('device:', device)
@@ -99,7 +101,7 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_reates = np.logspace(-2, -4.0, 5)[-2:]
+    learning_reates = np.logspace(-2, -4.0, 5)
     dict_loss = {lr: [] for lr in learning_reates}    
     dict_acc = {lr: [] for lr in learning_reates}
     dict_acc_val = {lr: [] for lr in learning_reates}
@@ -114,12 +116,11 @@ if __name__ == "__main__":
 
         for epoch in range(args.epochs):
             loss, acc_train = train_epoch(model, dataloader_train, args)
-            acc_val = -1
-            # acc_val = val_epoch(model, dataloader_val, args)
+            acc_val = val_epoch(model, dataloader_val, args)
 
-            # dict_loss[lr].append(loss)
-            # dict_acc[lr].append(acc_train)
-            # dict_acc_val[lr].append(acc_val)
+            dict_loss[lr].append(loss)
+            dict_acc[lr].append(acc_train)
+            dict_acc_val[lr].append(acc_val)
 
             scheduler.step()
 
@@ -130,7 +131,7 @@ if __name__ == "__main__":
     Save plots
     '''
     # plot_name = f'PN2_len{len(dataset_train)}_bs{args.batch_size}_mb{args.max_batches}_l{args.num_layers}_v{args.variation}_s{args.shuffle}_g{args.lr_gamma}.png'
-    plot_name = f'PN2-Kitti_bs{args.batch_size}_mb{args.max_batches}_l{args.num_layers}_v{args.variation}_s{args.shuffle}_g{args.lr_gamma}.png'
+    plot_name = f'PN2-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_l{args.num_layers}_v{args.variation}_s{args.shuffle}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-acc': dict_acc,

@@ -17,6 +17,7 @@ from dataloading.semantic3d_poses import Semantic3dPosesDataset
 
 '''
 TODO:
+- all2all edges, then EdgeConv?
 - optimize k?
 - more layers?
 - generally other architecture?

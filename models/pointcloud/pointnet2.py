@@ -64,7 +64,7 @@ class PointNet2(nn.Module):
         self.sa1 = SetAbstractionLayer(0.5, 0.2, get_mlp([3 + 3, 32, 64]))
         self.sa2 = SetAbstractionLayer(0.5, 0.3, get_mlp([64 + 3, 128, 128]))
         self.sa3 = SetAbstractionLayer(0.5, 0.4, get_mlp([128 + 3, 256, 256]))   
-        self.ga = GlobalAbstractionLayer(get_mlp([256 + 3, 512, 1024], add_batchnorm=False))
+        self.ga = GlobalAbstractionLayer(get_mlp([256 + 3, 512, 1024]))
 
         self.lin1 = nn.Linear(1024, 512)
         self.lin2 = nn.Linear(512, 256)

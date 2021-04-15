@@ -7,6 +7,7 @@ import numpy as np
 import cv2
 
 import torch
+from torch.utils.data import Dataset
 import torch_geometric.transforms as T
 from torch_geometric.data import Data, DataLoader
 
@@ -20,16 +21,12 @@ class Kitti360ObjectsDataset(Kitti360BaseDataset):
     CARE: should be shuffled so that objects aren't ordered by class
     Objects will often have less than 2k points, T.FixedPoints() will sample w/ replace by default
     """    
-    def __init__(self, base_path, scene_name, split=None, transform=T.Compose([T.FixedPoints(2048), T.NormalizeScale()])):
+    def __init__(self, base_path, scene_name, split=None, transform=T.Compose([T.FixedPoints(1024), T.NormalizeScale()])):
         super().__init__(base_path, scene_name, split)
         self.transform = transform
 
         # Note: objects are retrieved from cells, not the (un-clustered) scene-objects
         self.objects = [obj for cell in self.cells for obj in cell.objects]
-
-        # print('Before', len(self))
-        # self.objects = [obj for obj in self.objects if len(obj.xyz) >=2048]
-        # print('After', len(self))        
         
         print(self)
 
@@ -48,6 +45,37 @@ class Kitti360ObjectsDataset(Kitti360BaseDataset):
 
     def __repr__(self):
         return f'Kitti360ObjectsDataset: {len(self)} objects from {len(self.class_to_index)} classes'
+
+class Kitti360ObjectsDatasetMulti(Dataset):
+    def __init__(self, base_path, scene_names, split=None, transform=T.Compose([T.FixedPoints(1024), T.NormalizeScale()])):
+        self.scene_names = scene_names
+        self.split = split
+        self.transform = transform
+        self.datasets = [Kitti360ObjectsDataset(base_path, scene_name, split, transform) for scene_name in scene_names]
+
+        self.objects = [obj for dataset in self.datasets for obj in dataset.objects]
+        self.class_to_index = self.datasets[0].class_to_index
+        
+        print(self)    
+
+    def __getitem__(self, idx):
+        obj = self.objects[idx]
+        points = torch.tensor(np.float32(obj.xyz))
+        colors = torch.tensor(np.float32(obj.rgb))
+        label = self.class_to_index[obj.label]
+
+        data = Data(x=colors, y=label, pos=points) # 'x' refers to point-attributes in PyG, 'pos' is xyz
+        data = self.transform(data)
+        return data
+
+    def __len__(self):
+        return len(self.objects)
+
+    def __repr__(self):
+        return f'Kitti360ObjectsDatasetMulti: {len(self.scene_names)} scenes, {len(self)} objects from {len(self.get_known_classes())} classes, split {self.split}'
+
+    def get_known_classes(self):
+        return list(self.class_to_index.keys())
 
 if __name__ == '__main__':
     base_path = './data/kitti360'

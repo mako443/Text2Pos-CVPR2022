@@ -3,9 +3,13 @@ import os
 import os.path as osp
 import numpy as np
 import pickle
+import sys
 
 import open3d
-import pptk
+try:
+    import pptk
+except:
+    print('pptk not found')
 from plyfile import PlyData, PlyElement
 
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
@@ -23,6 +27,7 @@ TODO:
 - How to handle multiple identical objects in matching? Remove from cell?
 - Use "smarter" colors? E.g. top 1 or 2 histogram-buckets
 """
+assert False, "Use fixed cell-fraction for <on-top> direction (0.015)"
 
 def load_points(filepath):
     plydata = PlyData.read(filepath)
@@ -105,6 +110,7 @@ def gather_objects(base_path, folder_name):
                 thresh_counts[obj.label] = 1
         else:
             objects_threshed.append(obj)
+    print(thresh_counts)
 
     return objects_threshed
     # return list(scene_objects.values())
@@ -160,11 +166,13 @@ def create_cells(objects, poses, scene_name, cell_size=30):
     
 if __name__ == '__main__':
     np.random.seed(4096) # Set seed to re-produce results
-
     base_path = './data/kitti360'
+    scene_name = sys.argv[-1]
+    print('Scene:', scene_name)
+
     # Incomplete folders: 3 corrupted...
     # for folder_name in SCENE_NAMES:
-    for folder_name in ['2013_05_28_drive_0010_sync', ]:
+    for folder_name in [scene_name, ]:
         print(f'Folder: {folder_name}')
 
         poses, pose_objects = create_poses(base_path, folder_name, return_pose_objects=True)

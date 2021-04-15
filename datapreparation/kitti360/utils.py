@@ -3,6 +3,31 @@ import numpy as np
 # CARE: scene-names incomplete because some where corrupted ?
 SCENE_NAMES = ('2013_05_28_drive_0000_sync','2013_05_28_drive_0003_sync','2013_05_28_drive_0005_sync','2013_05_28_drive_0006_sync','2013_05_28_drive_0009_sync','2013_05_28_drive_0010_sync')
 
+CLASS_TO_INDEX = {
+    'building':0,
+    'pole':1,
+    'traffic light':2,
+    'traffic sign':3,
+    'garage':4,
+    'stop':5,
+    'smallpole':6,
+    'lamp':7,
+    'trash bin':8,
+    'vending machine':9,
+    'box':10,
+    'road': 11,
+    'sidewalk':12,
+    'parking':13,
+    'wall': 14,
+    'fence': 15,
+    'guard rail': 16,
+    'bridge': 17,
+    'tunnel': 18,
+    'vegetation': 19,
+    'terrain': 20,
+    'pad': 21,
+}
+
 CLASS_TO_LABEL = {
     'building':11,
     'pole':17,
@@ -82,7 +107,7 @@ CLASS_TO_VOXELSIZE = {
     'pole': None,
     'traffic light': None,
     'traffic sign': None,
-    'garage': 0.25,
+    'garage': 0.125,
     'stop': None,
     'smallpole': None,
     'lamp': None,

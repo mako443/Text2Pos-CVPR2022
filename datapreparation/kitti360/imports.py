@@ -10,15 +10,15 @@ class Object3d:
         self.rgb = rgb
         self.label = label
         self.id = id
-        self.closest_point = None # Set in get_closest_point for cell-object
+        self.closest_point = None # Set in get_closest_point() for cell-object
+        self.center = None # TODO, for SG-Matching: ok to just input center instead of closest-point? or better to directly input xyz (care that PN++ knowns about coords)
 
-    # def set_color(self, colors_hsv, color_names):
-    #     rgb = np.mean(self.rgb, axis=0).reshape((1,1,3)).astype(np.uint8)
-    #     hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
-    #     dists = np.linalg.norm(colors_hsv - hsv, axis=1)
-    #     self.color_text = color_names[np.argmin(dists)]
+    def get_color_rgb(self):
+        color = np.mean(self.rgb, axis=0)
+        assert color.shape == (3,)
+        return color
 
-    def get_color(self):
+    def get_color_text(self):
         """Get the color as text based on the closest (L2) discrete color-center.
         CARE: Can change during downsampling or masking
         """
