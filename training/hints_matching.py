@@ -13,10 +13,10 @@ from models.superglue_matcher import SuperGlueMatch
 from models.tf_matcher import TransformerMatch
 
 from dataloading.semantic3d.semantic3d import Semantic3dPoseReferenceMockDataset, Semantic3dPoseReferenceDataset, Semantic3dPoseReferenceDatasetMulti
-from dataloading.kitti360.poses import Kitti360PoseReferenceDataset, Kitti360PoseReferenceMockDataset
+from dataloading.kitti360.poses import Kitti360PoseReferenceDataset, Kitti360PoseReferenceDatasetMulti, Kitti360PoseReferenceMockDataset
 
 from datapreparation.semantic3d.imports import COLORS as COLORS_S3D, COLOR_NAMES as COLOR_NAMES_S3D
-from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360
+from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360, SCENE_NAMES as SCENE_NAMES_K360
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -136,7 +136,8 @@ if __name__ == "__main__":
         dataset_train = Kitti360PoseReferenceMockDataset(args)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceMockDataset.collate_fn)
 
-        dataset_val = Kitti360PoseReferenceDataset('./data/kitti360', '2013_05_28_drive_0000_sync', args)
+        # dataset_val = Kitti360PoseReferenceDataset('./data/kitti360', '2013_05_28_drive_0000_sync', args)
+        dataset_val = Kitti360PoseReferenceDatasetMulti('./data/kitti360', SCENE_NAMES_K360, args, split=None)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceDataset.collate_fn)  
         
         # dataset_train = Semantic3dPoseReferenceMockDataset(args, dataset_val.get_known_classes(), COLORS_K360, COLOR_NAMES_K360)
@@ -167,7 +168,7 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_rates = np.logspace(-2.5, -3.5 ,3) 
+    learning_rates = np.logspace(-3.0, -4.5 ,4) # Larger than -3 throws error (even with warm-up)
     dict_loss = {lr: [] for lr in learning_rates}
     dict_recall = {lr: [] for lr in learning_rates}
     dict_precision = {lr: [] for lr in learning_rates}

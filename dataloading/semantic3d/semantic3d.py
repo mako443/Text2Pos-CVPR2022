@@ -21,7 +21,6 @@ from datapreparation.semantic3d.imports import Object3D, DescriptionObject #, CO
 from datapreparation.semantic3d.drawing import draw_cells
 
 from datapreparation.semantic3d.imports import COLORS as COLORS_S3D, COLOR_NAMES as COLOR_NAMES_S3D
-from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360
 
 
 '''

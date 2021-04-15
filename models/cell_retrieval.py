@@ -12,8 +12,8 @@ import pickle
 from easydict import EasyDict
 
 from models.modules import get_mlp, LanguageEncoder
-from dataloading.semantic3d import Semantic3dCellRetrievalDataset
-from dataloading.semantic3d_poses import Semantic3dPosesDataset
+from dataloading.semantic3d.semantic3d import Semantic3dCellRetrievalDataset
+from dataloading.semantic3d.semantic3d_poses import Semantic3dPosesDataset
 
 '''
 TODO:
@@ -87,7 +87,7 @@ class CellRetrievalNetwork(torch.nn.Module):
         if 'color' in self.use_features:
             colors = []
             for objects_sample in objects:
-                colors.extend([obj.color_rgb for obj in objects_sample])
+                colors.extend([obj.get_color_rgb() for obj in objects_sample])
             color_embedding = self.color_embedding(torch.tensor(colors, dtype=torch.float, device=self.device))
             embeddings.append(F.normalize(color_embedding, dim=-1))
         if 'position' in self.use_features:

@@ -10,7 +10,7 @@ from easydict import EasyDict
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, CLASS_TO_INDEX, COLORS, COLOR_NAMES
+from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, CLASS_TO_INDEX, COLORS, COLOR_NAMES, SCENE_NAMES
 from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
@@ -179,14 +179,49 @@ class Kitti360PoseReferenceDataset(Kitti360BaseDataset):
 
     def __len__(self):
         return len(self.cells)
+
+class Kitti360PoseReferenceDatasetMulti(Dataset):
+    def __init__(self, base_path, scene_names, args, split=None):
+        self.scene_names = scene_names
+        self.split = split
+        self.datasets = [Kitti360PoseReferenceDataset(base_path, scene_name, args, split) for scene_name in scene_names]
+
+        print(str(self))
+
+    def __getitem__(self, idx):
+        count = 0
+        for dataset in self.datasets:
+            idx_in_dataset = idx - count
+            if idx_in_dataset < len(dataset):
+                return dataset[idx_in_dataset]
+            else:
+                count += len(dataset)
+        assert False
+
+    def __repr__(self):
+        return f'Kitti360PoseReferenceDatasetMulti: {len(self)} poses/cells from {len(self.scene_names)} scenes, split: {self.split}'
+
+    def __len__(self):
+        return np.sum([len(ds) for ds in self.datasets])
+
+    def get_known_words(self):
+        known_words = []
+        for ds in self.datasets:
+            known_words.extend(ds.get_known_words())
+        return list(np.unique(known_words))
+
+    def get_known_classes(self):
+        known_classes = []
+        for ds in self.datasets:
+            known_classes.extend(ds.get_known_classes())
+        return list(np.unique(known_classes))          
         
 if __name__ == '__main__':
     base_path = './data/kitti360'
     folder_name = '2013_05_28_drive_0000_sync'    
     
     args = EasyDict(pad_size=8, num_mentioned=6)
-    dataset = Kitti360PoseReferenceMockDataset(args)
-    data = dataset[0]
+    dataset = Kitti360PoseReferenceDatasetMulti(base_path, SCENE_NAMES, args)
 
     quit()
 
