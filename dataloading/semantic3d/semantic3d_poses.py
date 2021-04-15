@@ -11,10 +11,10 @@ import cv2
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from datapreparation.imports import Object3D, DescriptionObject, Pose, COMBINED_SCENE_NAMES
-from datapreparation.descriptions import describe_cell
-from datapreparation.prepare_semantic3d import create_cells
-from datapreparation.drawing import draw_cells, draw_retrieval
+from datapreparation.semantic3d.imports import Object3D, DescriptionObject, Pose, COMBINED_SCENE_NAMES
+from datapreparation.semantic3d.descriptions import describe_cell
+from datapreparation.semantic3d.prepare import create_cells
+from datapreparation.semantic3d.drawing import draw_cells, draw_retrieval
 
 '''
 Datasets for cell-retrieval

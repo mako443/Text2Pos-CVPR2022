@@ -43,7 +43,7 @@ class Object3D:
 
     @property
     def center(self):
-        return 1/2*(np.min(self.points_w, axis=0) + np.max(self.points_w, axis=0))
+        return 1/2*(np.min(self.points_w, axis=0) + np.max(self.points_w, axis=0)) 
 
     def __repr__(self):
         return f'Object3D: {self.label} at {self.center}'

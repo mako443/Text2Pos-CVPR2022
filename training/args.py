@@ -15,6 +15,7 @@ def parse_arguments():
     parser.add_argument('--use_features', nargs='+', default=['class', 'color', 'position'])
     parser.add_argument('--shuffle', action='store_true')
     parser.add_argument('--variation', type=int, default=0)
+    parser.add_argument('--dataset', type=str, default='K360')
     
     # DGCNN
     parser.add_argument('--use_layers', type=str, default='all')
@@ -51,6 +52,9 @@ def parse_arguments():
         args.max_batches = int(args.max_batches)
     except:
         pass    
+    
+    args.dataset = args.dataset.upper()
+    assert args.dataset in ('S3D', 'K360')
     
     assert args.ranking_loss in ('triplet', 'pairwise', 'hardest')
     for feat in args.use_features:

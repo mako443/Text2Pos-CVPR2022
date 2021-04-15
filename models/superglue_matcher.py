@@ -18,6 +18,7 @@ from dataloading.semantic3d.semantic3d import Semantic3dPoseReferenceMockDataset
 '''
 TODO:
 - are L2-based distances better?
+- CARE: when PN++, has model knowlege of object center?
 '''
 
 class SuperGlueMatch(torch.nn.Module):
@@ -27,6 +28,7 @@ class SuperGlueMatch(torch.nn.Module):
         self.num_layers = args.num_layers
         self.sinkhorn_iters = args.sinkhorn_iters
         self.use_features = args.use_features
+        self.args = args
 
         # Set idx=0 for padding
         self.known_classes = {c: (i+1) for i,c in enumerate(known_classes)}
@@ -73,7 +75,10 @@ class SuperGlueMatch(torch.nn.Module):
         pos_embeddings = torch.zeros((batch_size, num_objects, 3), dtype=torch.float, device=self.device)
         for i in range(batch_size):
             for j in range(num_objects):
-                pos_embeddings[i, j, :] = torch.from_numpy(objects[i][j].center)
+                if self.args.dataset == 'S3D':
+                    pos_embeddings[i, j, :] = torch.from_numpy(objects[i][j].center)
+                else:
+                    pos_embeddings[i, j, :] = torch.from_numpy(objects[i][j].closest_point)
         pos_embeddings = self.pos_embedding(pos_embeddings) # [B, num_obj, DIM]
         if 'position' not in self.use_features:
             pos_embeddings = torch.zeros_like(pos_embeddings)
@@ -81,7 +86,10 @@ class SuperGlueMatch(torch.nn.Module):
         color_embeddings = torch.zeros((batch_size, num_objects, 3), dtype=torch.float, device=self.device)
         for i in range(batch_size):
             for j in range(num_objects):
-                color_embeddings[i, j, :] = torch.from_numpy(objects[i][j].color)
+                if self.args.dataset == 'S3D':
+                    color_embeddings[i, j, :] = torch.from_numpy(objects[i][j].color)
+                else:
+                    color_embeddings[i, j, :] = torch.tensor(objects[i][j].get_color_rgb(), dtype=torch.float)
         color_embeddings = self.color_embedding(color_embeddings) # [B, num_obj, DIM]
         if 'color' not in self.use_features:
             color_embeddings = torch.zeros_like(color_embeddings)

@@ -15,10 +15,16 @@ from easydict import EasyDict
 
 # This one proved best (with BN and before ReLU), but not too much difference
 def get_mlp(channels, add_batchnorm=True):
-    return nn.Sequential(*[
-        nn.Sequential(nn.Linear(channels[i - 1], channels[i]), nn.BatchNorm1d(channels[i]), nn.ReLU())
-        for i in range(1, len(channels))
-    ])
+    if add_batchnorm:
+        return nn.Sequential(*[
+            nn.Sequential(nn.Linear(channels[i - 1], channels[i]), nn.BatchNorm1d(channels[i]), nn.ReLU())
+            for i in range(1, len(channels))
+        ])
+    else:
+        return nn.Sequential(*[
+            nn.Sequential(nn.Linear(channels[i - 1], channels[i]), nn.ReLU())
+            for i in range(1, len(channels))
+        ])        
       
 class SetAbstractionLayer(nn.Module):
     def __init__(self, ratio, radius, mlp):
@@ -75,6 +81,8 @@ class PointNet2(nn.Module):
             
     def forward(self, data):
         data.to(self.device)
+        # unique, counts = np.unique(data.batch.cpu().detach().numpy(), return_counts=True)
+        # print(unique, counts)
 
         x, pos, batch = self.sa1(data.x, data.pos, data.batch)
         x, pos, batch = self.sa2(x, pos, batch)

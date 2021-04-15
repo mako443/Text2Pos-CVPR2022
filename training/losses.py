@@ -46,7 +46,7 @@ def calc_recall_precision(batch_gt_matches, batch_matches0, batch_matches1):
 
     return np.mean(all_recalls), np.mean(all_precisions)
 
-def calc_pose_error(objects, matches0, poses, offsets=None, use_mid_pred=False):
+def calc_pose_error(objects, matches0, poses, args, offsets=None, use_mid_pred=False):
     """Calculates the mean error by adding offset ("obj-to-pose") to every corresponding, matched object
     Uses simple matched-objects-average if offsets not given
     CARE: error only in x-y-plane
@@ -56,7 +56,7 @@ def calc_pose_error(objects, matches0, poses, offsets=None, use_mid_pred=False):
         matches0: matches0[i] = [j] <-> object[i] matches hint/offset[j]]
         poses
         offsets (optional): Predicted offsets. Defaults to None.
-        use_mid_pred (optional): Use cell-mid (0.5,0.5) as prediction, discarding objects and matches for debugging.
+        use_mid_pred (optional): Use cell-mid (0.5,0.5) as prediction, discarding objects and matches (for debugging).
 
     Returns:
         [float]: mean error
@@ -71,17 +71,20 @@ def calc_pose_error(objects, matches0, poses, offsets=None, use_mid_pred=False):
         offsets = np.zeros((batch_size, pad_size, 2)) # Set zero offsets to just predict the mean of matched-objects' centers
 
     errors = []
-    for i_batch in range(batch_size):
+    for i_sample in range(batch_size):
         preds = []
-        for obj_idx, hint_idx in enumerate(matches0[i_batch]):
+        for obj_idx, hint_idx in enumerate(matches0[i_sample]):
             if hint_idx == -1:
                 continue
-            preds.append(objects[i_batch][obj_idx].center[0:2] + offsets[i_batch][hint_idx])
+            if args.dataset == 'S3D':
+                preds.append(objects[i_sample][obj_idx].center[0:2] + offsets[i_sample][hint_idx])
+            else:
+                preds.append(objects[i_sample][obj_idx].closest_point[0:2] + offsets[i_sample][hint_idx])
         if use_mid_pred:
             pose_prediction = np.array((0.5,0.5))
         else:
-            pose_prediction = np.mean(preds, axis=0)
-        errors.append(np.linalg.norm(poses[i_batch] - pose_prediction))
+            pose_prediction = np.mean(preds, axis=0) if len(preds)>0 else np.array((0.5,0.5)) # Guess the middle if no matches
+        errors.append(np.linalg.norm(poses[i_sample] - pose_prediction))
     return np.mean(errors)
 
 class PairwiseRankingLoss(torch.nn.Module):

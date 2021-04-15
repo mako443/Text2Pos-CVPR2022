@@ -13,10 +13,10 @@ from models.superglue_matcher import SuperGlueMatch
 from models.tf_matcher import TransformerMatch
 
 from dataloading.semantic3d.semantic3d import Semantic3dPoseReferenceMockDataset, Semantic3dPoseReferenceDataset, Semantic3dPoseReferenceDatasetMulti
-from dataloading.kitti360.poses import Kitti360PoseReferenceDataset
+from dataloading.kitti360.poses import Kitti360PoseReferenceDataset, Kitti360PoseReferenceDatasetMulti, Kitti360PoseReferenceMockDataset
 
 from datapreparation.semantic3d.imports import COLORS as COLORS_S3D, COLOR_NAMES as COLOR_NAMES_S3D
-from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360
+from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360, SCENE_NAMES as SCENE_NAMES_K360
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -24,6 +24,9 @@ from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
 TODO:
+- Refactoring: train (on-top, classes, center/closest point, color rgb/text, )
+- CARE / TODO: on-top in synthetic data!
+- feature ablation
 - regress offsets: is error more in direction or magnitude? optimize?
 - Pad at (0.5,0.5) for less harmfull miss-matches?
 - Variable num_mentioned?
@@ -64,13 +67,14 @@ def train_epoch(model, dataloader, args):
 
         recall, precision = calc_recall_precision(batch['matches'], output.matches0.cpu().detach().numpy(), output.matches1.cpu().detach().numpy())
 
+        # TODO: batch_data = {x:x, y:y...}, for key in batch_data: epoch_data[key].append(batch_data[key])
         epoch_losses.append(loss.item())
         epoch_recalls.append(recall)
         epoch_precisions.append(precision)
 
-        epoch_pose_mid.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=output.offsets.detach().cpu().numpy(), use_mid_pred=True))
-        epoch_pose_mean.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=None))
-        epoch_pose_offsets.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=output.offsets.detach().cpu().numpy()))
+        epoch_pose_mid.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy(), use_mid_pred=True))
+        epoch_pose_mean.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=None))
+        epoch_pose_offsets.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy()))
 
     # return np.mean(epoch_losses), np.mean(epoch_recalls), np.mean(epoch_precisions), time.time()-t0
     return EasyDict(
@@ -100,9 +104,9 @@ def val_epoch(model, dataloader, args):
         epoch_recalls.append(recall)
         epoch_precisions.append(precision)
 
-        epoch_pose_mid.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=output.offsets.detach().cpu().numpy(), use_mid_pred=True))
-        epoch_pose_mean.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=None))
-        epoch_pose_offsets.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=output.offsets.detach().cpu().numpy()))        
+        epoch_pose_mid.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy(), use_mid_pred=True))
+        epoch_pose_mean.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=None))
+        epoch_pose_offsets.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy()))        
 
     # return np.mean(epoch_recalls), np.mean(epoch_precisions)
     return EasyDict(
@@ -120,26 +124,39 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    # S3D
-    scene_names = ('bildstein_station1_xyz_intensity_rgb','domfountain_station1_xyz_intensity_rgb','neugasse_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb','untermaederbrunnen_station1_xyz_intensity_rgb')
-    dataset_val = Semantic3dPoseReferenceDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.pad_size, split=None)
-    dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceDataset.collate_fn)  
-    
-    dataset_train = Semantic3dPoseReferenceMockDataset(args, dataset_val.get_known_classes(), COLORS_S3D, COLOR_NAMES_S3D)
-    dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)
+    if args.dataset == 'S3D':
+        scene_names = ('bildstein_station1_xyz_intensity_rgb','domfountain_station1_xyz_intensity_rgb','neugasse_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb','untermaederbrunnen_station1_xyz_intensity_rgb')
+        dataset_val = Semantic3dPoseReferenceDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.pad_size, split=None)
+        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceDataset.collate_fn)  
+        
+        dataset_train = Semantic3dPoseReferenceMockDataset(args, dataset_val.get_known_classes(), COLORS_S3D, COLOR_NAMES_S3D)
+        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)
 
-    # Kitti360
-    # dataset_val = Kitti360PoseReferenceDataset('./data/kitti360', '2013_05_28_drive_0000_sync', args)
-    # dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceDataset.collate_fn)  
+    if args.dataset == 'K360':
+        dataset_train = Kitti360PoseReferenceMockDataset(args)
+        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceMockDataset.collate_fn)
+
+        # dataset_val = Kitti360PoseReferenceDataset('./data/kitti360', '2013_05_28_drive_0000_sync', args)
+        dataset_val = Kitti360PoseReferenceDatasetMulti('./data/kitti360', SCENE_NAMES_K360, args, split=None)
+        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceDataset.collate_fn)  
+        
+        # dataset_train = Semantic3dPoseReferenceMockDataset(args, dataset_val.get_known_classes(), COLORS_K360, COLOR_NAMES_K360)
+        # dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)
+
     # dataset_train = Semantic3dPoseReferenceMockDataset(args, dataset_val.get_known_classes(), length=1024)
     # dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)
 
-    # print(sorted(dataset_train.get_known_classes()))
-    # print(sorted(dataset_val.get_known_classes()))
-    # print(sorted(dataset_train.get_known_words()))
-    # print(sorted(dataset_val.get_known_words()))
+    print(sorted(dataset_train.get_known_classes()))
+    print(sorted(dataset_val.get_known_classes()))
+    print(sorted(dataset_train.get_known_words()))
+    print(sorted(dataset_val.get_known_words()))
+    train_words = dataset_train.get_known_words()
+    for w in dataset_val.get_known_words():
+        assert w in train_words
+    assert sorted(dataset_train.get_known_classes()) == sorted(dataset_val.get_known_classes())        
 
-    assert sorted(dataset_train.get_known_classes()) == sorted(dataset_val.get_known_classes()) and sorted(dataset_train.get_known_words()) == sorted(dataset_val.get_known_words())
+    # TODO: turn back on for multi
+    # assert sorted(dataset_train.get_known_classes()) == sorted(dataset_val.get_known_classes()) and sorted(dataset_train.get_known_words()) == sorted(dataset_val.get_known_words())
     
     data0 = dataset_train[0]
     batch = next(iter(dataloader_train))
@@ -151,7 +168,7 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_rates = np.logspace(-3.5, -4.5 ,3)[0:1] #larger than -3 gives nan, TODO: warm-up epochs?
+    learning_rates = np.logspace(-3.0, -4.5 ,4) # Larger than -3 throws error (even with warm-up)
     dict_loss = {lr: [] for lr in learning_rates}
     dict_recall = {lr: [] for lr in learning_rates}
     dict_precision = {lr: [] for lr in learning_rates}
@@ -170,12 +187,18 @@ if __name__ == "__main__":
         # model = TransformerMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args)
         model.to(DEVICE)
 
-        optimizer = optim.Adam(model.parameters(), lr=lr)
         criterion_matching = MatchingLoss()
         criterion_offsets = nn.MSELoss()
+
+        # Warm-up 
+        optimizer = optim.Adam(model.parameters(), lr=1e-5)
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)
 
         for epoch in range(args.epochs):
+            if epoch==3:
+                optimizer = optim.Adam(model.parameters(), lr=lr)
+                scheduler = optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)            
+
             # loss, train_recall, train_precision, epoch_time = train_epoch(model, dataloader_train, args)
             train_out = train_epoch(model, dataloader_train, args)
             dict_loss[lr].append(train_out.loss)
@@ -196,7 +219,11 @@ if __name__ == "__main__":
             if scheduler: 
                 scheduler.step()
 
-            print(f'\t lr {lr:0.6} epoch {epoch} loss {train_out.loss:0.3f} t-recall {train_out.recall:0.2f} t-precision {train_out.precision:0.2f} v-recall {val_out.recall:0.2f} v-precision {val_out.precision:0.2f} time {train_out.time:0.3f}')
+            print((
+                f'\t lr {lr:0.6} epoch {epoch} loss {train_out.loss:0.3f} '
+                f't-recall {train_out.recall:0.2f} t-precision {train_out.precision:0.2f} t-mean {train_out.pose_mean:0.2f} t-offset {train_out.pose_offsets:0.2f} '
+                f'v-recall {val_out.recall:0.2f} v-precision {val_out.precision:0.2f} v-mean {val_out.pose_mean:0.2f} v-offset {val_out.pose_offsets:0.2f} '
+                ))
         print()
 
     '''
@@ -207,18 +234,18 @@ if __name__ == "__main__":
     # plot_name = f'TF-match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     # plot_name = f'SG-match_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     # plot_name = f'SG-PosePad_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
-    plot_name = f'SG-Offsets_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    plot_name = f'SG-Off-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
+        'train-loss1': dict_loss,
+        'train-loss2': dict_loss,
+        'train-loss3': dict_loss,
         'train-recall': dict_recall,
         'train-precision': dict_precision,
-        'train-pose-mid': dict_pose_mid,
         'train-pose-mean': dict_pose_mean,
         'train-pose-offsets': dict_pose_offsets,
         'val-recall': dict_val_recall,
         'val-precision': dict_val_precision,        
-        'val-precision-2': dict_val_precision,
-        'val-pose-mid': dict_val_pose_mid,
         'val-pose-mean': dict_val_pose_mean,
         'val-pose-offsets': dict_val_pose_offsets,        
     }
