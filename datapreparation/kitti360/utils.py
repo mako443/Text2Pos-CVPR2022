@@ -82,7 +82,7 @@ CLASS_TO_VOXELSIZE = {
     'pole': None,
     'traffic light': None,
     'traffic sign': None,
-    'garage': 0.25,
+    'garage': 0.125,
     'stop': None,
     'smallpole': None,
     'lamp': None,

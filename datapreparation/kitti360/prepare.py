@@ -13,7 +13,8 @@ from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, COLOR
 from datapreparation.kitti360.utils import CLASS_TO_MINPOINTS, CLASS_TO_VOXELSIZE
 from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.descriptions import describe_cell
-
+{'garage': 103, 'lamp': 44, 'building': 17, 'pole': 19, 'traffic light': 1, 'traffic sign': 19, 'trash bin': 14, 'box': 11, 'smallpole': 4, 'vending machine': 2}
+{'building': 18, 'traffic light': 16, 'traffic sign': 79, 'smallpole': 60, 'trash bin': 3, 'box': 7, 'pole': 38, 'lamp': 79, 'garage': 2, 'bridge': 1}
 """
 DONE:
 - Use closest point instead of center for description and plot?? Say 'on-top' if small distance => Seems good ✓
@@ -105,6 +106,7 @@ def gather_objects(base_path, folder_name):
                 thresh_counts[obj.label] = 1
         else:
             objects_threshed.append(obj)
+    print(thresh_counts)
 
     return objects_threshed
     # return list(scene_objects.values())
@@ -164,7 +166,7 @@ if __name__ == '__main__':
     base_path = './data/kitti360'
     # Incomplete folders: 3 corrupted...
     # for folder_name in SCENE_NAMES:
-    for folder_name in ['2013_05_28_drive_0010_sync', ]:
+    for folder_name in ['2013_05_28_drive_0000_sync', ]:
         print(f'Folder: {folder_name}')
 
         poses, pose_objects = create_poses(base_path, folder_name, return_pose_objects=True)
