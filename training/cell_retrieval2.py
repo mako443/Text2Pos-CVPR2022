@@ -7,6 +7,7 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
+from easydict import EasyDict
 
 from models.cell_retrieval import CellRetrievalNetwork
 
@@ -16,6 +17,7 @@ from datapreparation.semantic3d.drawing import draw_retrieval
 
 from datapreparation.kitti360.utils import SCENE_NAMES as SCENE_NAMES_K360
 from dataloading.kitti360.cells import Kitti360CellDataset, Kitti360CellDatasetMulti
+from dataloading.kitti360.poses import Kitti360PoseReferenceMockDataset
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -23,16 +25,23 @@ from training.losses import MatchingLoss, PairwiseRankingLoss, HardestRankingLos
 
 '''
 TODO:
-- try all-to-all edges?
 - does it generalize? some form of augmentation? K-Fold?
 - max-dist for descriptions?
 - remove "identical negative" (currently does not occur in Kitti)
+
+NOTES:
+- failures in specific scenes? -> No, not at this point
+- Removing one feature not too bad, but noticable in validation; colors should be ok then
+- (Performances can fluctuate from run to run)
 '''
 
 def train_epoch(model, dataloader, args):
     model.train()
     epoch_losses = []   
 
+    # cell_encodings = []
+    # text_encodings = []
+    batches = []
     for i_batch, batch in enumerate(dataloader):
         if args.max_batches is not None and i_batch >= args.max_batches:
             break  
@@ -41,8 +50,8 @@ def train_epoch(model, dataloader, args):
  
         optimizer.zero_grad()
         anchor = model.encode_text(batch['texts']) 
-        cell_objects = [cell.objects for cell in batch['cells']]
-        positive = model.encode_objects(cell_objects)
+        # cell_objects = [cell.objects for cell in batch['cells']]
+        positive = model.encode_objects(batch['objects'])
 
         if args.ranking_loss == 'triplet':
             negative_cell_objects = [cell.objects for cell in batch['negative_cells']]
@@ -55,8 +64,9 @@ def train_epoch(model, dataloader, args):
         optimizer.step()
 
         epoch_losses.append(loss.item())
+        batches.append(batch)
 
-    return np.mean(epoch_losses)
+    return np.mean(epoch_losses), batches
 
 print_targets = False
 
@@ -68,18 +78,21 @@ def eval_epoch(model, dataloader, args):
     Args:
         model ([type]): The model
         dataloader ([type]): Train or test dataloader
-        args ([type]): Global
+        args ([type]): Global arguments
+        cell_encodings ([np.ndarray]): Encodings already given, ignore dataloader, (used for Mock-Data)
+        text_encodings ([np.ndarray]): Encodings already given, ignore dataloader, (used for Mock-Data)
 
     Returns:
         Dict: Top-k accuracies
         Dict: Top retrievals
     """
-    cell_encodings = np.zeros((len(dataloader.dataset), model.embed_dim))
-    text_encodings = np.zeros((len(dataloader.dataset), model.embed_dim))
+    num_samples = len(dataloader.dataset) if isinstance(dataloader, DataLoader) else np.sum([len(batch['texts']) for batch in dataloader])
+    cell_encodings = np.zeros((num_samples, model.embed_dim))
+    text_encodings = np.zeros((num_samples, model.embed_dim))
     index_offset = 0
     for batch in dataloader:
-        cell_objects = [cell.objects for cell in batch['cells']]
-        cell_enc = model.encode_objects(cell_objects)
+        # cell_objects = [cell.objects for cell in batch['cells']]
+        cell_enc = model.encode_objects(batch['objects'])
         text_enc = model.encode_text(batch['texts'])
 
         batch_size = len(cell_enc)
@@ -109,8 +122,6 @@ def eval_epoch(model, dataloader, args):
 if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
-
-    # WEITER: Colors, compare features
     
     '''
     Create data loaders
@@ -129,11 +140,10 @@ if __name__ == "__main__":
         print("\t\t Stats: ", args.cell_size, args.cell_stride, dataset_train.gather_stats())
 
     if args.dataset == 'K360':
-        # scene_name = args.scene_names[0] #'2013_05_28_drive_0000_sync'
-        dataset_train = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_K360, split='train')
-        # dataset_train = Kitti360CellDataset('./data/kitti360', scene_name, split='train')
+        # scene_name = args.scene_names[0]
+        # dataset_train = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_K360, split='train')
+        dataset_train = Kitti360PoseReferenceMockDataset(args, length=512)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=args.shuffle)
-        # dataset_val = Kitti360CellDataset('./data/kitti360', scene_name, split='test')
         dataset_val = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_K360, split='test')
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=False)    
 
@@ -141,6 +151,7 @@ if __name__ == "__main__":
     for word in dataset_val.get_known_words():
         assert word in train_words
 
+    print('Words-diff:', set(dataset_train.get_known_words()).difference(set(dataset_val.get_known_words())))
     assert sorted(dataset_train.get_known_classes()) == sorted(dataset_val.get_known_classes())
 
     data = dataset_train[0]        
@@ -157,7 +168,7 @@ if __name__ == "__main__":
 
     # ACC_TARGET = 'all'
     for lr in learning_rates:
-        model = CellRetrievalNetwork(dataset_train.get_known_classes(), dataset_train.get_known_words(), args.embed_dim, k=args.k, use_features=args.use_features)
+        model = CellRetrievalNetwork(dataset_train.get_known_classes(), dataset_train.get_known_words(), args)
         model.to(device)    
 
         optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -171,8 +182,9 @@ if __name__ == "__main__":
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)
 
         for epoch in range(args.epochs):
-            loss = train_epoch(model, dataloader_train, args)
-            train_acc, train_retrievals = eval_epoch(model, dataloader_train, args)
+            loss, train_batches = train_epoch(model, dataloader_train, args)
+            # train_acc, train_retrievals = eval_epoch(model, dataloader_train, args)
+            train_acc, train_retrievals = eval_epoch(model, train_batches, args)
             val_acc, val_retrievals = eval_epoch(model, dataloader_val, args)
 
             key = lr
@@ -193,9 +205,8 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    # scene_name = scene_name.split('_')[-2]
-    # plot_name = f'Cells-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_c{int(args.cell_size)}-{int(args.cell_stride)}_f{"-".join(args.use_features)}.png'
-    plot_name = f'Cells-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_f{"-".join(args.use_features)}.png'
+    # plot_name = f'Cells-{args.dataset}_s{scene_name.split('_')[-2]}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_f{"-".join(args.use_features)}.png'
+    plot_name = f'CellsMock-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_v{args.variation}_l-{args.ranking_loss}_m{args.margin}_s{args.shuffle}_f{"-".join(args.use_features)}.png'
 
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
     val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}

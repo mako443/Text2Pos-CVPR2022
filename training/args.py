@@ -19,7 +19,7 @@ def parse_arguments():
     
     # DGCNN
     parser.add_argument('--use_layers', type=str, default='all')
-    parser.add_argument('--k', type=int, default=4)
+    # parser.add_argument('--k', type=int, default=4)
 
     # SuperGlue
     parser.add_argument('--sinkhorn_iters', type=int, default=50)

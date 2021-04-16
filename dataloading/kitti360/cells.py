@@ -20,9 +20,10 @@ class Kitti360CellDataset(Kitti360BaseDataset):
         hints = self.hint_descriptions[idx]
         text = ' '.join(hints)
         return {
-            'cells': cell,
+            # 'cells': cell,
+            'objects': cell.objects,
             'texts': text,
-            'cell_indices': idx,
+            # 'cell_indices': idx,
             'scene_names': self.scene_name
         } 
 

@@ -34,7 +34,6 @@ def cluster_stuff_object(obj, stuff_min, eps=0.75):
     return clustered_objects
 
 printed = False
-# TODO: if instance-objects too slow, add simple center-based thresholding first
 def describe_cell(bbox, scene_objects: List[Object3d], pose, scene_name, inside_fraction=1/3, stuff_min=500, num_mentioned=6):
     """Create the cell using all the objects in the scene.
     Instance-objects are threshed in/outside the scene (all points are retained)
@@ -69,7 +68,6 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose, scene_name, inside_
                 continue
             cell_objects.append(obj) # DEBUG: comment out
 
-    # assert len(cell_objects) >= num_mentioned
     if len(cell_objects) < num_mentioned:
         return None
 

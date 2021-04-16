@@ -97,6 +97,7 @@ class Kitti360PoseReferenceMockDataset(Dataset):
         return {
             'objects': objects,
             'hint_descriptions': hints,
+            'texts': ' '.join(hints),
             'num_mentioned': self.num_mentioned,
             'num_distractors': num_distractors,
             'matches': matches,
