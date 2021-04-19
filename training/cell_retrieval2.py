@@ -15,24 +15,31 @@ from dataloading.semantic3d.semantic3d_poses import Semantic3dPosesDataset, Sema
 from datapreparation.semantic3d.imports import COMBINED_SCENE_NAMES as SCENE_NAMES_S3D
 from datapreparation.semantic3d.drawing import draw_retrieval
 
-from datapreparation.kitti360.utils import SCENE_NAMES as SCENE_NAMES_K360
+from datapreparation.kitti360.utils import SCENE_NAMES as SCENE_NAMES_K360, SCENE_NAMES_TRAIN as SCENE_NAMES_TRAIN_K360, SCENE_NAMES_TEST as SCENE_NAMES_TEST_K360
 from dataloading.kitti360.cells import Kitti360CellDataset, Kitti360CellDatasetMulti
 from dataloading.kitti360.poses import Kitti360PoseReferenceMockDataset
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
 from training.losses import MatchingLoss, PairwiseRankingLoss, HardestRankingLoss
+from training.utils import plot_retrievals
 
 '''
 TODO:
-- does it generalize? some form of augmentation? K-Fold?
+- Look at val-fails -> 
+- Augmentation possible? -> hint-shuffle helped, 
+- scene-wise split
+
 - max-dist for descriptions?
 - remove "identical negative" (currently does not occur in Kitti)
 
 NOTES:
+- More Kitti-Cells helped ✓
+- Mock: train-acc high if same data every epoch, model still does not generalize. Mock valid??
 - failures in specific scenes? -> No, not at this point
 - Removing one feature not too bad, but noticable in validation; colors should be ok then
 - (Performances can fluctuate from run to run)
+- stronger language model? (More layers) -> Doesn't change much 
 '''
 
 def train_epoch(model, dataloader, args):
@@ -86,6 +93,8 @@ def eval_epoch(model, dataloader, args):
         Dict: Top-k accuracies
         Dict: Top retrievals
     """
+    assert args.ranking_loss != 'triplet' # Else also update evaluation.pipeline
+
     num_samples = len(dataloader.dataset) if isinstance(dataloader, DataLoader) else np.sum([len(batch['texts']) for batch in dataloader])
     cell_encodings = np.zeros((num_samples, model.embed_dim))
     text_encodings = np.zeros((num_samples, model.embed_dim))
@@ -141,15 +150,15 @@ if __name__ == "__main__":
 
     if args.dataset == 'K360':
         # scene_name = args.scene_names[0]
-        # dataset_train = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_K360, split='train')
-        dataset_train = Kitti360PoseReferenceMockDataset(args, length=512)
+        dataset_train = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_TRAIN_K360, split=None, shuffle_hints=True)
+        # dataset_train = Kitti360PoseReferenceMockDataset(args, length=1024, fixed_seed=True) # OPTION: fixed_seed or not for same data at every index
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=args.shuffle)
-        dataset_val = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_K360, split='test')
+        dataset_val = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_TEST_K360, split=None)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=False)    
 
-    train_words = dataset_train.get_known_words()
-    for word in dataset_val.get_known_words():
-        assert word in train_words
+    # train_words = dataset_train.get_known_words()
+    # for word in dataset_val.get_known_words():
+    #     assert word in train_words
 
     print('Words-diff:', set(dataset_train.get_known_words()).difference(set(dataset_val.get_known_words())))
     assert sorted(dataset_train.get_known_classes()) == sorted(dataset_val.get_known_classes())
@@ -161,7 +170,7 @@ if __name__ == "__main__":
     print('device:', device)
     torch.autograd.set_detect_anomaly(True)     
 
-    learning_rates = np.logspace(-2, -4, 5)
+    learning_rates = np.logspace(-2, -4, 5)[:-2]
     dict_loss = {lr: [] for lr in learning_rates}
     dict_acc = {k: {lr: [] for lr in learning_rates} for k in args.top_k}
     dict_acc_val = {k: {lr: [] for lr in learning_rates} for k in args.top_k}    
@@ -182,6 +191,8 @@ if __name__ == "__main__":
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)
 
         for epoch in range(args.epochs):
+            # dataset_train.reset_seed() #OPTION: re-setting seed leads to equal data at every epoch
+
             loss, train_batches = train_epoch(model, dataloader_train, args)
             # train_acc, train_retrievals = eval_epoch(model, dataloader_train, args)
             train_acc, train_retrievals = eval_epoch(model, train_batches, args)
@@ -202,11 +213,13 @@ if __name__ == "__main__":
                 print(f'{k}-{v:0.2f} ', end="")            
             print()        
 
+        # plot_retrievals(val_retrievals, dataset_val)
+
     '''
     Save plots
     '''
     # plot_name = f'Cells-{args.dataset}_s{scene_name.split('_')[-2]}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_f{"-".join(args.use_features)}.png'
-    plot_name = f'CellsMock-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_v{args.variation}_l-{args.ranking_loss}_m{args.margin}_s{args.shuffle}_f{"-".join(args.use_features)}.png'
+    plot_name = f'CellsRealScene-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_v{args.variation}_l-{args.ranking_loss}_m{args.margin}_s{args.shuffle}_f{"-".join(args.use_features)}.png'
 
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
     val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}

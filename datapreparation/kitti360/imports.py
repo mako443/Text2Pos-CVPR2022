@@ -65,7 +65,7 @@ class Description:
         assert (object_color is not None)
 
     def __repr__(self):
-        return f'Pose is {self.direction} of a {self.object_label}'
+        return f'Pose is {self.direction} of a {self.object_color} {self.object_label}'
 
 class Cell:
     def __init__(self, scene_name, objects: List[Object3d], descriptions: List[Description], pose):

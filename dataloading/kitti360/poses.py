@@ -16,19 +16,31 @@ from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
 
 class Kitti360PoseReferenceMockDataset(Dataset):
-    def __init__(self, args, length=1024):
+    def __init__(self, args, length=1024, fixed_seed=False):
         self.pad_size = args.pad_size
         self.num_mentioned = args.num_mentioned
         self.length = length
+        self.fixed_seed = fixed_seed
 
         self.classes = [c for c in CLASS_TO_INDEX if c!='pad']
         self.colors = COLORS
         self.color_names = COLOR_NAMES
 
+        # self.reset_seed()
+
+    # def reset_seed(self):
+    #     """Resets the np random seed for re-producible results.
+    #     Done initially and can be done before every epoch for consistent data.
+    #     """
+    #     np.random.seed(4096)
+
     def __len__(self):
         return self.length
 
     def __getitem__(self, idx):
+        if self.fixed_seed:
+            np.random.seed(idx)
+
         # Create random objects in the cell
         # num_distractors = self.num_distractors #np.random.randint(self.pad_size - self.num_mentioned) if self.pad_size > self.num_mentioned else 0
         num_distractors = np.random.randint(self.pad_size - self.num_mentioned) if self.pad_size > self.num_mentioned else 0
@@ -118,7 +130,7 @@ class Kitti360PoseReferenceMockDataset(Dataset):
     def get_known_words(self):
         known_words = []
         for i in range(50):
-            data = self[0]
+            data = self[i]
             for hint in data['hint_descriptions']:
                 known_words.extend(hint.replace('.','').replace(',','').lower().split())
         return list(np.unique(known_words))  

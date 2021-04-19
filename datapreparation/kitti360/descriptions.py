@@ -33,7 +33,7 @@ def cluster_stuff_object(obj, stuff_min, eps=0.75):
 
     return clustered_objects
 
-printed = False
+# TODO: shifted cells. 1) randomly shift cell around pose, 2) randomly shift, take objects from 2 trheshs for missing hints (even necessary?)
 def describe_cell(bbox, scene_objects: List[Object3d], pose, scene_name, inside_fraction=1/3, stuff_min=500, num_mentioned=6):
     """Create the cell using all the objects in the scene.
     Instance-objects are threshed in/outside the scene (all points are retained)
@@ -45,11 +45,6 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose, scene_name, inside_
         scene_objects: Objects in scene
         pose: Pose
     """
-    # Gather and cluster the objects
-    global printed
-    # if not printed:
-    #     print('CARE: not using instance-obj!')
-    #     printed = True
 
     cell_objects = []
     for obj in scene_objects:
@@ -91,7 +86,8 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose, scene_name, inside_
     mentioned_objects = [cell_objects[idx] for idx in closest_indices[0:num_mentioned]]
     for obj in mentioned_objects:
         obj2pose = pose - obj.get_closest_point(pose) # e.g. "The pose is south of a car."
-        if np.linalg.norm(obj2pose[0:2]) < 0.5 / cell_size: # Say 'on-top' if the object is very close (e.g. road), only calculated in x-y-plane!
+        # if np.linalg.norm(obj2pose[0:2]) < 0.5 / cell_size: # Say 'on-top' if the object is very close (e.g. road), only calculated in x-y-plane!
+        if np.linalg.norm(obj2pose[0:2]) < 0.015: # Say 'on-top' if the object is very close (e.g. road), only calculated in x-y-plane!
             direction = 'on-top'
         else:
             if abs(obj2pose[0])>=abs(obj2pose[1]) and obj2pose[0]>=0: direction='east'
@@ -99,7 +95,7 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose, scene_name, inside_
             if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]>=0: direction='north'
             if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]<=0: direction='south' 
 
-        descriptions.append(Description(obj.id, direction, obj.label, obj.get_color()))
+        descriptions.append(Description(obj.id, direction, obj.label, obj.get_color_rgb()))
 
     return Cell(scene_name, cell_objects, descriptions, pose)
 

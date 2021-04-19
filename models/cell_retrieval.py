@@ -61,7 +61,7 @@ class CellRetrievalNetwork(torch.nn.Module):
         '''
         Textual path
         '''
-        self.language_encoder = LanguageEncoder(known_words, embed_dim, bi_dir=True)                      
+        self.language_encoder = LanguageEncoder(known_words, embed_dim, bi_dir=True)                   
 
         print(f'CellRetrievalNetwork variation: {self.variation}, dim: {embed_dim}, features: {self.use_features}')
 

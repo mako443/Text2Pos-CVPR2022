@@ -27,7 +27,7 @@ TODO:
 - How to handle multiple identical objects in matching? Remove from cell?
 - Use "smarter" colors? E.g. top 1 or 2 histogram-buckets
 """
-assert False, "Use fixed cell-fraction for <on-top> direction (0.015)"
+# assert False, "Use fixed cell-fraction for <on-top> direction (0.015)"
 
 def load_points(filepath):
     plydata = PlyData.read(filepath)
@@ -115,7 +115,7 @@ def gather_objects(base_path, folder_name):
     return objects_threshed
     # return list(scene_objects.values())
 
-def create_poses(base_path, folder_name, sample_dist=75, return_pose_objects=False):
+def create_poses(base_path, folder_name, pose_distance, return_pose_objects=False):
     path = osp.join(base_path, 'data_poses', folder_name, 'poses.txt')
     poses = np.loadtxt(path)
     poses = poses[:, 1:].reshape((-1, 3,4)) # Convert to 3x4 matrices
@@ -124,7 +124,7 @@ def create_poses(base_path, folder_name, sample_dist=75, return_pose_objects=Fal
     sampled_poses = [poses[0], ]
     for pose in poses:
         dist = np.linalg.norm(pose - sampled_poses[-1])
-        if dist > sample_dist:
+        if dist >= pose_distance:
             sampled_poses.append(pose)
 
     if return_pose_objects:
@@ -145,7 +145,7 @@ def create_poses(base_path, folder_name, sample_dist=75, return_pose_objects=Fal
 #     for obj in objects:
 #         obj.set_color(COLORS_HSV, COLOR_NAMES)
 
-def create_cells(objects, poses, scene_name, cell_size=30):
+def create_cells(objects, poses, scene_name, cell_size):
     print('Creating cells...')
     cells = []
     nones = 0
@@ -170,12 +170,15 @@ if __name__ == '__main__':
     scene_name = sys.argv[-1]
     print('Scene:', scene_name)
 
+    cell_size = 30
+    print('Using cell-size', cell_size)
+
     # Incomplete folders: 3 corrupted...
     # for folder_name in SCENE_NAMES:
     for folder_name in [scene_name, ]:
         print(f'Folder: {folder_name}')
 
-        poses, pose_objects = create_poses(base_path, folder_name, return_pose_objects=True)
+        poses, pose_objects = create_poses(base_path, folder_name, cell_size, return_pose_objects=True)
 
         path_objects = osp.join(base_path, 'objects', f'{folder_name}.pkl')
         path_cells = osp.join(base_path, 'cells', f'{folder_name}.pkl')
@@ -193,9 +196,9 @@ if __name__ == '__main__':
         # set_object_colors(objects)
 
         # Create cells
-        cells = create_cells(objects, poses, folder_name)
+        cells = create_cells(objects, poses, folder_name, cell_size)
         pickle.dump(cells, open(path_cells, 'wb'))
-        print(f'Saved cells to {path_cells}')   
+        print(f'Saved {len(cells)} cells to {path_cells}')   
 
         # Debugging 
         idx = np.random.randint(len(cells))
