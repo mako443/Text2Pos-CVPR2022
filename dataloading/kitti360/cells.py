@@ -85,6 +85,7 @@ if __name__ == '__main__':
     base_path = './data/kitti360'
     # folder_name = '2013_05_28_drive_0000_sync'    
     dataset = Kitti360CellDatasetMulti(base_path, SCENE_NAMES)
+    cell = dataset.cells[0]
     
     # dataset = Kitti360CellDataset(base_path, folder_name)          
     # data = dataset[0]

@@ -121,6 +121,7 @@ def create_poses(base_path, folder_name, pose_distance, return_pose_objects=Fals
     poses = poses[:, 1:].reshape((-1, 3,4)) # Convert to 3x4 matrices
     poses = poses[:, :, -1] # Take last column
 
+    # CARE: This can still lead to two very close-by poses if the trajectory "went around a corner"
     sampled_poses = [poses[0], ]
     for pose in poses:
         dist = np.linalg.norm(pose - sampled_poses[-1])
@@ -169,13 +170,13 @@ if __name__ == '__main__':
     base_path = './data/kitti360'
     scene_name = sys.argv[-1]
     print('Scene:', scene_name)
+    scene_names = SCENE_NAMES if scene_name=='all' else [scene_name, ]
 
     cell_size = 30
     print('Using cell-size', cell_size)
 
     # Incomplete folders: 3 corrupted...
-    # for folder_name in SCENE_NAMES:
-    for folder_name in [scene_name, ]:
+    for folder_name in scene_names:
         print(f'Folder: {folder_name}')
 
         poses, pose_objects = create_poses(base_path, folder_name, cell_size, return_pose_objects=True)

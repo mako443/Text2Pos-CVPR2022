@@ -95,6 +95,8 @@ def eval_epoch(model, dataloader, args):
     """
     assert args.ranking_loss != 'triplet' # Else also update evaluation.pipeline
 
+    model.eval() # Now eval() seems to increase results
+
     num_samples = len(dataloader.dataset) if isinstance(dataloader, DataLoader) else np.sum([len(batch['texts']) for batch in dataloader])
     cell_encodings = np.zeros((num_samples, model.embed_dim))
     text_encodings = np.zeros((num_samples, model.embed_dim))
@@ -170,15 +172,22 @@ if __name__ == "__main__":
     print('device:', device)
     torch.autograd.set_detect_anomaly(True)     
 
-    learning_rates = np.logspace(-2, -4, 5)[:-2]
+    learning_rates = np.logspace(-2, -4, 5)[:-1]
     dict_loss = {lr: [] for lr in learning_rates}
     dict_acc = {k: {lr: [] for lr in learning_rates} for k in args.top_k}
     dict_acc_val = {k: {lr: [] for lr in learning_rates} for k in args.top_k}    
 
+    best_val_accuracy = -1
+    model_path = f"./checkpoints/retrieval_{args.dataset}.pth"
+
     # ACC_TARGET = 'all'
     for lr in learning_rates:
         model = CellRetrievalNetwork(dataset_train.get_known_classes(), dataset_train.get_known_words(), args)
-        model.to(device)    
+        model.to(device) 
+
+        # print('Saving model to', model_path)
+        # torch.save(model, model_path)  
+        # quit()
 
         optimizer = optim.Adam(model.parameters(), lr=lr)
         if args.ranking_loss == 'pairwise':
@@ -211,7 +220,13 @@ if __name__ == "__main__":
             print('val-acc: ', end="")
             for k, v in val_acc.items():
                 print(f'{k}-{v:0.2f} ', end="")            
-            print()        
+            print()    
+
+        # Saving best model (w/o early stopping)
+        if val_acc[max(args.top_k)] > best_val_accuracy:
+            print('Saving model to', model_path)
+            torch.save(model, model_path)
+            best_val_accuracy = val_acc[max(args.top_k)]
 
         # plot_retrievals(val_retrievals, dataset_val)
 

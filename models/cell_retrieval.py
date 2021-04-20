@@ -17,9 +17,6 @@ from dataloading.semantic3d.semantic3d_poses import Semantic3dPosesDataset
 
 '''
 TODO:
-- global mean or max?
-- more layers?
-- generally other architecture?
 '''
 
 class CellRetrievalNetwork(torch.nn.Module):
