@@ -38,12 +38,16 @@ NOTES:
 
 def train_epoch(model, dataloader, args):
     model.train()
-    epoch_losses = []
-    epoch_recalls = []
-    epoch_precisions = []
-    epoch_pose_mid = []
-    epoch_pose_mean = []
-    epoch_pose_offsets = []
+    stats = EasyDict(
+        loss = [],
+        loss_offsets = [],
+        recall = [],
+        precision = [],
+        pose_mid = [],
+        pose_mean = [],
+        pose_offsets = [],
+    )
+
     t0 = time.time()
     printed=False
     for i_batch, batch in enumerate(dataloader):
@@ -57,35 +61,45 @@ def train_epoch(model, dataloader, args):
         loss_offsets = criterion_offsets(output.offsets, torch.tensor(batch['offsets'], dtype=torch.float, device=DEVICE))
         
         if not printed:
-            print(f'{loss_matching.item():0.2f} - {loss_offsets.item():0.2f}')
+            # print(f'{loss_matching.item():0.2f} - {loss_offsets.item():0.2f}')
             printed = True
 
-        loss = loss_matching + loss_offsets # TODO/CARE: balance between? Currently on same magnitude (w/ and w/o norm, but cell ∈ [0,1])
+        loss = loss_matching + 5 * loss_offsets # TODO/CARE: balance between? Currently on same magnitude (w/ and w/o norm, but cell ∈ [0,1])
 
         loss.backward()
         optimizer.step()
 
         recall, precision = calc_recall_precision(batch['matches'], output.matches0.cpu().detach().numpy(), output.matches1.cpu().detach().numpy())
 
-        # TODO: batch_data = {x:x, y:y...}, for key in batch_data: epoch_data[key].append(batch_data[key])
-        epoch_losses.append(loss.item())
-        epoch_recalls.append(recall)
-        epoch_precisions.append(precision)
+        stats.loss.append(loss.item())
+        stats.loss_offsets.append(loss_offsets.item())
+        stats.recall.append(recall)
+        stats.precision.append(precision)
 
-        epoch_pose_mid.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy(), use_mid_pred=True))
-        epoch_pose_mean.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=None))
-        epoch_pose_offsets.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy()))
+        stats.pose_mid.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy(), use_mid_pred=True))
+        stats.pose_mean.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=None))
+        stats.pose_offsets.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy()))
+
+    print('Offsets:')
+    print(output.offsets.cpu().detach().numpy().astype(np.float16)[0])
+    print('Targets:')
+    print(batch['offsets'][0].astype(np.float16))
+
+    for k in stats.keys():
+        stats[k] = np.mean(stats[k])
+    stats.time = time.time() - t0
+    return stats
 
     # return np.mean(epoch_losses), np.mean(epoch_recalls), np.mean(epoch_precisions), time.time()-t0
-    return EasyDict(
-        loss=np.mean(epoch_losses), 
-        recall=np.mean(epoch_recalls), 
-        precision=np.mean(epoch_precisions), 
-        pose_mid=np.mean(epoch_pose_mid), 
-        pose_mean=np.mean(epoch_pose_mean), 
-        pose_offsets=np.mean(epoch_pose_offsets), 
-        time=time.time()-t0
-    )
+    # return EasyDict(
+    #     loss=np.mean(epoch_losses), 
+    #     # recall=np.mean(epoch_recalls), 
+    #     # precision=np.mean(epoch_precisions), 
+    #     # pose_mid=np.mean(epoch_pose_mid), 
+    #     # pose_mean=np.mean(epoch_pose_mean), 
+    #     # pose_offsets=np.mean(epoch_pose_offsets), 
+    #     # time=time.time()-t0
+    # )
 
 @torch.no_grad()
 def val_epoch(model, dataloader, args):
@@ -105,8 +119,8 @@ def val_epoch(model, dataloader, args):
         epoch_precisions.append(precision)
 
         epoch_pose_mid.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy(), use_mid_pred=True))
-        # epoch_pose_mean.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=None))
-        epoch_pose_offsets.append(calc_pose_error2(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy()))        
+        epoch_pose_mean.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=None))
+        # epoch_pose_mean.append(calc_pose_error2(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy()))        
         epoch_pose_offsets.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy()))        
 
     # return np.mean(epoch_recalls), np.mean(epoch_precisions)
@@ -121,6 +135,8 @@ def val_epoch(model, dataloader, args):
 if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
+
+    # WEITER: Warum train-offset worse? Compare w/ and w/o BN, compare new/old pos-in-cell eval
     
     '''
     Create data loaders
@@ -172,18 +188,33 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_rates = np.logspace(-3.0, -4.5 ,4) # Larger than -3 throws error (even with warm-up)
-    dict_loss = {lr: [] for lr in learning_rates}
-    dict_recall = {lr: [] for lr in learning_rates}
-    dict_precision = {lr: [] for lr in learning_rates}
-    dict_pose_mid = {lr: [] for lr in learning_rates}
-    dict_pose_mean = {lr: [] for lr in learning_rates}
-    dict_pose_offsets = {lr: [] for lr in learning_rates}
-    dict_val_recall = {lr: [] for lr in learning_rates}
-    dict_val_precision = {lr: [] for lr in learning_rates}    
-    dict_val_pose_mid = {lr: [] for lr in learning_rates}
-    dict_val_pose_mean = {lr: [] for lr in learning_rates}
-    dict_val_pose_offsets = {lr: [] for lr in learning_rates}    
+    learning_rates = np.logspace(-3.0, -4.5 ,4)[:-1] # Larger than -3 throws error (even with warm-up)
+    # learning_rates = np.logspace(-1, -4, 4)
+    # dict_loss = {lr: [] for lr in learning_rates}
+    # dict_loss_offsets = {lr: [] for lr in learning_rates}
+    # dict_recall = {lr: [] for lr in learning_rates}
+    # dict_precision = {lr: [] for lr in learning_rates}
+    # dict_pose_mid = {lr: [] for lr in learning_rates}
+    # dict_pose_mean = {lr: [] for lr in learning_rates}
+    # dict_pose_offsets = {lr: [] for lr in learning_rates}
+    # dict_val_recall = {lr: [] for lr in learning_rates}
+    # dict_val_precision = {lr: [] for lr in learning_rates}    
+    # dict_val_pose_mid = {lr: [] for lr in learning_rates}
+    # dict_val_pose_mean = {lr: [] for lr in learning_rates}
+    # dict_val_pose_offsets = {lr: [] for lr in learning_rates}    
+    train_stats_loss = {lr: [] for lr in learning_rates}
+    train_stats_loss_offsets = {lr: [] for lr in learning_rates}
+    train_stats_recall = {lr: [] for lr in learning_rates}
+    train_stats_precision = {lr: [] for lr in learning_rates}
+    train_stats_pose_mid = {lr: [] for lr in learning_rates}
+    train_stats_pose_mean = {lr: [] for lr in learning_rates}
+    train_stats_pose_offsets = {lr: [] for lr in learning_rates}
+    
+    val_stats_recall = {lr: [] for lr in learning_rates},
+    val_stats_precision = {lr: [] for lr in learning_rates},    
+    val_stats_pose_mid = {lr: [] for lr in learning_rates},
+    val_stats_pose_mean = {lr: [] for lr in learning_rates},
+    val_stats_pose_offsets = {lr: [] for lr in learning_rates}
     
     for lr in learning_rates:
         model = SuperGlueMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args)
@@ -205,35 +236,37 @@ if __name__ == "__main__":
 
             # loss, train_recall, train_precision, epoch_time = train_epoch(model, dataloader_train, args)
             train_out = train_epoch(model, dataloader_train, args)
-            dict_loss[lr].append(train_out.loss)
-            dict_recall[lr].append(train_out.recall)
-            dict_precision[lr].append(train_out.precision)
-            dict_pose_mid[lr].append(train_out.pose_mid)
-            dict_pose_mean[lr].append(train_out.pose_mean)
-            dict_pose_offsets[lr].append(train_out.pose_offsets)
+
+            train_stats_loss[lr].append(train_out.loss)
+            train_stats_loss_offsets[lr].append(train_out.loss_offsets)
+            train_stats_recall[lr].append(train_out.recall)
+            train_stats_precision[lr].append(train_out.precision)
+            train_stats_pose_mid[lr].append(train_out.pose_mid)
+            train_stats_pose_mean[lr].append(train_out.pose_mean)
+            train_stats_pose_offsets[lr].append(train_out.pose_offsets)
 
             # val_recall, val_precision = val_epoch(model, dataloader_val, args) #CARE: which loader for val!
-            val_out = val_epoch(model, dataloader_val, args) #CARE: which loader for val!
-            dict_val_recall[lr].append(val_out.recall)
-            dict_val_precision[lr].append(val_out.precision)     
-            dict_val_pose_mid[lr].append(val_out.pose_mid)
-            dict_val_pose_mean[lr].append(val_out.pose_mean)
-            dict_val_pose_offsets[lr].append(val_out.pose_offsets)                   
+            # val_out = val_epoch(model, dataloader_val, args) #CARE: which loader for val!
+            # dict_val_recall[lr].append(val_out.recall)
+            # dict_val_precision[lr].append(val_out.precision)     
+            # dict_val_pose_mid[lr].append(val_out.pose_mid)
+            # dict_val_pose_mean[lr].append(val_out.pose_mean)
+            # dict_val_pose_offsets[lr].append(val_out.pose_offsets)                   
 
             if scheduler: 
                 scheduler.step()
 
             print((
                 f'\t lr {lr:0.6} epoch {epoch} loss {train_out.loss:0.3f} '
-                f't-recall {train_out.recall:0.2f} t-precision {train_out.precision:0.2f} t-mean {train_out.pose_mean:0.2f} t-offset {train_out.pose_offsets:0.2f} '
-                f'v-recall {val_out.recall:0.2f} v-precision {val_out.precision:0.2f} v-mean {val_out.pose_mean:0.2f} v-offset {val_out.pose_offsets:0.2f} '
+                # f't-recall {train_out.recall:0.2f} t-precision {train_out.precision:0.2f} t-mean {train_out.pose_mean:0.2f} t-offset {train_out.pose_offsets:0.2f} '
+                # f'v-recall {val_out.recall:0.2f} v-precision {val_out.precision:0.2f} v-mean {val_out.pose_mean:0.2f} v-offset {val_out.pose_offsets:0.2f} '
                 ))
         print()
 
-        if np.mean((val_out.recall, val_out.precision)) > best_val_recallPrecision:
-            print('Saving model to', model_path)
-            torch.save(model, model_path)
-            best_val_recallPrecision = np.mean((val_out.recall, val_out.precision)) 
+        # if np.mean((val_out.recall, val_out.precision)) > best_val_recallPrecision:
+        #     print('Saving model to', model_path)
+        #     torch.save(model, model_path)
+        #     best_val_recallPrecision = np.mean((val_out.recall, val_out.precision)) 
 
     '''
     Save plots
@@ -243,20 +276,26 @@ if __name__ == "__main__":
     # plot_name = f'TF-match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     # plot_name = f'SG-match_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     # plot_name = f'SG-PosePad_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
-    plot_name = f'SG-Off-2-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    plot_name = f'SG-Off-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     metrics = {
-        'train-loss': dict_loss,
-        'train-loss1': dict_loss,
-        'train-loss2': dict_loss,
-        'train-loss3': dict_loss,
-        'train-recall': dict_recall,
-        'train-precision': dict_precision,
-        'train-pose-mean': dict_pose_mean,
-        'train-pose-offsets': dict_pose_offsets,
-        'val-recall': dict_val_recall,
-        'val-precision': dict_val_precision,        
-        'val-pose-mean': dict_val_pose_mean,
-        'val-pose-offsets': dict_val_pose_offsets,        
+        'train-loss': train_stats_loss,
+        'train-loss_offsets': train_stats_loss_offsets,
+        'train-recall': train_stats_recall,
+        'train-precision': train_stats_precision,
+        'train-pose_mid': train_stats_pose_mid,
+        'train-pose_mean': train_stats_pose_mean,
+        'train-pose_offsets': train_stats_pose_offsets,
+        # 'train-loss1': dict_loss,
+        # 'train-loss2': dict_loss,
+        # 'train-loss3': dict_loss,
+        # 'train-recall': dict_recall,
+        # 'train-precision': dict_precision,
+        # 'train-pose-mean': dict_pose_mean,
+        # 'train-pose-offsets': dict_pose_offsets,
+        # 'val-recall': dict_val_recall,
+        # 'val-precision': dict_val_precision,        
+        # 'val-pose-mean': dict_val_pose_mean,
+        # 'val-pose-offsets': dict_val_pose_offsets,        
     }
     plot_metrics(metrics, './plots/'+plot_name)        
 

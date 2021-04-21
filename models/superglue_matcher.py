@@ -21,22 +21,22 @@ from datapreparation.kitti360.imports import Object3d as Object3d_K360
 
 '''
 TODO:
+- BatchNorm yes/no/where?
 - are L2-based distances better?
 - CARE: when PN++, has model knowlege of object center?
 '''
 
-# #TODO: BN before or after ReLU?
-# def get_mlp(dims, add_batchnorm=True):
-#     if len(dims)<3:
-#         print('get_mlp(): less than 2 layers!')
-#     mlp = []
-#     for i in range(len(dims)-1):
-#         mlp.append(nn.Linear(dims[i], dims[i+1]))
-#         if i<len(dims)-2:
-#             mlp.append(nn.ReLU())
-#             if add_batchnorm:
-#                 mlp.append(nn.BatchNorm1d(dims[i+1]))
-#     return nn.Sequential(*mlp)
+def get_mlp_offset(dims, add_batchnorm=False):
+    if len(dims)<3:
+        print('get_mlp(): less than 2 layers!')
+    mlp = []
+    for i in range(len(dims)-1):
+        mlp.append(nn.Linear(dims[i], dims[i+1]))
+        if i<len(dims)-2:
+            mlp.append(nn.ReLU())
+            if add_batchnorm:
+                mlp.append(nn.BatchNorm1d(dims[i+1]))
+    return nn.Sequential(*mlp)
 
 class SuperGlueMatch(torch.nn.Module):
     def __init__(self, known_classes, known_words, args):
@@ -56,12 +56,12 @@ class SuperGlueMatch(torch.nn.Module):
         # self.color_embedding = get_mlp([3,128, self.embed_dim], add_batchnorm=False) #OPTION: color_embedding layers
         # self.mlp_merge = get_mlp([3*self.embed_dim, self.embed_dim])
 
-        self.pos_embedding = get_mlp([3, 64, self.embed_dim]) #OPTION: pos_embedding layers
-        self.color_embedding = get_mlp([3, 64, self.embed_dim]) #OPTION: color_embedding layers
-        self.mlp_merge = get_mlp([len(self.use_features)*self.embed_dim, self.embed_dim])        
+        self.pos_embedding = get_mlp([3, 64, self.embed_dim], add_batchnorm=False) #OPTION: pos_embedding layers
+        self.color_embedding = get_mlp([3, 64, self.embed_dim], add_batchnorm=False) #OPTION: color_embedding layers
+        self.mlp_merge = get_mlp([len(self.use_features)*self.embed_dim, self.embed_dim], add_batchnorm=False)        
 
         self.language_encoder = LanguageEncoder(known_words, self.embed_dim, bi_dir=True)  
-        self.mlp_offsets = get_mlp([self.embed_dim, self.embed_dim //2, 2], add_batchnorm=False)
+        self.mlp_offsets = get_mlp_offset([self.embed_dim, self.embed_dim // 2, 2])
 
         config = {
             'descriptor_dim': self.embed_dim,
@@ -79,6 +79,8 @@ class SuperGlueMatch(torch.nn.Module):
         '''
         hint_encodings = torch.stack([self.language_encoder(hint_sample) for hint_sample in hints]) # [B, num_hints, DIM]
         hint_encodings = F.normalize(hint_encodings, dim=-1) #Norming those too
+
+        # offsets = self.mlp_offsets(hint_encodings) # [B, num_hints, 2]        
 
         '''
         Encode the objects, first flattened for correct batch-norms, then re-shape
@@ -155,7 +157,6 @@ class SuperGlueMatch(torch.nn.Module):
         Predict offsets from hints
         '''
         offsets = self.mlp_offsets(hint_encodings) # [B, num_hints, 2]
-        # offsets = F.normalize(offsets, dim=-1)
 
         outputs = EasyDict()
         outputs.P = matcher_output['P']
