@@ -25,10 +25,6 @@ class Object3d:
         dists = np.linalg.norm(np.mean(self.rgb, axis=0) - COLORS, axis=1)
         return COLOR_NAMES[np.argmin(dists)]
 
-    @property
-    def color_rgb(self):
-        return self.get_color)
-
     def __repr__(self):
         return f'Object3d: {self.label}'
 

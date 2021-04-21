@@ -58,7 +58,7 @@ def train_epoch(model, dataloader, args):
 
     return np.mean(epoch_losses)
 
-print_targets = False
+printed = False
 
 # TODO: possibly update this to also handle S3D
 @torch.no_grad()
@@ -74,6 +74,8 @@ def eval_epoch(model, dataloader, args):
         Dict: Top-k accuracies
         Dict: Top retrievals
     """
+    global printed
+
     cell_encodings = np.zeros((len(dataloader.dataset), model.embed_dim))
     text_encodings = np.zeros((len(dataloader.dataset), model.embed_dim))
     index_offset = 0
@@ -129,12 +131,12 @@ if __name__ == "__main__":
         print("\t\t Stats: ", args.cell_size, args.cell_stride, dataset_train.gather_stats())
 
     if args.dataset == 'K360':
-        # scene_name = args.scene_names[0] #'2013_05_28_drive_0000_sync'
-        dataset_train = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_K360, split='train')
+        scene_names = ['2013_05_28_drive_0000_sync', ]
+        dataset_train = Kitti360CellDatasetMulti('./data/kitti360', scene_names, split='train')
         # dataset_train = Kitti360CellDataset('./data/kitti360', scene_name, split='train')
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=args.shuffle)
         # dataset_val = Kitti360CellDataset('./data/kitti360', scene_name, split='test')
-        dataset_val = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_K360, split='test')
+        dataset_val = Kitti360CellDatasetMulti('./data/kitti360', scene_names, split='test')
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=False)    
 
     train_words = dataset_train.get_known_words()
