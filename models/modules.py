@@ -17,6 +17,7 @@ import numpy as np
 #                 mlp.append(nn.BatchNorm1d(dims[i+1]))
 #     return nn.Sequential(*mlp)
 
+# CARE: This has a trailing ReLU!!
 def get_mlp(channels, add_batchnorm=True):
     if add_batchnorm:
         return nn.Sequential(*[
