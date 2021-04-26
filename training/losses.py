@@ -48,7 +48,21 @@ def calc_recall_precision(batch_gt_matches, batch_matches0, batch_matches1):
 
     return np.mean(all_recalls), np.mean(all_precisions)
 
-def calc_pose_error2(objects, matches0, poses, args, offsets=None, use_mid_pred=False):
+# Verified against old function ✓
+def calc_pose_error(objects, matches0, poses, offsets=None, use_mid_pred=False):
+    """Calculates the mean error of a batch by averaging the positions of all matches objects plus corresp. offsets.
+    All calculations are in x-y-plane.
+
+    Args:
+        objects (List[List[Object3D]]): Objects-list for each sample in the batch.
+        matches0 (np.ndarray): SuperGlue matching output of the batch.
+        poses (np.ndarray): Ground-truth poses [batch_size, 3]
+        offsets (List[np.ndarray], optional): List of offset vectors for all hints. Zero offsets are used if not given.
+        use_mid_pred (bool, optional): If set, predicts the center of the cell regardless of matches and offsets. Defaults to False.
+
+    Returns:
+        [float]: Mean error.
+    """
     assert len(objects) == len(matches0) == len(poses)
     batch_size, pad_size = matches0.shape
     poses = np.array(poses)[:, 0:2]
@@ -69,7 +83,7 @@ def calc_pose_error2(objects, matches0, poses, args, offsets=None, use_mid_pred=
     return np.mean(errors)
         
 
-def calc_pose_error(objects, matches0, poses, args, offsets=None, use_mid_pred=False):
+def deprecated_calc_pose_error(objects, matches0, poses, args, offsets=None, use_mid_pred=False):
     """Calculates the mean error by adding offset ("obj-to-pose") to every corresponding, matched object
     Uses simple matched-objects-average if offsets not given
     CARE: error only in x-y-plane

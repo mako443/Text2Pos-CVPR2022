@@ -234,12 +234,5 @@ if __name__ == '__main__':
     folder_name = '2013_05_28_drive_0000_sync'    
     
     args = EasyDict(pad_size=8, num_mentioned=6)
-    dataset = Kitti360PoseReferenceDatasetMulti(base_path, SCENE_NAMES, args)
-
-    quit()
-
-    dataset = Kitti360PoseReferenceDataset(base_path, folder_name, args)
+    dataset = Kitti360PoseReferenceMockDataset(args)
     data = dataset[0]
-
-    dataloader = DataLoader(dataset, batch_size=2, collate_fn=Kitti360BaseDataset.collate_fn)
-    batch = next(iter(dataloader))        
