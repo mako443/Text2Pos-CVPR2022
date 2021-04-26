@@ -6,25 +6,25 @@ from torch.utils.data import DataLoader
 
 import torch_geometric.nn as gnn
 import torch_geometric.transforms as T
+from models.modules import get_mlp
 
 import numpy as np
-
 from easydict import EasyDict
 
 # from models.modules import get_mlp
 
 # This one proved best (with BN and before ReLU), but not too much difference
-def get_mlp(channels, add_batchnorm=True):
-    if add_batchnorm:
-        return nn.Sequential(*[
-            nn.Sequential(nn.Linear(channels[i - 1], channels[i]), nn.BatchNorm1d(channels[i]), nn.ReLU())
-            for i in range(1, len(channels))
-        ])
-    else:
-        return nn.Sequential(*[
-            nn.Sequential(nn.Linear(channels[i - 1], channels[i]), nn.ReLU())
-            for i in range(1, len(channels))
-        ])        
+# def get_mlp(channels, add_batchnorm=True):
+#     if add_batchnorm:
+#         return nn.Sequential(*[
+#             nn.Sequential(nn.Linear(channels[i - 1], channels[i]), nn.BatchNorm1d(channels[i]), nn.ReLU())
+#             for i in range(1, len(channels))
+#         ])
+#     else:
+#         return nn.Sequential(*[
+#             nn.Sequential(nn.Linear(channels[i - 1], channels[i]), nn.ReLU())
+#             for i in range(1, len(channels))
+#         ])        
       
 class SetAbstractionLayer(nn.Module):
     def __init__(self, ratio, radius, mlp):

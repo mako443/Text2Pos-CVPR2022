@@ -5,29 +5,40 @@ import torch.nn.functional as F
 
 import numpy as np
 
-#TODO: BN before or after ReLU?
-def get_mlp(dims, add_batchnorm=False):
-    if len(dims)<3:
-        print('get_mlp(): less than 2 layers!')
-    mlp = []
-    for i in range(len(dims)-1):
-        mlp.append(nn.Linear(dims[i], dims[i+1]))
-        if i<len(dims)-2:
-            mlp.append(nn.ReLU())
-            if add_batchnorm:
-                mlp.append(nn.BatchNorm1d(dims[i+1]))
-    return nn.Sequential(*mlp)
+# def get_mlp(dims, add_batchnorm=False):
+#     if len(dims)<3:
+#         print('get_mlp(): less than 2 layers!')
+#     mlp = []
+#     for i in range(len(dims)-1):
+#         mlp.append(nn.Linear(dims[i], dims[i+1]))
+#         if i<len(dims)-2:
+#             mlp.append(nn.ReLU())
+#             if add_batchnorm:
+#                 mlp.append(nn.BatchNorm1d(dims[i+1]))
+#     return nn.Sequential(*mlp)
+
+def get_mlp(channels, add_batchnorm=True):
+    if add_batchnorm:
+        return nn.Sequential(*[
+            nn.Sequential(nn.Linear(channels[i - 1], channels[i]), nn.BatchNorm1d(channels[i]), nn.ReLU())
+            for i in range(1, len(channels))
+        ])
+    else:
+        return nn.Sequential(*[
+            nn.Sequential(nn.Linear(channels[i - 1], channels[i]), nn.ReLU())
+            for i in range(1, len(channels))
+        ])    
 
 
 class LanguageEncoder(torch.nn.Module):
-    def __init__(self, known_words, embedding_dim, bi_dir):
+    def __init__(self, known_words, embedding_dim, bi_dir, num_layers=1):
         super(LanguageEncoder, self).__init__()
 
         self.known_words = {c: (i+1) for i,c in enumerate(known_words)}
         self.known_words['<unk>'] = 0        
         self.word_embedding = nn.Embedding(len(self.known_words), embedding_dim, padding_idx=0)
 
-        self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=embedding_dim, bidirectional=bi_dir)
+        self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=embedding_dim, bidirectional=bi_dir, num_layers=num_layers)
 
     '''
     Encodes descriptions as batch [d1, d2, d3, ..., d_B] with d_i a string. Strings can be of different sizes.
@@ -47,7 +58,7 @@ class LanguageEncoder(torch.nn.Module):
         embedded_words = self.word_embedding(padded_indices)
         description_inputs = nn.utils.rnn.pack_padded_sequence(embedded_words, torch.tensor(description_lengths), batch_first=True, enforce_sorted=False)   
 
-        d = 2 if self.lstm.bidirectional else 1
+        d = 2 * self.lstm.num_layers if self.lstm.bidirectional else 1 * self.lstm.num_layers
         h=torch.zeros(d, batch_size, self.word_embedding.embedding_dim).to(self.device)
         c=torch.zeros(d, batch_size, self.word_embedding.embedding_dim).to(self.device)
 

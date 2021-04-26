@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 from easydict import EasyDict
 
+from models.superglue_matcher import get_pos_in_cell
+
 class MatchingLoss(nn.Module):
     def __init__(self):
         super(MatchingLoss, self).__init__()
@@ -45,6 +47,27 @@ def calc_recall_precision(batch_gt_matches, batch_matches0, batch_matches1):
         all_precisions.append(precision)
 
     return np.mean(all_recalls), np.mean(all_precisions)
+
+def calc_pose_error2(objects, matches0, poses, args, offsets=None, use_mid_pred=False):
+    assert len(objects) == len(matches0) == len(poses)
+    batch_size, pad_size = matches0.shape
+    poses = np.array(poses)[:, 0:2]
+
+    if offsets is not None:
+        assert len(objects) == len(offsets)     
+    else:
+        offsets = np.zeros((batch_size, pad_size, 2)) # Set zero offsets to just predict the mean of matched-objects' centers
+
+    errors = []
+    for i_sample in range(batch_size):
+        if use_mid_pred:
+            pose_prediction = np.array((0.5, 0.5))
+        else:
+            pose_prediction = get_pos_in_cell(objects[i_sample], matches0[i_sample], offsets[i_sample])
+        
+        errors.append(np.linalg.norm(poses[i_sample] - pose_prediction))
+    return np.mean(errors)
+        
 
 def calc_pose_error(objects, matches0, poses, args, offsets=None, use_mid_pred=False):
     """Calculates the mean error by adding offset ("obj-to-pose") to every corresponding, matched object

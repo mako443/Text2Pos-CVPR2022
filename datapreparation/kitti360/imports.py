@@ -65,20 +65,26 @@ class Description:
         assert (object_color is not None)
 
     def __repr__(self):
-        return f'Pose is {self.direction} of a {self.object_label}'
+        return f'Pose is {self.direction} of a {self.object_color} {self.object_label}'
 
 class Cell:
-    def __init__(self, scene_name, objects: List[Object3d], descriptions: List[Description], pose):
+    def __init__(self, scene_name, objects: List[Object3d], descriptions: List[Description], pose, cell_size, pose_w, bbox_w):
         """
         Args:
             IDs should be unique across entire dataset
             Objects include distractors and mentioned, already cropped and normalized in cell
             Pose as (x,y,z), already normalized in cell
+            cell-size: longest edge in world-coordinates
+            Pose_w as (x,y,z) in original world-coordinates
         """
         self.scene_name = scene_name
         self.objects = objects
         self.descriptions = descriptions
         self.pose = pose    
+        
+        self.cell_size = cell_size # Original cell-size (longest edge)
+        self.pose_w = pose_w # Original pose in world-coordinates
+        self.bbox_w = bbox_w # Original pose in world-coordinates
 
     def __repr__(self):
         return f'Cell: {len(self.objects)} objects, {len(self.descriptions)} descriptions'

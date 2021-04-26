@@ -18,7 +18,7 @@ def plot_retrievals(top_retrievals, dataset, count=5):
     indices_plotted = 0
     for query_idx in query_indices:
         retrieval_indices = top_retrievals[query_idx]
-        if query_idx not in retrieval_indices[0:3]:
+        if query_idx in retrieval_indices[0:10]: # Only plot retrievals where the target is not in top-10
             continue
 
         img0 = plot_cell(dataset.cells[query_idx], scale=512)
@@ -26,8 +26,12 @@ def plot_retrievals(top_retrievals, dataset, count=5):
         img2 = plot_cell(dataset.cells[retrieval_indices[1]], scale=512)
         img3 = plot_cell(dataset.cells[retrieval_indices[2]], scale=512)
 
-        img = np.hstack((img0, img1, img2, img3))
+        sep = np.ones((img0.shape[0],10,3), dtype=np.uint8) * 255
+
+        img = np.hstack((img0, sep, img1, img2, img3))
         cv2.imwrite(f'retrievals_{query_idx}.png', img)
+
+        print(f'Plotted {query_idx}: {retrieval_indices[0]} {retrieval_indices[1]} {retrieval_indices[2]}')
 
         indices_plotted += 1
         if indices_plotted >= count:

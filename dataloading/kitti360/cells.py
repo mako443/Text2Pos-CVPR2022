@@ -14,15 +14,30 @@ from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
 
+'''
+Augmentations:
+- hints order (care not to influence matches)
+- pads to random objects and vice-versa
+- 
+'''
 class Kitti360CellDataset(Kitti360BaseDataset):
+    def __init__(self, base_path, scene_name, split=None, shuffle_hints=False):
+        super().__init__(base_path, scene_name, split)
+        self.shuffle_hints = shuffle_hints
+
     def __getitem__(self, idx):
         cell = self.cells[idx]
         hints = self.hint_descriptions[idx]
+        
+        if self.shuffle_hints:
+            hints = np.random.choice(hints, size=len(hints), replace=False)
+
         text = ' '.join(hints)
         return {
             'cells': cell,
+            'objects': cell.objects,
             'texts': text,
-            'cell_indices': idx,
+            # 'cell_indices': idx,
             'scene_names': self.scene_name
         } 
 
@@ -30,10 +45,11 @@ class Kitti360CellDataset(Kitti360BaseDataset):
         return len(self.cells)
 
 class Kitti360CellDatasetMulti(Dataset):
-    def __init__(self, base_path, scene_names, split=None):
+    def __init__(self, base_path, scene_names, split=None, shuffle_hints=False):
         self.scene_names = scene_names
         self.split = split
-        self.datasets = [Kitti360CellDataset(base_path, scene_name, split) for scene_name in scene_names]
+        self.datasets = [Kitti360CellDataset(base_path, scene_name, split, shuffle_hints) for scene_name in scene_names]
+        self.cells = [cell for dataset in self.datasets for cell in dataset.cells] # Gathering cells for retrieval plotting
 
         print(str(self))
 
@@ -69,6 +85,7 @@ if __name__ == '__main__':
     base_path = './data/kitti360'
     # folder_name = '2013_05_28_drive_0000_sync'    
     dataset = Kitti360CellDatasetMulti(base_path, SCENE_NAMES)
+    cell = dataset.cells[0]
     
     # dataset = Kitti360CellDataset(base_path, folder_name)          
     # data = dataset[0]

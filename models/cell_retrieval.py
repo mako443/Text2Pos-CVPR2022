@@ -17,19 +17,15 @@ from dataloading.semantic3d.semantic3d_poses import Semantic3dPosesDataset
 
 '''
 TODO:
-- all2all edges, then EdgeConv?
-- optimize k?
-- more layers?
-- generally other architecture?
 '''
 
 class CellRetrievalNetwork(torch.nn.Module):
-    def __init__(self, known_classes, known_words, embed_dim, k=2, use_features=['class', 'color', 'position'], architecture='dgcnn'):
+    def __init__(self, known_classes, known_words, args):
         super(CellRetrievalNetwork, self).__init__()
-        self.embed_dim = embed_dim
-        self.use_features = use_features
-        self.architecture = architecture
-        assert architecture in ('dgcnn',)
+        self.embed_dim = args.embed_dim
+        self.use_features = args.use_features
+        self.variation = args.variation
+        embed_dim = self.embed_dim
 
         '''
         Object path
@@ -42,20 +38,31 @@ class CellRetrievalNetwork(torch.nn.Module):
         self.pos_embedding = get_mlp([3, 64, embed_dim]) #OPTION: pos_embedding layers
         self.color_embedding = get_mlp([3, 64, embed_dim]) #OPTION: color_embedding layers
 
-        self.mlp_merge = get_mlp([len(use_features)*embed_dim, embed_dim])
+        self.mlp_merge = get_mlp([len(self.use_features)*embed_dim, embed_dim])
 
-        if architecture == 'dgcnn':
-            self.graph1 = gnn.DynamicEdgeConv(get_mlp([2 * embed_dim, embed_dim, embed_dim], add_batchnorm=True), k=k, aggr='max')
+        # CARE: possibly handle variation in forward()!
+        if self.variation == 0:
+            self.graph1 = gnn.DynamicEdgeConv(get_mlp([2 * embed_dim, embed_dim, embed_dim], add_batchnorm=True), k=8, aggr='max') # Originally: k=4
             # self.graph2 = gnn.DynamicEdgeConv(get_mlp([2 * embed_dim, embed_dim, embed_dim], add_batchnorm=True), k=k, aggr='max')            
             # self.lin1 = nn.Sequential(get_mlp([2*embed_dim, embed_dim]), nn.ReLU())
+            self.lin = get_mlp([embed_dim, embed_dim, embed_dim])
+        if self.variation == 1:
+            self.graph1 = gnn.DynamicEdgeConv(get_mlp([2 * embed_dim, embed_dim, embed_dim], add_batchnorm=True), k=8, aggr='max') # Originally: k=4
+            self.lin = get_mlp([embed_dim, embed_dim, embed_dim])            
+        if self.variation == 2:
+            self.graph1 = gnn.DynamicEdgeConv(get_mlp([2 * embed_dim, embed_dim, embed_dim], add_batchnorm=True), k=8, aggr='max') # Originally: k=4
+            self.graph2 = gnn.DynamicEdgeConv(get_mlp([2 * embed_dim, embed_dim, embed_dim], add_batchnorm=True), k=8, aggr='max')            
+            self.lin_combine = get_mlp([2*embed_dim, embed_dim])
             self.lin = get_mlp([embed_dim, embed_dim, embed_dim])
 
         '''
         Textual path
         '''
-        self.language_encoder = LanguageEncoder(known_words, embed_dim, bi_dir=True)                      
+        self.language_encoder = LanguageEncoder(known_words, embed_dim, bi_dir=True)                   
 
-        print(f'CellRetrievalNetwork dim {embed_dim}, k {k}, features {self.use_features}')
+        print(f'CellRetrievalNetwork variation: {self.variation}, dim: {embed_dim}, features: {self.use_features}')
+
+        self.printed = False
 
     def encode_text(self, descriptions):
         batch_size = len(descriptions)
@@ -104,10 +111,21 @@ class CellRetrievalNetwork(torch.nn.Module):
             embeddings = embeddings[0]
         # embeddings = torch.sum(torch.stack(embeddings), dim=0)
 
-        if self.architecture == 'dgcnn':
+        if self.variation == 0:
             x = self.graph1(embeddings, batch)
             x = gnn.global_max_pool(x, batch)
             x = self.lin(x)
+        if self.variation == 1:
+            x = self.graph1(embeddings, batch)
+            x = gnn.global_mean_pool(x, batch)
+            x = self.lin(x)   
+        if self.variation == 2:
+            x1 = self.graph1(embeddings, batch)
+            x2 = self.graph1(x1, batch)
+            x = torch.cat((x1, x2), dim=-1)
+            x = self.lin_combine(x)
+            x = gnn.global_max_pool(x, batch)
+            x = self.lin(x)                     
         
         x = F.normalize(x)
         return x

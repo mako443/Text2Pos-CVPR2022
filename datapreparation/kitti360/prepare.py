@@ -114,16 +114,17 @@ def gather_objects(base_path, folder_name):
     return objects_threshed
     # return list(scene_objects.values())
 
-def create_poses(base_path, folder_name, sample_dist=75, return_pose_objects=False):
+def create_poses(base_path, folder_name, pose_distance, return_pose_objects=False):
     path = osp.join(base_path, 'data_poses', folder_name, 'poses.txt')
     poses = np.loadtxt(path)
     poses = poses[:, 1:].reshape((-1, 3,4)) # Convert to 3x4 matrices
     poses = poses[:, :, -1] # Take last column
 
+    # CARE: This can still lead to two very close-by poses if the trajectory "went around a corner"
     sampled_poses = [poses[0], ]
     for pose in poses:
         dist = np.linalg.norm(pose - sampled_poses[-1])
-        if dist > sample_dist:
+        if dist >= pose_distance:
             sampled_poses.append(pose)
 
     if return_pose_objects:
@@ -144,10 +145,10 @@ def create_poses(base_path, folder_name, sample_dist=75, return_pose_objects=Fal
 #     for obj in objects:
 #         obj.set_color(COLORS_HSV, COLOR_NAMES)
 
-def create_cells(objects, poses, scene_name, cell_size=30):
+def create_cells(objects, poses, scene_name, cell_size):
     print('Creating cells...')
     cells = []
-    nones = 0
+    none_indices = []
     for i_pose, pose in enumerate(poses):
         # print(f'\r \t pose {i_pose} / {len(poses)}', end='')
         bbox = np.hstack((pose - cell_size/2, pose + cell_size/2))
@@ -156,10 +157,15 @@ def create_cells(objects, poses, scene_name, cell_size=30):
             cells.append(cell)
         else:
             # print(f'\n None at {i_pose}\n')
-            nones += 1
+            none_indices.append(i_pose)
     # print()
     
-    assert nones < len(poses)/5, 'Too many nones ({} / {}), are all objects gathered?'.format(nones, len(poses))
+    print(f'Nones: {len(none_indices)} / {len(poses)}')
+    if len(none_indices) > len(poses)/3:
+        print(f'Too many nones, are all objects gathered?')
+        return False, none_indices
+    else:
+        return True, cells
 
     return cells
     
@@ -168,13 +174,17 @@ if __name__ == '__main__':
     base_path = './data/kitti360'
     scene_name = sys.argv[-1]
     print('Scene:', scene_name)
+    scene_names = SCENE_NAMES if scene_name=='all' else [scene_name, ]
+
+    cell_size = 30
+    print('Using cell-size', cell_size)
 
     # Incomplete folders: 3 corrupted...
-    for folder_name in SCENE_NAMES:
-    # for folder_name in [scene_name, ]:
+    # for folder_name in SCENE_NAMES:
+    for folder_name in [scene_name, ]:
         print(f'Folder: {folder_name}')
 
-        poses, pose_objects = create_poses(base_path, folder_name, return_pose_objects=True)
+        poses, pose_objects = create_poses(base_path, folder_name, cell_size, return_pose_objects=True)
 
         path_objects = osp.join(base_path, 'objects', f'{folder_name}.pkl')
         path_cells = osp.join(base_path, 'cells', f'{folder_name}.pkl')
@@ -192,9 +202,11 @@ if __name__ == '__main__':
         # set_object_colors(objects)
 
         # Create cells
-        cells = create_cells(objects, poses, folder_name)
+        res, cells = create_cells(objects, poses, folder_name, cell_size)
+        assert res is True, "Too many nones, quitting."
+
         pickle.dump(cells, open(path_cells, 'wb'))
-        print(f'Saved cells to {path_cells}')   
+        print(f'Saved {len(cells)} cells to {path_cells}')   
 
         # Debugging 
         idx = np.random.randint(len(cells))

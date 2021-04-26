@@ -40,7 +40,8 @@ def show_objects(objects: List[Object3d], scale=1.0):
         rgb1[offset : offset+len(obj.xyz)] = np.ones((len(obj.xyz), 3))*rand_color
         rgb2[offset : offset+len(obj.xyz)] = obj.rgb * 255
         rgb3[offset : offset+len(obj.xyz)] = np.ones((len(obj.xyz), 3))*np.array(c)
-    return show_pptk(xyz*scale, [rgb1, rgb2, rgb3])
+        offset += len(obj.xyz)
+    return show_pptk(xyz*scale, [rgb1 / 255.0, rgb2 / 255.0, rgb3 / 255.0])
 
 def plot_cell(cell: Cell, scale=1024):
     img = np.zeros((scale, scale, 3), dtype=np.uint8)

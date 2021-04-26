@@ -20,7 +20,7 @@ from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
-from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
+from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error, calc_pose_error2
 
 '''
 TODO:
@@ -105,7 +105,8 @@ def val_epoch(model, dataloader, args):
         epoch_precisions.append(precision)
 
         epoch_pose_mid.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy(), use_mid_pred=True))
-        epoch_pose_mean.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=None))
+        # epoch_pose_mean.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=None))
+        epoch_pose_offsets.append(calc_pose_error2(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy()))        
         epoch_pose_offsets.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy()))        
 
     # return np.mean(epoch_recalls), np.mean(epoch_precisions)
@@ -164,6 +165,9 @@ if __name__ == "__main__":
     DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     print('device:', DEVICE)
     torch.autograd.set_detect_anomaly(True)    
+
+    best_val_recallPrecision = -1 # Measured by mean of recall and precision
+    model_path = f"./checkpoints/matching_{args.dataset}.pth"    
 
     '''
     Start training
@@ -226,6 +230,11 @@ if __name__ == "__main__":
                 ))
         print()
 
+        if np.mean((val_out.recall, val_out.precision)) > best_val_recallPrecision:
+            print('Saving model to', model_path)
+            torch.save(model, model_path)
+            best_val_recallPrecision = np.mean((val_out.recall, val_out.precision)) 
+
     '''
     Save plots
     '''
@@ -234,7 +243,7 @@ if __name__ == "__main__":
     # plot_name = f'TF-match_bs{args.batch_size}_mb{args.max_batches}_dist{args.num_distractors}_e{args.embed_dim}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     # plot_name = f'SG-match_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     # plot_name = f'SG-PosePad_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.num_distractors}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
-    plot_name = f'SG-Off-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    plot_name = f'SG-Off-2-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-loss1': dict_loss,

@@ -33,24 +33,18 @@ def cluster_stuff_object(obj, stuff_min, eps=0.75):
 
     return clustered_objects
 
-printed = False
-# TODO: if instance-objects too slow, add simple center-based thresholding first
-def describe_cell(bbox, scene_objects: List[Object3d], pose, scene_name, inside_fraction=1/3, stuff_min=500, num_mentioned=6):
+# TODO: shifted cells. 1) randomly shift cell around pose, 2) randomly shift, take objects from 2 trheshs for missing hints (even necessary?)
+def describe_cell(bbox, scene_objects: List[Object3d], pose_w, scene_name, inside_fraction=1/3, stuff_min=500, num_mentioned=6):
     """Create the cell using all the objects in the scene.
     Instance-objects are threshed in/outside the scene (all points are retained)
     Stuff-objects' points are threshed inside the cell, clustered and then saved with new IDs
     CARE: object-ids are completely re-set after gathering and can repeat across cells!
 
     Args:
-        bbox: Cell bbox
+        bbox: Cell bbox in world-coordinates
         scene_objects: Objects in scene
-        pose: Pose
+        pose_w: Pose in world-coordinates
     """
-    # Gather and cluster the objects
-    global printed
-    # if not printed:
-    #     print('CARE: not using instance-obj!')
-    #     printed = True
 
     cell_objects = []
     for obj in scene_objects:
@@ -69,7 +63,6 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose, scene_name, inside_
                 continue
             cell_objects.append(obj) # DEBUG: comment out
 
-    # assert len(cell_objects) >= num_mentioned
     if len(cell_objects) < num_mentioned:
         return None
 
@@ -77,12 +70,12 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose, scene_name, inside_
     for id, obj in enumerate(cell_objects):
         obj.id = id + 1
 
-    # Normalize objects, pose and cell based on the largest cell-edge ∈ [0, 1] (instance-objects can reach over edge)
+    # Normalize objects, pose and cell based on the largest cell-edge to be ∈ [0, 1] (instance-objects can reach over edge)
     cell_size = np.max(bbox[3:6] - bbox[0:3])
     for obj in cell_objects:
         obj.xyz = (obj.xyz - bbox[0:3]) / cell_size
-    pose = (pose - bbox[0:3]) / cell_size
-    bbox = (bbox - np.hstack((bbox[0:3], bbox[0:3]))) / cell_size
+    pose = (pose_w - bbox[0:3]) / cell_size
+    # bbox = (bbox - np.hstack((bbox[0:3], bbox[0:3]))) / cell_size
 
     # Describe the post based on the clostest objects
     # Alternatives: describe in each direction, try to get many classes
@@ -93,7 +86,8 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose, scene_name, inside_
     mentioned_objects = [cell_objects[idx] for idx in closest_indices[0:num_mentioned]]
     for obj in mentioned_objects:
         obj2pose = pose - obj.get_closest_point(pose) # e.g. "The pose is south of a car."
-        if np.linalg.norm(obj2pose[0:2]) < 0.5 / cell_size: # Say 'on-top' if the object is very close (e.g. road), only calculated in x-y-plane!
+        # if np.linalg.norm(obj2pose[0:2]) < 0.5 / cell_size: # Say 'on-top' if the object is very close (e.g. road), only calculated in x-y-plane!
+        if np.linalg.norm(obj2pose[0:2]) < 0.015: # Say 'on-top' if the object is very close (e.g. road), only calculated in x-y-plane!
             direction = 'on-top'
         else:
             if abs(obj2pose[0])>=abs(obj2pose[1]) and obj2pose[0]>=0: direction='east'
@@ -101,9 +95,9 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose, scene_name, inside_
             if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]>=0: direction='north'
             if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]<=0: direction='south' 
 
-        descriptions.append(Description(obj.id, direction, obj.label, obj.get_color()))
+        descriptions.append(Description(obj.id, direction, obj.label, obj.get_color_rgb()))
 
-    return Cell(scene_name, cell_objects, descriptions, pose)
+    return Cell(scene_name, cell_objects, descriptions, pose, cell_size, pose_w, bbox)
 
 
 
