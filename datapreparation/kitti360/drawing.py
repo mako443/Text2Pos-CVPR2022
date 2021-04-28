@@ -57,6 +57,6 @@ def plot_cell(cell: Cell, scale=1024):
     # Draw lines
     objects_dict = {obj.id: obj for obj in cell.objects}
     for descr in cell.descriptions:
-        target = np.int0(objects_dict[descr.object_id].get_closest_point(cell.pose)[0:2]*scale)
+        target = np.int0(objects_dict[descr.object_id].closest_point[0:2]*scale)
         cv2.arrowedLine(img, tuple(point), tuple(target), (0,0,255), thickness=2)
     return cv2.flip(img, 0) # Flip for correct north/south

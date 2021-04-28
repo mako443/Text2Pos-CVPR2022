@@ -6,6 +6,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
+from torch_geometric.data import Data, Batch
+
 import time
 import numpy as np
 import os
@@ -14,6 +16,8 @@ from easydict import EasyDict
 
 from models.modules import get_mlp, LanguageEncoder
 from models.superglue import SuperGlue
+from models.pointcloud.pointnet2 import PointNet2
+
 from dataloading.semantic3d.semantic3d import Semantic3dObjectReferenceDataset
 from dataloading.semantic3d.semantic3d import Semantic3dPoseReferenceMockDataset
 
@@ -22,7 +26,7 @@ from datapreparation.kitti360.imports import Object3d as Object3d_K360
 '''
 TODO:
 - are L2-based distances better?
-- CARE: when PN++, has model knowlege of object center?
+- CARE: when PN++, has model knowlege of object center? -> Still add position-MLP (closest / center)
 
 NOTES:
 - BatchNorm yes/no/where? -> Doesn't seem to make much difference
@@ -42,13 +46,18 @@ def get_mlp_offset(dims, add_batchnorm=False):
     return nn.Sequential(*mlp)       
 
 class SuperGlueMatch(torch.nn.Module):
-    def __init__(self, known_classes, known_words, args):
+    def __init__(self, known_classes, known_words, args, pointnet_path):
         super(SuperGlueMatch, self).__init__()
         self.embed_dim = args.embed_dim
         self.num_layers = args.num_layers
         self.sinkhorn_iters = args.sinkhorn_iters
         self.use_features = args.use_features
         self.args = args
+
+        self.pointnet = PointNet2(len(known_classes), args) # The known classes are all the same now, at least for K360
+        self.pointnet.load_state_dict(torch.load(pointnet_path))
+        self.pointnet.lin3 = nn.Identity() # Remove the last layer
+        self.mlp_objects = get_mlp([self.pointnet.lin2.weight.size(0), self.embed_dim, self.embed_dim]) # TODO: other variation?
 
         # Set idx=0 for padding
         self.known_classes = {c: (i+1) for i,c in enumerate(known_classes)}
@@ -78,6 +87,19 @@ class SuperGlueMatch(torch.nn.Module):
         '''
         hint_encodings = torch.stack([self.language_encoder(hint_sample) for hint_sample in hints]) # [B, num_hints, DIM]
         hint_encodings = F.normalize(hint_encodings, dim=-1) #Norming those too
+
+        '''
+        Get PN++ object features
+        '''
+        assert len(objects[0][0].xyz) >= 25
+
+        objects_batches = [] # For each sample in the overall batch, create a PyG-Batch of its objects
+        for objects_sample in objects:
+            objects_batches.append(Batch.from_data_list([Data(x=torch.tensor(np.float32(obj.rgb)), pos=torch.tensor(np.float32(obj.xyz))) for obj in objects_sample]))
+
+        objects_features = [self.pointnet(batch) for batch in objects_batches] # [batch_size, pad_size, PN_size]
+        objects_features = torch.stack(objects_features) # [batch_size, pad_size, PN_size]
+
 
         '''
         Encode the objects, first flattened for correct batch-norms, then re-shape

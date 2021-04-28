@@ -23,6 +23,7 @@ from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
 TODO:
+- Start using PN++ (aux. train for color + class if necessary)
 - Refactoring: train (on-top, classes, center/closest point, color rgb/text, )
 - feature ablation
 - regress offsets: is error more in direction or magnitude? optimize?
@@ -68,12 +69,12 @@ def train_epoch(model, dataloader, args):
         stats.recall.append(recall)
         stats.precision.append(precision)
 
-        stats.pose_mid.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy(), use_mid_pred=True))
-        stats.pose_mean.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=None))
-        stats.pose_offsets.append(calc_pose_error2(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=output.offsets.detach().cpu().numpy()))
+        stats.pose_mid.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=output.offsets.detach().cpu().numpy(), use_mid_pred=True))
+        stats.pose_mean.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=None))
+        stats.pose_offsets.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=output.offsets.detach().cpu().numpy()))
 
-    for k in stats.keys():
-        stats[k] = np.mean(stats[k])
+    for key in stats.keys():
+        stats[key] = np.mean(stats[key])
     return stats
 
 @torch.no_grad()
@@ -99,12 +100,12 @@ def eval_epoch(model, dataloader, args):
         stats.recall.append(recall)
         stats.precision.append(precision)
 
-        stats.pose_mid.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=output.offsets.detach().cpu().numpy(), use_mid_pred=True))
-        stats.pose_mean.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], args, offsets=None))
+        stats.pose_mid.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=output.offsets.detach().cpu().numpy(), use_mid_pred=True))
+        stats.pose_mean.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=None))
         stats.pose_offsets.append(calc_pose_error(batch['objects'], output.matches0.detach().cpu().numpy(), batch['poses'], offsets=output.offsets.detach().cpu().numpy()))        
 
-    for k in stats.keys():
-        stats[k] = np.mean(stats[k])
+    for key in stats.keys():
+        stats[key] = np.mean(stats[key])
     return stats
 
 if __name__ == "__main__":
@@ -126,13 +127,14 @@ if __name__ == "__main__":
         dataset_train = Kitti360PoseReferenceMockDataset(args)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceMockDataset.collate_fn)
 
-        dataset_val = Kitti360PoseReferenceDatasetMulti('./data/kitti360', SCENE_NAMES_K360, args, split=None)
+        print('CARE: Re-set scenes')
+        dataset_val = Kitti360PoseReferenceDatasetMulti('./data/kitti360', ['2013_05_28_drive_0000_sync', ], args, split=None)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceDataset.collate_fn)  
         
-    print(sorted(dataset_train.get_known_classes()))
-    print(sorted(dataset_val.get_known_classes()))
-    print(sorted(dataset_train.get_known_words()))
-    print(sorted(dataset_val.get_known_words()))
+    # print(sorted(dataset_train.get_known_classes()))
+    # print(sorted(dataset_val.get_known_classes()))
+    # print(sorted(dataset_train.get_known_words()))
+    # print(sorted(dataset_val.get_known_words()))
     train_words = dataset_train.get_known_words()
     for w in dataset_val.get_known_words():
         assert w in train_words
@@ -171,7 +173,7 @@ if __name__ == "__main__":
     val_stats_pose_offsets = {lr: [] for lr in learning_rates}
     
     for lr in learning_rates:
-        model = SuperGlueMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args)
+        model = SuperGlueMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args, './checkpoints/pointnet_K360.pth')
         model.to(DEVICE)
 
         criterion_matching = MatchingLoss()
@@ -222,7 +224,7 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'SG-Off-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    plot_name = f'SG-Off-PN-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': train_stats_loss,
         'train-loss_offsets': train_stats_loss_offsets,

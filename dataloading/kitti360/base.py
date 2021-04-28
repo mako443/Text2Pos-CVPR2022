@@ -29,22 +29,20 @@ class Kitti360BaseDataset(Dataset):
             # self.scene_objects = [o for (i,o) in enumerate(self.scene_objects) if indices[i]]      
             self.cells = [c for (i,c) in enumerate(self.cells) if indices[i]]      
 
-        self.hint_descriptions = self.create_hint_descriptions(self.cells) # Gather here for get_known_words()
+        # self.hint_descriptions = Kitti360BaseDataset.create_hint_descriptions(self.cells) # Gather here for get_known_words()
+        self.hint_descriptions = [Kitti360BaseDataset.create_hint_description(cell) for cell in self.cells]
 
     def __getitem__(self, idx):
         raise Exception('Not implemented: abstract class.')
 
-    def create_hint_descriptions(self, cells: List[Cell]):
-        hint_descriptions = []
-        for cell in cells:
-            hints = []
-            cell_objects_dict = {obj.id: obj for obj in cell.objects}
-            for descr in cell.descriptions:
-                obj = cell_objects_dict[descr.object_id]
-                hints.append(f'The pose is {descr.direction} of a {obj.get_color_text()} {obj.label}.')
-            hint_descriptions.append(hints)
-
-        return hint_descriptions
+    # def create_hint_descriptions(self, cells: List[Cell]):
+    def create_hint_description(cell: Cell):        
+        hints = []
+        cell_objects_dict = {obj.id: obj for obj in cell.objects}
+        for descr in cell.descriptions:
+            obj = cell_objects_dict[descr.object_id]
+            hints.append(f'The pose is {descr.direction} of a {obj.get_color_text()} {obj.label}.')
+        return hints
 
     def get_known_classes(self):
         return list(self.class_to_index.keys())

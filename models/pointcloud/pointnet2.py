@@ -57,9 +57,7 @@ class GlobalAbstractionLayer(nn.Module):
 class PointNet2(nn.Module):
     def __init__(self, num_classes, args):
         super(PointNet2, self).__init__()
-        assert args.num_layers == 3 and args.variation == 0
-        # self.num_layers = args.num_layers   
-        # self.variation = args.variation                
+        assert args.pointnet_layers == 3 and args.pointnet_variation == 0
        
         self.sa1 = SetAbstractionLayer(0.5, 0.2, get_mlp([3 + 3, 32, 64]))
         self.sa2 = SetAbstractionLayer(0.5, 0.3, get_mlp([64 + 3, 128, 128]))

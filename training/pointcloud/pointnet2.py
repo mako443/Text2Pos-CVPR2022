@@ -85,11 +85,12 @@ if __name__ == "__main__":
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)    
 
     if args.dataset == 'K360':
+        # TODO: Also split by scene!
         base_path = './data/kitti360'
-        dataset_train = Kitti360ObjectsDatasetMulti(base_path, SCENE_NAMES_K360, split='train', transform=transform)
+        dataset_train = Kitti360ObjectsDatasetMulti(base_path, ['2013_05_28_drive_0000_sync', ], split='train', transform=transform)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle)
         
-        dataset_val = Kitti360ObjectsDatasetMulti(base_path, SCENE_NAMES_K360, split='test')
+        dataset_val = Kitti360ObjectsDatasetMulti(base_path, ['2013_05_28_drive_0000_sync', ], split='test')
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False)
 
     assert sorted(dataset_train.get_known_classes()) == sorted(dataset_val.get_known_classes())
@@ -106,9 +107,16 @@ if __name__ == "__main__":
     dict_acc = {lr: [] for lr in learning_reates}
     dict_acc_val = {lr: [] for lr in learning_reates}
 
+    best_val_accuracy = -1
+    model_path = f"./checkpoints/pointnet_{args.dataset}.pth"    
+
     for lr in learning_reates:
         model = PointNet2(num_classes=len(dataset_train.class_to_index), args=args)
         model.to(device)
+
+        print(f'Saving model to {model_path}')
+        torch.save(model.state_dict(), model_path)
+        quit()
 
         optimizer = optim.Adam(model.parameters(), lr=lr)
         criterion = nn.CrossEntropyLoss()

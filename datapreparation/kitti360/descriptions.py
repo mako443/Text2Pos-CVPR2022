@@ -98,7 +98,3 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose_w, scene_name, insid
         descriptions.append(Description(obj.id, direction, obj.label, obj.get_color_rgb()))
 
     return Cell(scene_name, cell_objects, descriptions, pose, cell_size, pose_w, bbox)
-
-
-
-
