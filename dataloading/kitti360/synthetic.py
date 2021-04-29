@@ -18,6 +18,7 @@ from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
 from dataloading.kitti360.objects import Kitti360ObjectsDatasetMulti
+from dataloading.kitti360.poses import load_cell_data
 
 
 '''
@@ -51,82 +52,51 @@ class Kitti360PoseReferenceMockDatasetPoints(Dataset):
         self.colors = COLORS
         self.color_names = COLOR_NAMES        
 
-    def __getitem__(self, idx):
-        if self.fixed_seed:
-            np.random.seed(idx)
-
+    def create_synthetic_cell(self, idx):
         pose = np.random.rand(3)
         num_distractors = np.random.randint(self.pad_size - self.num_mentioned) if self.pad_size > self.num_mentioned else 0
 
         # Copy over random objects from the real dataset to random positions
         # Note that the objects are already clustered and normed: taken from cells (not scene) in Kitti360ObjectsDataset
         # Closest points are re-set here
-        objects = []
+        cell_objects = []
         for i in range(self.num_mentioned + num_distractors):
             obj_class = np.random.choice([k for k, v in self.objects_dict.items() if len(v) > 0])
             obj = np.random.choice(self.objects_dict[obj_class])
 
             # Shift the object center to a random position ∈ [0, 1] in x-y-plane, z is kept
+            # Note that object might be partly outside the cell, but that is ok when masking + clustering is skipped
             obj.xyz[:, 0:2] -= np.mean(obj.xyz[:, 0:2], axis=0)
             obj.xyz[:, 0:2] += np.random.rand(2)
 
-            # Possibly shift the object so that it is not out-of-bounds
-            for dim in (0, 1):
-                if np.min(obj.xyz[:, dim]) < 0: obj.xyz[:, dim] -= np.min(obj.xyz[:, dim])
-                if np.max(obj.xyz[:, dim]) > 1: obj.xyz[:, dim] -= np.max(obj.xyz[:, dim]) - 1          
-
-            if obj.label != 'stop':            
-                assert np.max(np.abs(obj.xyz)) < 2.1
-
-            objects.append(obj)
+            cell_objects.append(obj)
             # TODO: possibly apply transforms
 
-        # Random shift an object close to the pose for on-top
+        # Randomly shift an object close to the pose for <on-top>
         if np.random.choice((True, False)):
-            idx = np.random.randint(len(objects))
+            idx = np.random.randint(len(cell_objects))
+            obj = cell_objects[idx]
             obj.xyz[:, 0:2] -= np.mean(obj.xyz[:, 0:2], axis=0)
             obj.xyz[:, 0:2] += np.array(pose[0:2] + np.random.randn(2)*0.01).reshape((1,2))
 
         # Create the cell description object
-        cell = describe_cell(np.array([0,0,0,1,1,1]), objects, pose, "Mock-Scene")
+        cell = describe_cell(np.array([0,0,0,1,1,1]), cell_objects, pose, "Mock-Scene", is_synthetic=True)
         assert cell is not None
-        padded_objects = cell.objects # CARE: objects in cell now also padded (all by reference)
+        assert np.allclose(cell.cell_size, 1.0)     
+        return cell   
 
-        # Add padding objects
-        while len(padded_objects) < self.pad_size:
-            xyz = np.zeros((1, 3))
-            label = 'pad'
-            rgb = np.zeros((1, 3))            
-            padded_objects.append(Object3d(xyz, rgb, label, None))
+    def __getitem__(self, idx):
+        """Return the data of a synthetic cell.
+        CARE: Logic is shared with Kitti360PoseReferenceDataset, refactor if used at another place
+        """
+        if self.fixed_seed:
+            np.random.seed(idx)
+        t0 = time.time()
 
-        # Get the cell text
+        cell = self.create_synthetic_cell(idx)
         hints = Kitti360BaseDataset.create_hint_description(cell)
 
-        # Build matches
-        matches = np.array(cell.matches)
-        all_matches = [(i,j) for (i, j) in matches]
-        for obj_idx, _ in enumerate(padded_objects):
-            if obj_idx not in matches[:, 0]: # If the object at this index is not mentioned (distractor / pad) ...
-                all_matches.append((obj_idx, self.num_mentioned)) # ... then match it to the hints-side bin.
-        
-        matches, all_matches = np.array(matches), np.array(all_matches)
-        assert len(matches) == self.num_mentioned, matches
-        assert len(all_matches) == len(padded_objects), f'#dist: {num_distractors}, all_matches: \n {all_matches}'
-        assert np.sum(all_matches[:, 1] == self.num_mentioned) == self.pad_size - self.num_mentioned, f'#dist: {num_distractors}, all_matches: \n {all_matches}'
-
-        return {
-            'objects': padded_objects,
-            'hint_descriptions': hints,
-            'texts': ' '.join(hints),
-            'num_mentioned': self.num_mentioned,
-            'num_distractors': num_distractors,
-            'matches': matches,
-            'all_matches': all_matches,
-            'poses': cell.pose,
-            'offsets': cell.offsets,
-            'cells': cell
-        }
-
+        return load_cell_data(cell, hints, self.pad_size)
 
     def __len__(self):
         return self.length
@@ -153,9 +123,8 @@ if __name__ == '__main__':
     
     args = EasyDict(pad_size=8, num_mentioned=6)
     dataset = Kitti360PoseReferenceMockDatasetPoints(base_path, ['2013_05_28_drive_0000_sync',], args)
+    dataloader = DataLoader(dataset, batch_size=32, collate_fn=Kitti360PoseReferenceMockDatasetPoints.collate_fn)
+
     data = dataset[0]
     print(data['hint_descriptions'])
     cv2.imshow("", plot_cell(data['cells'])); cv2.waitKey()
-
-    words = dataset.get_known_words()
-    print(words)

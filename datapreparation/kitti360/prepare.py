@@ -159,6 +159,8 @@ def create_cells(objects, poses, scene_name, cell_size):
             # print(f'\n None at {i_pose}\n')
             none_indices.append(i_pose)
     # print()
+
+
     
     print(f'Nones: {len(none_indices)} / {len(poses)}')
     if len(none_indices) > len(poses)/3:

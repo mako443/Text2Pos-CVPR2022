@@ -23,6 +23,12 @@ from training.plots import plot_metrics
 from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
+Problems:
+-> train
+
+- objects are not run through PyG-Transform -> do in data-loading (real and mock), "object_points"
+    - including NormalizeScale, as closest/center is encoded separately
+
 TODO:
 - Start using PN++ (aux. train for color + class if necessary)
 - Train PN++ or not?
