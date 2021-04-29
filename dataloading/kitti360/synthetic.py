@@ -38,11 +38,11 @@ class Kitti360PoseReferenceMockDatasetPoints(Dataset):
         self.cell_size = 30 # CARE: Match to K360 prepare
         
         # Create an objects dataset to copy the objects from in synthetic cell creation
+        # CARE: some classes might be empty because of the train/test split
         objects_dataset = Kitti360ObjectsDatasetMulti(base_path, scene_names) # Transform of this dataset is ignored
         self.objects_dict = {c: [] for c in CLASS_TO_INDEX.keys()}
         for obj in objects_dataset.objects:
             self.objects_dict[obj.label].append(obj)
-        # CARE: some classes might be empty because of the train/test split
 
         self.pad_size = args.pad_size
         self.num_mentioned = args.num_mentioned
@@ -65,7 +65,6 @@ class Kitti360PoseReferenceMockDatasetPoints(Dataset):
         for i in range(self.num_mentioned + num_distractors):
             obj_class = np.random.choice([k for k, v in self.objects_dict.items() if len(v) > 0])
             obj = np.random.choice(self.objects_dict[obj_class])
-            assert np.max(np.abs(obj.xyz)) < 2.1
 
             # Shift the object center to a random position ∈ [0, 1] in x-y-plane, z is kept
             obj.xyz[:, 0:2] -= np.mean(obj.xyz[:, 0:2], axis=0)
@@ -75,6 +74,9 @@ class Kitti360PoseReferenceMockDatasetPoints(Dataset):
             for dim in (0, 1):
                 if np.min(obj.xyz[:, dim]) < 0: obj.xyz[:, dim] -= np.min(obj.xyz[:, dim])
                 if np.max(obj.xyz[:, dim]) > 1: obj.xyz[:, dim] -= np.max(obj.xyz[:, dim]) - 1          
+
+            if obj.label != 'stop':            
+                assert np.max(np.abs(obj.xyz)) < 2.1
 
             objects.append(obj)
             # TODO: possibly apply transforms

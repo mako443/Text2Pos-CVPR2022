@@ -93,12 +93,12 @@ class SuperGlueMatch(torch.nn.Module):
         '''
         assert len(objects[0][0].xyz) >= 25
 
-        objects_batches = [] # For each sample in the overall batch, create a PyG-Batch of its objects
-        for objects_sample in objects:
-            objects_batches.append(Batch.from_data_list([Data(x=torch.tensor(np.float32(obj.rgb)), pos=torch.tensor(np.float32(obj.xyz))) for obj in objects_sample]))
+        # objects_batches = [] # For each sample in the overall batch, create a PyG-Batch of its objects
+        # for objects_sample in objects:
+        #     objects_batches.append(Batch.from_data_list([Data(x=torch.tensor(np.float32(obj.rgb)), pos=torch.tensor(np.float32(obj.xyz))) for obj in objects_sample]))
 
-        objects_features = [self.pointnet(batch) for batch in objects_batches] # [batch_size, pad_size, PN_size]
-        objects_features = torch.stack(objects_features) # [batch_size, pad_size, PN_size]
+        # objects_features = [self.pointnet(batch) for batch in objects_batches] # [batch_size, pad_size, PN_size]
+        # objects_features = torch.stack(objects_features) # [batch_size, pad_size, PN_size]
 
 
         '''
@@ -122,6 +122,9 @@ class SuperGlueMatch(torch.nn.Module):
 
         if 'position' in self.use_features:
             positions = [obj.closest_point for objects_sample in objects for obj in objects_sample]
+            print(positions[0])
+            for pos in positions:
+                assert pos is not None, positions
             pos_embedding = self.pos_embedding(torch.tensor(positions, dtype=torch.float, device=self.device))
             embeddings.append(F.normalize(pos_embedding, dim=-1))
 

@@ -77,7 +77,7 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose_w, scene_name, insid
     pose = (pose_w - bbox[0:3]) / cell_size
     # bbox = (bbox - np.hstack((bbox[0:3], bbox[0:3]))) / cell_size
 
-    # Describe the post based on the clostest objects
+    # Describe the pose based on the clostest objects
     # Alternatives: describe in each direction, try to get many classes
     descriptions = []
     matches = []

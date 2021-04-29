@@ -16,7 +16,7 @@ from dataloading.kitti360.poses import Kitti360PoseReferenceDataset, Kitti360Pos
 from dataloading.kitti360.synthetic import Kitti360PoseReferenceMockDatasetPoints
 
 from datapreparation.semantic3d.imports import COLORS as COLORS_S3D, COLOR_NAMES as COLOR_NAMES_S3D
-from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360, SCENE_NAMES as SCENE_NAMES_K360
+from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360, SCENE_NAMES as SCENE_NAMES_K360, SCENE_NAMES_TRAIN as SCENE_NAMES_TRAIN_K360, SCENE_NAMES_TEST as SCENE_NAMES_TEST_K360
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -25,6 +25,8 @@ from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 '''
 TODO:
 - Start using PN++ (aux. train for color + class if necessary)
+- Train PN++ or not?
+
 - Refactoring: train (on-top, classes, center/closest point, color rgb/text, )
 - feature ablation
 - regress offsets: is error more in direction or magnitude? optimize?
@@ -126,17 +128,16 @@ if __name__ == "__main__":
 
     if args.dataset == 'K360':
         # dataset_train = Kitti360PoseReferenceMockDataset(args)
-        dataset_train = Kitti360PoseReferenceMockDatasetPoints('./data/kitti360', ['2013_05_28_drive_0000_sync', ], args, length=512)
+        dataset_train = Kitti360PoseReferenceMockDatasetPoints('./data/kitti360', SCENE_NAMES_K360, args)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceMockDatasetPoints.collate_fn)
 
-        print('CARE: Re-set scenes')
-        dataset_val = Kitti360PoseReferenceDatasetMulti('./data/kitti360', ['2013_05_28_drive_0000_sync', ], args, split=None)
+        dataset_val = Kitti360PoseReferenceDatasetMulti('./data/kitti360', SCENE_NAMES_TEST_K360, args, split=None)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceDataset.collate_fn)  
         
     # print(sorted(dataset_train.get_known_classes()))
     # print(sorted(dataset_val.get_known_classes()))
-    # print(sorted(dataset_train.get_known_words()))
-    # print(sorted(dataset_val.get_known_words()))
+    print(sorted(dataset_train.get_known_words()))
+    print(sorted(dataset_val.get_known_words()))
     train_words = dataset_train.get_known_words()
     for w in dataset_val.get_known_words():
         assert w in train_words
@@ -158,7 +159,7 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_rates = np.logspace(-3.0, -4.0 ,3)[0:1] # Larger than -3 throws error (even with warm-up)
+    learning_rates = np.logspace(-3.0, -4.0 ,3) # Larger than -3 throws error (even with warm-up)
 
     train_stats_loss = {lr: [] for lr in learning_rates}
     train_stats_loss_offsets = {lr: [] for lr in learning_rates}
@@ -226,7 +227,7 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'SG-Off-PN-Prep-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    plot_name = f'SG-Off-PN-Embed-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': train_stats_loss,
         'train-loss_offsets': train_stats_loss_offsets,
