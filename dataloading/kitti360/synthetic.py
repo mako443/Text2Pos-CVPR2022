@@ -6,6 +6,7 @@ import pickle
 import numpy as np
 import cv2
 from easydict import EasyDict
+import time
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -64,7 +65,7 @@ class Kitti360PoseReferenceMockDatasetPoints(Dataset):
         for i in range(self.num_mentioned + num_distractors):
             obj_class = np.random.choice([k for k, v in self.objects_dict.items() if len(v) > 0])
             obj = np.random.choice(self.objects_dict[obj_class])
-            assert np.max(np.abs(obj.xyz)) < 1.5
+            assert np.max(np.abs(obj.xyz)) < 2.1
 
             # Shift the object center to a random position ∈ [0, 1] in x-y-plane, z is kept
             obj.xyz[:, 0:2] -= np.mean(obj.xyz[:, 0:2], axis=0)
@@ -83,43 +84,36 @@ class Kitti360PoseReferenceMockDatasetPoints(Dataset):
             idx = np.random.randint(len(objects))
             obj.xyz[:, 0:2] -= np.mean(obj.xyz[:, 0:2], axis=0)
             obj.xyz[:, 0:2] += np.array(pose[0:2] + np.random.randn(2)*0.01).reshape((1,2))
-            print('Shifted!')
 
         # Create the cell description object
         cell = describe_cell(np.array([0,0,0,1,1,1]), objects, pose, "Mock-Scene")
         assert cell is not None
-        objects = cell.objects
+        padded_objects = cell.objects # CARE: objects in cell now also padded (all by reference)
 
         # Add padding objects
-        while len(objects) < self.pad_size:
+        while len(padded_objects) < self.pad_size:
             xyz = np.zeros((1, 3))
             label = 'pad'
             rgb = np.zeros((1, 3))            
-            objects.append(Object3d(xyz, rgb, label, None))
+            padded_objects.append(Object3d(xyz, rgb, label, None))
 
         # Get the cell text
         hints = Kitti360BaseDataset.create_hint_description(cell)
 
         # Build matches
-        matches = []
-        object_ids = [obj.id for obj in objects]
-        mentioned_object_ids = [descr.object_id for descr in cell.descriptions]
-
-        for hint_idx, descr in enumerate(cell.descriptions):
-            obj_idx = object_ids.index(descr.object_id)
-            matches.append((obj_idx, hint_idx))
-
-        all_matches = matches.copy()
-        for obj_idx, obj in enumerate(objects):
-            if obj.id not in mentioned_object_ids: # If the object is not mentioned
-                all_matches.append((obj_idx, self.num_mentioned)) # Then assign it to the hints-side bin
+        matches = np.array(cell.matches)
+        all_matches = [(i,j) for (i, j) in matches]
+        for obj_idx, _ in enumerate(padded_objects):
+            if obj_idx not in matches[:, 0]: # If the object at this index is not mentioned (distractor / pad) ...
+                all_matches.append((obj_idx, self.num_mentioned)) # ... then match it to the hints-side bin.
         
         matches, all_matches = np.array(matches), np.array(all_matches)
         assert len(matches) == self.num_mentioned, matches
-        assert np.sum(all_matches[:, 1] == self.num_mentioned) == self.pad_size - self.num_mentioned, all_matches
+        assert len(all_matches) == len(padded_objects), f'#dist: {num_distractors}, all_matches: \n {all_matches}'
+        assert np.sum(all_matches[:, 1] == self.num_mentioned) == self.pad_size - self.num_mentioned, f'#dist: {num_distractors}, all_matches: \n {all_matches}'
 
         return {
-            'objects': objects,
+            'objects': padded_objects,
             'hint_descriptions': hints,
             'texts': ' '.join(hints),
             'num_mentioned': self.num_mentioned,
@@ -156,7 +150,10 @@ if __name__ == '__main__':
     base_path = './data/kitti360'
     
     args = EasyDict(pad_size=8, num_mentioned=6)
-    dataset = Kitti360PoseReferenceMockDatasetPoints(base_path, ['2013_05_28_drive_0000_sync',], args)    
+    dataset = Kitti360PoseReferenceMockDatasetPoints(base_path, ['2013_05_28_drive_0000_sync',], args)
     data = dataset[0]
     print(data['hint_descriptions'])
     cv2.imshow("", plot_cell(data['cells'])); cv2.waitKey()
+
+    words = dataset.get_known_words()
+    print(words)

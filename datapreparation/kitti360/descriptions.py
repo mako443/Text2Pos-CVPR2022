@@ -80,12 +80,17 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose_w, scene_name, insid
     # Describe the post based on the clostest objects
     # Alternatives: describe in each direction, try to get many classes
     descriptions = []
+    matches = []
     distances = np.linalg.norm([obj.get_closest_point(pose) - pose for obj in cell_objects], axis=1)
     closest_indices = np.argsort(distances)
 
-    mentioned_objects = [cell_objects[idx] for idx in closest_indices[0:num_mentioned]]
+    # mentioned_objects = [cell_objects[idx] for idx in closest_indices[0:num_mentioned]]
+    mentioned_indices = [idx for idx in closest_indices[0 : num_mentioned]]
     offsets = []
-    for obj in mentioned_objects:
+    # for obj in mentioned_objects:
+    for hint_idx, obj_idx in enumerate(mentioned_indices):
+        obj = cell_objects[obj_idx]
+
         obj2pose = pose - obj.closest_point # e.g. "The pose is south of a car."
         # if np.linalg.norm(obj2pose[0:2]) < 0.5 / cell_size: # Say 'on-top' if the object is very close (e.g. road), only calculated in x-y-plane!
         if np.linalg.norm(obj2pose[0:2]) < 0.015: # Say 'on-top' if the object is very close (e.g. road), only calculated in x-y-plane!
@@ -98,5 +103,6 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose_w, scene_name, insid
 
         descriptions.append(Description(obj.id, direction, obj.label, obj.get_color_rgb()))
         offsets.append(obj2pose[0:2])
+        matches.append((obj_idx, hint_idx))
 
-    return Cell(scene_name, cell_objects, descriptions, pose, np.array(offsets), cell_size, pose_w, bbox)
+    return Cell(scene_name, cell_objects, descriptions, pose, np.array(matches), np.array(offsets), cell_size, pose_w, bbox)

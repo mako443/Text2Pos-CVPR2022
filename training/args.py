@@ -9,7 +9,7 @@ def parse_arguments():
     parser.add_argument('--num_distractors', default='all')
     parser.add_argument('--max_batches', type=int, default=None)
     parser.add_argument('--embed_dim', type=int, default=300)
-    parser.add_argument('--num_layers', type=int, default=8)
+    parser.add_argument('--num_layers', type=int, default=6)
     parser.add_argument('--use_features', nargs='+', default=['class', 'color', 'position'])
     parser.add_argument('--shuffle', action='store_true')
     parser.add_argument('--variation', type=int, default=0)
