@@ -135,15 +135,7 @@ class Kitti360PoseReferenceMockDataset(Dataset):
                 known_words.extend(hint.replace('.','').replace(',','').lower().split())
         return list(np.unique(known_words))  
 
-class Kitti360PoseReferenceDataset(Kitti360BaseDataset):
-    def __init__(self, base_path, scene_name, args, split=None):
-        super().__init__(base_path, scene_name, split)
-        self.pad_size = args.pad_size
-
-    def __getitem__(self, idx):
-        cell = self.cells[idx]
-        hints = self.hint_descriptions[idx]
-        
+def load_cell_data(cell, hints, pad_size):
         descriptions = cell.descriptions
         cell_objects_dict = {obj.id: obj for obj in cell.objects}
         mentioned_ids = [descr.object_id for descr in descriptions]
@@ -163,10 +155,10 @@ class Kitti360PoseReferenceDataset(Kitti360BaseDataset):
                 objects.append(obj)
 
         # Pad or cut-off distractors (CARE: the latter would use ground-truth data!)
-        if len(objects) > self.pad_size:
-            objects = objects[0 : self.pad_size]
+        if len(objects) > pad_size:
+            objects = objects[0 : pad_size]
 
-        while len(objects) < self.pad_size:
+        while len(objects) < pad_size:
             obj = Object3d(np.zeros((1,3)), np.zeros((1,3)), 'pad', -1)
             _ = obj.get_closest_point(cell.pose) # run to set the point
             objects.append(obj)
@@ -187,8 +179,20 @@ class Kitti360PoseReferenceDataset(Kitti360BaseDataset):
             'matches': matches,
             'all_matches': all_matches,
             'poses': cell.pose,
-            'offsets': np.array(offsets)
-        }
+            'offsets': np.array(offsets),
+            'cells': cell
+        }            
+
+class Kitti360PoseReferenceDataset(Kitti360BaseDataset):
+    def __init__(self, base_path, scene_name, args, split=None):
+        super().__init__(base_path, scene_name, split)
+        self.pad_size = args.pad_size
+
+    def __getitem__(self, idx):
+        cell = self.cells[idx]
+        hints = self.hint_descriptions[idx]
+        
+        return load_cell_data(cell, hints, self.pad_size)
 
     def __len__(self):
         return len(self.cells)
