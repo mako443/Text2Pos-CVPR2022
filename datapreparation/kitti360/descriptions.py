@@ -84,8 +84,9 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose_w, scene_name, insid
     closest_indices = np.argsort(distances)
 
     mentioned_objects = [cell_objects[idx] for idx in closest_indices[0:num_mentioned]]
+    offsets = []
     for obj in mentioned_objects:
-        obj2pose = pose - obj.get_closest_point(pose) # e.g. "The pose is south of a car."
+        obj2pose = pose - obj.closest_point # e.g. "The pose is south of a car."
         # if np.linalg.norm(obj2pose[0:2]) < 0.5 / cell_size: # Say 'on-top' if the object is very close (e.g. road), only calculated in x-y-plane!
         if np.linalg.norm(obj2pose[0:2]) < 0.015: # Say 'on-top' if the object is very close (e.g. road), only calculated in x-y-plane!
             direction = 'on-top'
@@ -96,5 +97,6 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose_w, scene_name, insid
             if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]<=0: direction='south' 
 
         descriptions.append(Description(obj.id, direction, obj.label, obj.get_color_rgb()))
+        offsets.append(obj2pose[0:2])
 
-    return Cell(scene_name, cell_objects, descriptions, pose, cell_size, pose_w, bbox)
+    return Cell(scene_name, cell_objects, descriptions, pose, np.array(offsets), cell_size, pose_w, bbox)

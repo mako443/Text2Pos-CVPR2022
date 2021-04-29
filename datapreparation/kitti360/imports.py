@@ -68,7 +68,7 @@ class Description:
         return f'Pose is {self.direction} of a {self.object_color} {self.object_label}'
 
 class Cell:
-    def __init__(self, scene_name, objects: List[Object3d], descriptions: List[Description], pose, cell_size, pose_w, bbox_w):
+    def __init__(self, scene_name, objects: List[Object3d], descriptions: List[Description], pose, offsets, cell_size, pose_w, bbox_w):
         """
         Args:
             IDs should be unique across entire dataset
@@ -81,6 +81,7 @@ class Cell:
         self.objects = objects
         self.descriptions = descriptions
         self.pose = pose    
+        self.offsets = offsets
         
         self.cell_size = cell_size # Original cell-size (longest edge)
         self.pose_w = pose_w # Original pose in world-coordinates

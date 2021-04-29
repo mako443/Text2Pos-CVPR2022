@@ -47,6 +47,8 @@ def plot_cell(cell: Cell, scale=1024):
     img = np.zeros((scale, scale, 3), dtype=np.uint8)
     # Draw points of each object
     for obj in cell.objects:
+        if obj.label == 'pad':
+            continue
         c = CLASS_TO_COLOR[obj.label]
         for point in obj.xyz*scale:
             point = np.int0(point[0:2])

@@ -58,8 +58,8 @@ class Kitti360PoseReferenceMockDatasetPoints(Dataset):
         num_distractors = np.random.randint(self.pad_size - self.num_mentioned) if self.pad_size > self.num_mentioned else 0
 
         # Copy over random objects from the real dataset to random positions
-        # Note that the objects are already clustered and normed: taken from cells, not scene in Kitti360ObjectsDataset
-        # Closest points are re-set
+        # Note that the objects are already clustered and normed: taken from cells (not scene) in Kitti360ObjectsDataset
+        # Closest points are re-set here
         objects = []
         for i in range(self.num_mentioned + num_distractors):
             obj_class = np.random.choice([k for k, v in self.objects_dict.items() if len(v) > 0])
@@ -69,6 +69,12 @@ class Kitti360PoseReferenceMockDatasetPoints(Dataset):
             # Shift the object center to a random position ∈ [0, 1] in x-y-plane, z is kept
             obj.xyz[:, 0:2] -= np.mean(obj.xyz[:, 0:2], axis=0)
             obj.xyz[:, 0:2] += np.random.rand(2)
+
+            # Possibly shift the object so that it is not out-of-bounds
+            for dim in (0, 1):
+                if np.min(obj.xyz[:, dim]) < 0: obj.xyz[:, dim] -= np.min(obj.xyz[:, dim])
+                if np.max(obj.xyz[:, dim]) > 1: obj.xyz[:, dim] -= np.max(obj.xyz[:, dim]) - 1          
+
             objects.append(obj)
             # TODO: possibly apply transforms
 
@@ -82,6 +88,7 @@ class Kitti360PoseReferenceMockDatasetPoints(Dataset):
         # Create the cell description object
         cell = describe_cell(np.array([0,0,0,1,1,1]), objects, pose, "Mock-Scene")
         assert cell is not None
+        objects = cell.objects
 
         # Add padding objects
         while len(objects) < self.pad_size:
@@ -91,10 +98,39 @@ class Kitti360PoseReferenceMockDatasetPoints(Dataset):
             objects.append(Object3d(xyz, rgb, label, None))
 
         # Get the cell text
-        text = Kitti360BaseDataset.create_hint_description(cell)
+        hints = Kitti360BaseDataset.create_hint_description(cell)
 
         # Build matches
-        return cell, text
+        matches = []
+        object_ids = [obj.id for obj in objects]
+        mentioned_object_ids = [descr.object_id for descr in cell.descriptions]
+
+        for hint_idx, descr in enumerate(cell.descriptions):
+            obj_idx = object_ids.index(descr.object_id)
+            matches.append((obj_idx, hint_idx))
+
+        all_matches = matches.copy()
+        for obj_idx, obj in enumerate(objects):
+            if obj.id not in mentioned_object_ids: # If the object is not mentioned
+                all_matches.append((obj_idx, self.num_mentioned)) # Then assign it to the hints-side bin
+        
+        matches, all_matches = np.array(matches), np.array(all_matches)
+        assert len(matches) == self.num_mentioned, matches
+        assert np.sum(all_matches[:, 1] == self.num_mentioned) == self.pad_size - self.num_mentioned, all_matches
+
+        return {
+            'objects': objects,
+            'hint_descriptions': hints,
+            'texts': ' '.join(hints),
+            'num_mentioned': self.num_mentioned,
+            'num_distractors': num_distractors,
+            'matches': matches,
+            'all_matches': all_matches,
+            'poses': cell.pose,
+            'offsets': cell.offsets,
+            'cells': cell
+        }
+
 
     def __len__(self):
         return self.length
@@ -121,6 +157,6 @@ if __name__ == '__main__':
     
     args = EasyDict(pad_size=8, num_mentioned=6)
     dataset = Kitti360PoseReferenceMockDatasetPoints(base_path, ['2013_05_28_drive_0000_sync',], args)    
-    cell, hints = dataset[0]
-    print(hints)
-    cv2.imshow("", plot_cell(cell)); cv2.waitKey()
+    data = dataset[0]
+    print(data['hint_descriptions'])
+    cv2.imshow("", plot_cell(data['cells'])); cv2.waitKey()
