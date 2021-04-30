@@ -122,9 +122,6 @@ class SuperGlueMatch(torch.nn.Module):
 
         if 'position' in self.use_features:
             positions = [obj.closest_point for objects_sample in objects for obj in objects_sample]
-            print(positions[0])
-            for pos in positions:
-                assert pos is not None, positions
             pos_embedding = self.pos_embedding(torch.tensor(positions, dtype=torch.float, device=self.device))
             embeddings.append(F.normalize(pos_embedding, dim=-1))
 
