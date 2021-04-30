@@ -43,16 +43,18 @@ def show_objects(objects: List[Object3d], scale=1.0):
         offset += len(obj.xyz)
     return show_pptk(xyz*scale, [rgb1 / 255.0, rgb2 / 255.0, rgb3 / 255.0])
 
-def plot_cell(cell: Cell, scale=1024):
+def plot_cell(cell: Cell, scale=1024, use_rbg=False):
     img = np.zeros((scale, scale, 3), dtype=np.uint8)
     # Draw points of each object
     for obj in cell.objects:
         if obj.label == 'pad':
             continue
         c = CLASS_TO_COLOR[obj.label]
-        for point in obj.xyz*scale:
+        for i_point, point in enumerate(obj.xyz*scale):
+            if use_rbg:
+                c = tuple(np.uint8(obj.rgb[i_point] * 255))
             point = np.int0(point[0:2])
-            cv2.circle(img, tuple(point), 1, (c[2],c[1],c[0]))
+            cv2.circle(img, tuple(point), 1, (int(c[2]),int(c[1]),int(c[0])))
     # Draw pose
     point = np.int0(cell.pose[0:2]*scale)
     cv2.circle(img, tuple(point), 10, (0,0,255), thickness=3)

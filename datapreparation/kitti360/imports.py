@@ -56,6 +56,12 @@ class Object3d:
             obj1.id
         )
 
+    @classmethod
+    def create_padding(cls):
+        obj = Object3d(np.random.rand(8,3) * 0.001, np.zeros((8,3)), 'pad', -1) # Creating too few points or zero positios throws nans in PyG
+        obj.get_closest_point([-1, -1, -1])
+        return obj
+
 class Description:
     def __init__(self, object_id, direction, object_label, object_color):
         self.object_id = object_id

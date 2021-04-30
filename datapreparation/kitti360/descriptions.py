@@ -17,7 +17,6 @@ def get_mask(points, cell_bbox):
     return mask 
 
 def cluster_stuff_object(obj, stuff_min, eps=0.75):
-    print('DBSCAN')
     """ Perform DBSCAN cluster, thresh objects by points again
     """
     # cluster = DBSCAN(eps=1.5, min_samples=300, leaf_size=30, n_jobs=-1).fit(obj.xyz)
