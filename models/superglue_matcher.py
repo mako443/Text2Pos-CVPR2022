@@ -193,15 +193,17 @@ if __name__ == "__main__":
     args.num_mentioned = 4
     args.pad_size = 8
     args.use_features = ['class', 'color', 'position']
+    args.pointnet_layers = 3
+    args.pointnet_variation = 0
 
-    dataset_train = Semantic3dPoseReferanceMockDataset(args, length=1024)
-    dataloader_train = DataLoader(dataset_train, batch_size=2, collate_fn=Semantic3dPoseReferanceMockDataset.collate_fn)    
-    data = dataset_train[0]
-    batch = next(iter(dataloader_train))
+    # dataset_train = Semantic3dPoseReferanceMockDataset(args, length=1024)
+    # dataloader_train = DataLoader(dataset_train, batch_size=2, collate_fn=Semantic3dPoseReferanceMockDataset.collate_fn)    
+    # data = dataset_train[0]
+    # batch = next(iter(dataloader_train))
 
-    model = SuperGlueMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args)   
+    model = SuperGlueMatch(['class1', 'class2'], ['word1', 'word2'], args, './checkpoints/pointnet_K360.pth')
 
-    out = model(batch['objects'], batch['hint_descriptions'])
+    # out = model(batch['objects'], batch['hint_descriptions'])
 
     print('Done')
 

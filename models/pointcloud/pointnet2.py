@@ -97,18 +97,17 @@ class PointNet2(nn.Module):
         return next(self.lin1.parameters()).device
 
 if __name__ == "__main__":
-    transform = T.Compose([T.NormalizeScale(), T.FixedPoints(5)])
+    transform = T.Compose([T.NormalizeScale(), T.RandomRotate(180, axis=2)])
     pos = torch.rand(10, 3)
     print(pos)
     print(transform(EasyDict(pos=pos, num_nodes=10)).pos)
 
     quit()
 
-
     x = torch.rand(10, 3)
     pos = torch.rand(10, 3)
     batch = torch.zeros(10, dtype=torch.long)
 
-    model = PointNet2(10)
+    model = PointNet2(10, EasyDict(pointnet_layers=3, pointnet_variation=0))
 
     out = model(EasyDict(x=x, pos=pos, batch=batch))

@@ -12,6 +12,8 @@ import pickle
 from easydict import EasyDict
 
 from models.modules import get_mlp, LanguageEncoder
+from models.pointcloud.pointnet2 import PointNet2
+
 from dataloading.semantic3d.semantic3d import Semantic3dCellRetrievalDataset
 from dataloading.semantic3d.semantic3d_poses import Semantic3dPosesDataset
 
@@ -55,6 +57,17 @@ class CellRetrievalNetwork(torch.nn.Module):
             self.lin_combine = get_mlp([2*embed_dim, embed_dim])
             self.lin = get_mlp([embed_dim, embed_dim, embed_dim])
 
+        # PointNet++
+        print('CARE: Not loading PN state')
+        self.pointnet = PointNet2(len(known_classes), args) # The known classes are all the same now, at least for K360
+        # self.pointnet.load_state_dict(torch.load(pointnet_path))
+        self.pointnet.lin3 = nn.Identity() # Remove the last layer
+
+        self.mlp_object_merge = get_mlp([self.pointnet.lin2.weight.size(0) + self.embed_dim,
+                                         max(self.pointnet.lin2.weight.size(0), self.embed_dim),
+                                         self.embed_dim]) # TODO: other variation?        
+
+
         '''
         Textual path
         '''
@@ -72,11 +85,27 @@ class CellRetrievalNetwork(torch.nn.Module):
 
         return description_encodings
 
-    def encode_objects(self, objects):
+    def encode_objects(self, objects, object_points):
         '''
-        Process the objects in a flattened way to allow for the processing of batches with uneven samples
+        Process the objects in a flattened way to allow for the processing of batches with uneven sample counts
         '''
         batch_size = len(objects)
+
+        # PN++
+        object_features = [self.pointnet(pyg_batch.to(self.get_device())) for pyg_batch in object_points] # [B, obj_counts, PN_dim]
+        object_features = torch.cat(object_features, dim=0) # [total_objects, PN_dim]
+        object_features = F.normalize(object_features, dim=-1) # [total_objects, PN_dim]
+
+        positions = [obj.closest_point for objects_sample in objects for obj in objects_sample]
+        pos_embedding = self.pos_embedding(torch.tensor(positions, dtype=torch.float, device=self.get_device()))
+        pos_embedding = F.normalize(pos_embedding, dim=-1) # [total_objects, DIM]
+
+        # Merge and norm
+        object_encodings = self.mlp_object_merge(torch.cat((object_features, pos_embedding), dim=-1)) # [total_objects, DIM]
+        object_encodings = F.normalize(object_encodings, dim=-1) # [total_objects, DIM]
+        # PN++   
+
+        # TODO: build batch       
 
         class_indices = []
         batch = [] #Batch tensor to send into PyG
@@ -136,6 +165,9 @@ class CellRetrievalNetwork(torch.nn.Module):
     @property
     def device(self):
         return next(self.pos_embedding.parameters()).device   
+
+    def get_device(self):
+        return next(self.pos_embedding.parameters()).device           
 
 if __name__ == "__main__":
     model = CellRetrievalNetwork(['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars'], 'a b c d e'.split(), embed_dim=32, k=2)      

@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
+import torch_geometric.transforms as T 
+
 import time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -26,14 +28,14 @@ from training.utils import plot_retrievals
 
 '''
 TODO:
-- Look at val-fails -> 
+- Use PN: Add encoder but re-train w/ embedding, use fully
 - Augmentation possible? -> hint-shuffle helped, 
-- scene-wise split
 
 - max-dist for descriptions?
 - remove "identical negative" (currently does not occur in Kitti)
 
 NOTES:
+- Look at val-fails -> Not much to see
 - More Kitti-Cells helped ✓
 - Mock: train-acc high if same data every epoch, model still does not generalize. Mock valid??
 - failures in specific scenes? -> No, not at this point
@@ -58,7 +60,7 @@ def train_epoch(model, dataloader, args):
         optimizer.zero_grad()
         anchor = model.encode_text(batch['texts']) 
         # cell_objects = [cell.objects for cell in batch['cells']]
-        positive = model.encode_objects(batch['objects'])
+        positive = model.encode_objects(batch['objects'], batch['object_points'])
 
         if args.ranking_loss == 'triplet':
             negative_cell_objects = [cell.objects for cell in batch['negative_cells']]
@@ -103,7 +105,7 @@ def eval_epoch(model, dataloader, args):
     index_offset = 0
     for batch in dataloader:
         # cell_objects = [cell.objects for cell in batch['cells']]
-        cell_enc = model.encode_objects(batch['objects'])
+        cell_enc = model.encode_objects(batch['objects'], batch['object_points'])
         text_enc = model.encode_text(batch['texts'])
 
         batch_size = len(cell_enc)
@@ -151,11 +153,12 @@ if __name__ == "__main__":
         print("\t\t Stats: ", args.cell_size, args.cell_stride, dataset_train.gather_stats())
 
     if args.dataset == 'K360':
-        # scene_name = args.scene_names[0]
-        dataset_train = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_TRAIN_K360, split=None, shuffle_hints=True)
-        # dataset_train = Kitti360PoseReferenceMockDataset(args, length=1024, fixed_seed=True) # OPTION: fixed_seed or not for same data at every index
+        train_transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale()])
+        dataset_train = Kitti360CellDatasetMulti('./data/kitti360', ['2013_05_28_drive_0000_sync', ], train_transform, split=None, shuffle_hints=True)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=args.shuffle)
-        dataset_val = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_TEST_K360, split=None)
+
+        val_transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale()])
+        dataset_val = Kitti360CellDatasetMulti('./data/kitti360', ['2013_05_28_drive_0000_sync', ], val_transform, split=None)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=False)    
 
     # train_words = dataset_train.get_known_words()

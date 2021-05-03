@@ -13,6 +13,7 @@ from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS
 from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
+from dataloading.kitti360.poses import batch_object_points
 
 '''
 Augmentations:
@@ -21,9 +22,10 @@ Augmentations:
 - 
 '''
 class Kitti360CellDataset(Kitti360BaseDataset):
-    def __init__(self, base_path, scene_name, split=None, shuffle_hints=False):
+    def __init__(self, base_path, scene_name, transform, split=None, shuffle_hints=False):
         super().__init__(base_path, scene_name, split)
         self.shuffle_hints = shuffle_hints
+        self.transform = transform
 
     def __getitem__(self, idx):
         cell = self.cells[idx]
@@ -33,9 +35,13 @@ class Kitti360CellDataset(Kitti360BaseDataset):
             hints = np.random.choice(hints, size=len(hints), replace=False)
 
         text = ' '.join(hints)
+
+        object_points = batch_object_points(cell.objects, self.transform)
+
         return {
             'cells': cell,
             'objects': cell.objects,
+            'object_points': object_points,
             'texts': text,
             # 'cell_indices': idx,
             'scene_names': self.scene_name
@@ -45,10 +51,11 @@ class Kitti360CellDataset(Kitti360BaseDataset):
         return len(self.cells)
 
 class Kitti360CellDatasetMulti(Dataset):
-    def __init__(self, base_path, scene_names, split=None, shuffle_hints=False):
+    def __init__(self, base_path, scene_names, transform, split=None, shuffle_hints=False):
         self.scene_names = scene_names
+        self.transform = transform
         self.split = split
-        self.datasets = [Kitti360CellDataset(base_path, scene_name, split, shuffle_hints) for scene_name in scene_names]
+        self.datasets = [Kitti360CellDataset(base_path, scene_name, transform, split, shuffle_hints) for scene_name in scene_names]
         self.cells = [cell for dataset in self.datasets for cell in dataset.cells] # Gathering cells for retrieval plotting
 
         print(str(self))

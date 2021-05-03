@@ -141,12 +141,12 @@ class Kitti360PoseReferenceMockDataset(Dataset):
 
 def batch_object_points(objects: List[Object3d], transform):
     """Generates a PyG-Batch for the objects of a single cell.
-    Note: Aggregating an entire cell-batch into a single PyG-Batch would exceed the limit of 256 sub-graphs.
+    Note: Aggregating an entire batch of cells into a single PyG-Batch would exceed the limit of 256 sub-graphs.
     Note: The objects can be transformed / augmented freely, as their center-points are encoded separately.
 
     Args:
         objects (List[Object3d]): Cell objects
-        transform ([type]): PyG-Transform
+        transform: PyG-Transform
     """
     # CARE: Transforms not working with batches?! Doing it object-by-object here!
     data_list = [Data(x=torch.tensor(obj.rgb, dtype=torch.float), pos=torch.tensor(obj.xyz, dtype=torch.float)) for obj in objects]
