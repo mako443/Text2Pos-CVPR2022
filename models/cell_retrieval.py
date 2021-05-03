@@ -29,6 +29,8 @@ class CellRetrievalNetwork(torch.nn.Module):
         self.variation = args.variation
         embed_dim = self.embed_dim
 
+        assert args.variation == 0
+
         '''
         Object path
         '''
@@ -58,9 +60,9 @@ class CellRetrievalNetwork(torch.nn.Module):
             self.lin = get_mlp([embed_dim, embed_dim, embed_dim])
 
         # PointNet++
-        print('CARE: Not loading PN state')
+        # print('CARE: Not loading PN state')
         self.pointnet = PointNet2(len(known_classes), args) # The known classes are all the same now, at least for K360
-        # self.pointnet.load_state_dict(torch.load(pointnet_path))
+        self.pointnet.load_state_dict(torch.load(args.pointnet_path))
         self.pointnet.lin3 = nn.Identity() # Remove the last layer
 
         self.mlp_object_merge = get_mlp([self.pointnet.lin2.weight.size(0) + self.embed_dim,
@@ -91,22 +93,31 @@ class CellRetrievalNetwork(torch.nn.Module):
         '''
         batch_size = len(objects)
 
-        # PN++
-        object_features = [self.pointnet(pyg_batch.to(self.get_device())) for pyg_batch in object_points] # [B, obj_counts, PN_dim]
-        object_features = torch.cat(object_features, dim=0) # [total_objects, PN_dim]
-        object_features = F.normalize(object_features, dim=-1) # [total_objects, PN_dim]
+        ### PN++ version
+        # object_features = [self.pointnet(pyg_batch.to(self.get_device())) for pyg_batch in object_points] # [B, obj_counts, PN_dim]
+        # object_features = torch.cat(object_features, dim=0) # [total_objects, PN_dim]
+        # object_features = F.normalize(object_features, dim=-1) # [total_objects, PN_dim]
 
-        positions = [obj.closest_point for objects_sample in objects for obj in objects_sample]
-        pos_embedding = self.pos_embedding(torch.tensor(positions, dtype=torch.float, device=self.get_device()))
-        pos_embedding = F.normalize(pos_embedding, dim=-1) # [total_objects, DIM]
+        # positions = [obj.closest_point for objects_sample in objects for obj in objects_sample]
+        # pos_embedding = self.pos_embedding(torch.tensor(positions, dtype=torch.float, device=self.get_device()))
+        # pos_embedding = F.normalize(pos_embedding, dim=-1) # [total_objects, DIM]
 
-        # Merge and norm
-        object_encodings = self.mlp_object_merge(torch.cat((object_features, pos_embedding), dim=-1)) # [total_objects, DIM]
-        object_encodings = F.normalize(object_encodings, dim=-1) # [total_objects, DIM]
+        # # Merge and norm
+        # object_encodings = self.mlp_object_merge(torch.cat((object_features, pos_embedding), dim=-1)) # [total_objects, DIM]
+        # object_encodings = F.normalize(object_encodings, dim=-1) # [total_objects, DIM]
+
+        # # Build batch: assign all objects of a sample to a combined batch-idx
+        # batch = []
+        # for i_sample in range(batch_size):
+        #     for i_obj in range(len(objects[i_sample])):
+        #         batch.append(i_sample)
+        # assert len(batch) == len(object_encodings)
+        # batch = torch.tensor(batch, dtype=torch.long, device=self.device)
+
+        # embeddings = object_encodings
         # PN++   
 
-        # TODO: build batch       
-
+        ### Embedding version
         class_indices = []
         batch = [] #Batch tensor to send into PyG
         for i_batch, objects_sample in enumerate(objects):
@@ -138,7 +149,6 @@ class CellRetrievalNetwork(torch.nn.Module):
             embeddings = self.mlp_merge(torch.cat(embeddings, dim=-1))
         else:
             embeddings = embeddings[0]
-        # embeddings = torch.sum(torch.stack(embeddings), dim=0)
 
         if self.variation == 0:
             x = self.graph1(embeddings, batch)

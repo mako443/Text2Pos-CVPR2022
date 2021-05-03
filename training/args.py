@@ -1,5 +1,6 @@
 import argparse
 from argparse import ArgumentParser
+import os.path as osp
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='PoseRefer models and ablations')
@@ -30,6 +31,9 @@ def parse_arguments():
     # PointNet
     parser.add_argument('--pointnet_layers', type=int, default=3)
     parser.add_argument('--pointnet_variation', type=int, default=0)
+    parser.add_argument('--pointnet_numpoints', type=int, default=512)
+    parser.add_argument('--pointnet_transform', type=int, default=0)
+    parser.add_argument('--pointnet_path', type=str, default='./checkpoints/pointnet_K360.pth')
 
     # Others
     parser.add_argument('--epochs', type=int, default=16)
@@ -58,6 +62,9 @@ def parse_arguments():
     assert args.ranking_loss in ('triplet', 'pairwise', 'hardest')
     for feat in args.use_features:
         assert feat in ['class', 'color', 'position'], "Unexpected feature"
+
+    if args.pointnet_path:
+        assert osp.isfile(args.pointnet_path)
 
     return args
 

@@ -28,7 +28,11 @@ from training.utils import plot_retrievals
 
 '''
 TODO:
-- Use PN: Add encoder but re-train w/ embedding, use fully
+- Use PN: Add encoder but re-train w/ embedding ✓ 0.8 acc VERIFIED W/ ALL SCENES?
+- Use PN fully -> performance bad
+- Use aux. train
+- mlp_merge variations?
+- Learning rates?
 - Augmentation possible? -> hint-shuffle helped, 
 
 - max-dist for descriptions?
@@ -138,9 +142,8 @@ if __name__ == "__main__":
     
     '''
     Create data loaders
-    '''    
+    '''
     if args.dataset == 'S3D':
-        scene_names = args.scene_names #['sg27_station2_intensity_rgb', 'sg27_station4_intensity_rgb', 'sg27_station5_intensity_rgb'] #'sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb']
         dataset_train = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.cell_size, args.cell_stride, split='train')
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=args.shuffle)
         dataset_val = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.cell_size, args.cell_stride, split='test')
@@ -153,12 +156,17 @@ if __name__ == "__main__":
         print("\t\t Stats: ", args.cell_size, args.cell_stride, dataset_train.gather_stats())
 
     if args.dataset == 'K360':
-        train_transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale()])
-        dataset_train = Kitti360CellDatasetMulti('./data/kitti360', ['2013_05_28_drive_0000_sync', ], train_transform, split=None, shuffle_hints=True)
+        if args.pointnet_transform == 0:
+            train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
+        if args.pointnet_transform == 1:
+            train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(180, axis=2), T.NormalizeScale()])
+        if args.pointnet_transform == 2:
+            train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale(), T.RandomFlip(0), T.RandomFlip(1), T.RandomFlip(2), T.NormalizeScale()])
+        dataset_train = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_TRAIN_K360, train_transform, split=None, shuffle_hints=True)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=args.shuffle)
 
         val_transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale()])
-        dataset_val = Kitti360CellDatasetMulti('./data/kitti360', ['2013_05_28_drive_0000_sync', ], val_transform, split=None)
+        dataset_val = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_TEST_K360, val_transform, split=None)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=False)    
 
     # train_words = dataset_train.get_known_words()
@@ -175,7 +183,7 @@ if __name__ == "__main__":
     print('device:', device)
     torch.autograd.set_detect_anomaly(True)     
 
-    learning_rates = np.logspace(-2, -4, 5)[:-1]
+    learning_rates = np.logspace(-2, -4, 5)[1:2]
     dict_loss = {lr: [] for lr in learning_rates}
     dict_acc = {k: {lr: [] for lr in learning_rates} for k in args.top_k}
     dict_acc_val = {k: {lr: [] for lr in learning_rates} for k in args.top_k}    
@@ -237,7 +245,7 @@ if __name__ == "__main__":
     Save plots
     '''
     # plot_name = f'Cells-{args.dataset}_s{scene_name.split('_')[-2]}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_f{"-".join(args.use_features)}.png'
-    plot_name = f'CellsRealScene-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_v{args.variation}_l-{args.ranking_loss}_m{args.margin}_s{args.shuffle}_f{"-".join(args.use_features)}.png'
+    plot_name = f'CellsRealScene-PN-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_v{args.variation}_l-{args.ranking_loss}_t{args.pointnet_transform}_m{args.margin}_s{args.shuffle}_f{"-".join(args.use_features)}.png'
 
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
     val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}
