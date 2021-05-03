@@ -18,21 +18,17 @@ from dataloading.kitti360.poses import Kitti360PoseReferenceDataset, Kitti360Pos
 from dataloading.kitti360.synthetic import Kitti360PoseReferenceMockDatasetPoints
 
 from datapreparation.semantic3d.imports import COLORS as COLORS_S3D, COLOR_NAMES as COLOR_NAMES_S3D
-from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360, SCENE_NAMES as SCENE_NAMES_K360
+from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360, SCENE_NAMES as SCENE_NAMES_K360, SCENE_NAMES_TRAIN as SCENE_NAMES_TRAIN_K360, SCENE_NAMES_TEST as SCENE_NAMES_TEST_K360
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
 from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
-Problems:
-- objects are not run through PyG-Transform -> do in data-loading (real and mock), "object_points"
-    - including NormalizeScale, as closest/center is encoded separately
-
 TODO:
-- Start using PN++ (aux. train for color + class if necessary)
-- Train PN?
-- Evaluate w/ and w/o NormalizeScale and Flips
+- Aux. train color + class necessary?
+- Which augmentation: RandomFlips, RandomRotate, Nothing? -> Not much difference?
+- 512 points ok?
 
 - Refactoring: train (on-top, classes, center/closest point, color rgb/text, )
 - feature ablation
@@ -42,6 +38,7 @@ TODO:
 
 NOTES:
 - Random number of pads/distractors: acc. improved ✓
+- Keep PN frozen? -> Bad
 '''
 
 def train_epoch(model, dataloader, args):
@@ -134,8 +131,13 @@ if __name__ == "__main__":
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)
 
     if args.dataset == 'K360':
-        train_transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale(), T.RandomFlip(0), T.RandomFlip(1), T.RandomFlip(2), T.NormalizeScale()])
-        dataset_train = Kitti360PoseReferenceMockDatasetPoints('./data/kitti360', ['2013_05_28_drive_0000_sync', ], train_transform, args, length=512)
+        if args.variation == 0:
+            train_transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale(), T.RandomFlip(0), T.RandomFlip(1), T.RandomFlip(2), T.NormalizeScale()])
+        if args.variation == 1:
+            train_transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale()])
+        if args.variation == 2:
+            train_transform = T.Compose([T.FixedPoints(1024), T.RandomRotate(180, axis=2), T.NormalizeScale()])                        
+        dataset_train = Kitti360PoseReferenceMockDatasetPoints('./data/kitti360', ['2013_05_28_drive_0000_sync', ], train_transform, args, length=1024)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceMockDatasetPoints.collate_fn)
 
         print('CARE: Re-set scenes')
@@ -145,8 +147,8 @@ if __name__ == "__main__":
         
     # print(sorted(dataset_train.get_known_classes()))
     # print(sorted(dataset_val.get_known_classes()))
-    # print(sorted(dataset_train.get_known_words()))
-    # print(sorted(dataset_val.get_known_words()))
+    print(sorted(dataset_train.get_known_words()))
+    print(sorted(dataset_val.get_known_words()))
     train_words = dataset_train.get_known_words()
     for w in dataset_val.get_known_words():
         assert w in train_words
@@ -239,7 +241,7 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'SG-Off-PN-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    plot_name = f'SG-Off-PN-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': train_stats_loss,
         'train-loss_offsets': train_stats_loss_offsets,
