@@ -19,7 +19,6 @@ class Kitti360BaseDataset(Dataset):
         self.scene_objects = pickle.load(open(osp.join(base_path, 'objects', f'{scene_name}.pkl'), 'rb')) # CARE: created before segmentation - do not use for object classification
         self.cells = pickle.load(open(osp.join(base_path, 'cells', f'{scene_name}.pkl'), 'rb'))
 
-        # self.class_to_index = {c: i for (i, c) in enumerate(self.get_known_classes())} # Build here so that all classes are captured, base num_classes on this!
         self.class_to_index = CLASS_TO_INDEX
         
         if split is not None: # CARE: Selection only done on cells; scene_objects are not really used anymore

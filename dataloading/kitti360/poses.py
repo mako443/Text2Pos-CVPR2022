@@ -109,7 +109,7 @@ class Kitti360PoseReferenceMockDataset(Dataset):
         all_matches = np.array(all_matches)
         assert len(matches) == self.num_mentioned and np.sum(all_matches[:, 1] == self.num_mentioned) == self.pad_size - self.num_mentioned
         # assert len(all_matches) == self.num_mentioned + self.num_distractors and np.sum(all_matches[:, 1]==self.num_mentioned) == self.num_distractors
-
+      
         return {
             'objects': objects,
             'hint_descriptions': hints,
@@ -198,6 +198,9 @@ def load_cell_data(cell, hints, pad_size, transform):
 
         object_points = batch_object_points(objects, transform)
 
+        object_class_indices = [CLASS_TO_INDEX[obj.label] for obj in objects]
+        object_color_indices = [COLOR_NAMES.index(obj.get_color_text()) for obj in objects]        
+
         return {
             'objects': objects,
             'object_points': object_points,
@@ -206,7 +209,9 @@ def load_cell_data(cell, hints, pad_size, transform):
             'all_matches': all_matches,
             'poses': cell.pose,
             'offsets': np.array(offsets),
-            'cells': cell
+            'cells': cell,
+            'object_class_indices': object_class_indices,
+            'object_color_indices': object_color_indices
         }            
 
 class Kitti360PoseReferenceDataset(Kitti360BaseDataset):

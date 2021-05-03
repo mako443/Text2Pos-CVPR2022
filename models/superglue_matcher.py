@@ -45,7 +45,7 @@ def get_mlp_offset(dims, add_batchnorm=False):
     return nn.Sequential(*mlp)       
 
 class SuperGlueMatch(torch.nn.Module):
-    def __init__(self, known_classes, known_words, args):
+    def __init__(self, known_classes, known_colors, known_words, args, pointnet_path):
         super(SuperGlueMatch, self).__init__()
         self.embed_dim = args.embed_dim
         self.num_layers = args.num_layers
@@ -56,11 +56,15 @@ class SuperGlueMatch(torch.nn.Module):
         self.pointnet = PointNet2(len(known_classes), args) # The known classes are all the same now, at least for K360
         self.pointnet.load_state_dict(torch.load(args.pointnet_path))
         self.pointnet.lin3 = nn.Identity() # Remove the last layer
+        self.pointnet_dim = self.pointnet.lin2.weight.size(0)
 
 
-        self.mlp_object_merge = get_mlp([self.pointnet.lin2.weight.size(0) + self.embed_dim,
-                                         max(self.pointnet.lin2.weight.size(0), self.embed_dim),
+        self.mlp_object_merge = get_mlp([self.pointnet_dim + self.embed_dim,
+                                         max(self.pointnet_dim, self.embed_dim),
                                          self.embed_dim]) # TODO: other variation?
+
+        self.mlp_class = get_mlp([self.pointnet_dim, self.pointnet_dim//2, len(known_classes)])                                        
+        self.mlp_color = get_mlp([self.pointnet_dim, self.pointnet_dim//2, len(known_colors)])                                        
 
         # Set idx=0 for padding
         # self.known_classes = {c: (i+1) for i,c in enumerate(known_classes)}
@@ -100,7 +104,7 @@ class SuperGlueMatch(torch.nn.Module):
         object_features = [self.pointnet(pyg_batch.to(self.get_device())) for pyg_batch in object_points] # [B, pad_size, PN_size]
         object_features = torch.stack(object_features) # [B, pad_size, PN_size]
         object_features = object_features.reshape((batch_size * num_objects, -1))  # [B * pad_size, PN_size]
-        object_features = F.normalize(object_features, dim=-1)
+        object_features = F.normalize(object_features, dim=-1) # [B * pad_size, PN_size]
 
         positions = [obj.closest_point for objects_sample in objects for obj in objects_sample]
         pos_embedding = self.pos_embedding(torch.tensor(positions, dtype=torch.float, device=self.get_device()))
@@ -110,6 +114,10 @@ class SuperGlueMatch(torch.nn.Module):
         object_encodings = self.mlp_object_merge(torch.cat((object_features, pos_embedding), dim=-1)) # [B * pad_size, DIM]
         object_encodings = object_encodings.reshape((batch_size, num_objects, self.embed_dim)) # [B, pad_size, DIM]
         object_encodings = F.normalize(object_encodings, dim=-1)
+
+        # Auxiliary predictions
+        object_class_preds = self.mlp_class(object_features) # [B * pad_size, num_classes]
+        object_color_preds = self.mlp_color(object_features) # [B * pad_size, num_colors]
 
         '''
         Encode the objects, first flattened for correct batch-norms, then re-shape
@@ -161,6 +169,8 @@ class SuperGlueMatch(torch.nn.Module):
         outputs.matches0 = matcher_output['matches0']
         outputs.matches1 = matcher_output['matches1']
         outputs.offsets = offsets
+        outputs.class_preds = object_class_preds
+        outputs.color_preds = object_color_preds
 
         # print("P", outputs.P.shape)
 
