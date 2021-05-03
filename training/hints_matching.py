@@ -63,8 +63,12 @@ def train_epoch(model, dataloader, args):
 
         loss_matching = criterion_matching(output.P, batch['all_matches'])
         loss_offsets = criterion_offsets(output.offsets, torch.tensor(batch['offsets'], dtype=torch.float, device=DEVICE))
+        loss_classes = 0.5 * criterion_class(output.class_preds, torch.tensor(batch['object_class_indices'], dtype=torch.long, device=DEVICE).flatten())
+        loss_colors = 0.5 * criterion_color(output.color_preds, torch.tensor(batch['object_color_indices'], dtype=torch.long, device=DEVICE).flatten())
         
-        loss = loss_matching + 5 * loss_offsets # Currently fixed alpha seems enough, cell normed ∈ [0, 1]
+        loss = loss_matching + 5 * loss_offsets + loss_classes + loss_colors # Currently fixed alpha seems enough, cell normed ∈ [0, 1]
+        if not printed:
+            print(f'Losses: {loss_matching.item():0.3f} {loss_classes.item():0.3f} {loss_colors.item():0.3f}')
 
         loss.backward()
         optimizer.step()
@@ -187,11 +191,13 @@ if __name__ == "__main__":
     val_stats_pose_offsets = {lr: [] for lr in learning_rates}
     
     for lr in learning_rates:
-        model = SuperGlueMatch(dataset_train.get_known_classes(), dataset_train.get_known_words(), args, './checkpoints/pointnet_K360.pth')
+        model = SuperGlueMatch(dataset_train.get_known_classes(), COLOR_NAMES_K360, dataset_train.get_known_words(), args, './checkpoints/pointnet_K360.pth')
         model.to(DEVICE)
 
         criterion_matching = MatchingLoss()
         criterion_offsets = nn.MSELoss()
+        criterion_class = nn.CrossEntropyLoss()
+        criterion_color = nn.CrossEntropyLoss()
 
         # Warm-up 
         optimizer = optim.Adam(model.parameters(), lr=1e-5)
