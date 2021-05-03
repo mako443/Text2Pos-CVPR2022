@@ -11,6 +11,9 @@ import time
 import torch
 from torch.utils.data import Dataset, DataLoader
 
+from torch_geometric.data import Data, Batch
+import torch_geometric.transforms as T     
+
 from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, CLASS_TO_INDEX
 from datapreparation.kitti360.utils import COLORS, COLOR_NAMES, SCENE_NAMES_TRAIN
 from datapreparation.kitti360.descriptions import describe_cell
@@ -35,7 +38,7 @@ TODO:
 '''
 
 class Kitti360PoseReferenceMockDatasetPoints(Dataset):
-    def __init__(self, base_path, scene_names, args, length=1024, fixed_seed=False):
+    def __init__(self, base_path, scene_names, transform, args, length=1024, fixed_seed=False):
         self.cell_size = 30 # CARE: Match to K360 prepare
         
         # Create an objects dataset to copy the objects from in synthetic cell creation
@@ -45,6 +48,7 @@ class Kitti360PoseReferenceMockDatasetPoints(Dataset):
         for obj in objects_dataset.objects:
             self.objects_dict[obj.label].append(obj)
 
+        self.transform = transform
         self.pad_size = args.pad_size
         self.num_mentioned = args.num_mentioned
         self.length = length
@@ -96,7 +100,7 @@ class Kitti360PoseReferenceMockDatasetPoints(Dataset):
         cell = self.create_synthetic_cell(idx)
         hints = Kitti360BaseDataset.create_hint_description(cell)
 
-        return load_cell_data(cell, hints, self.pad_size)
+        return load_cell_data(cell, hints, self.pad_size, self.transform)
 
     def __len__(self):
         return self.length
@@ -120,11 +124,20 @@ class Kitti360PoseReferenceMockDatasetPoints(Dataset):
 
 if __name__ == '__main__':
     base_path = './data/kitti360'
-    
+    folder_name = '2013_05_28_drive_0000_sync'
     args = EasyDict(pad_size=8, num_mentioned=6)
-    dataset = Kitti360PoseReferenceMockDatasetPoints(base_path, ['2013_05_28_drive_0000_sync',], args)
+
+    transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale(), T.RandomFlip(0), T.RandomFlip(1), T.RandomFlip(2), T.NormalizeScale()])
+    
+    dataset = Kitti360PoseReferenceMockDatasetPoints(base_path, [folder_name, ], transform, args)
     dataloader = DataLoader(dataset, batch_size=32, collate_fn=Kitti360PoseReferenceMockDatasetPoints.collate_fn)
 
     data = dataset[0]
-    print(data['hint_descriptions'])
-    cv2.imshow("", plot_cell(data['cells'])); cv2.waitKey()
+    print('max data:', torch.max(data['object_points'].pos))
+
+    batch = next(iter(dataloader))
+    maxes = [torch.max(b.pos) for b in batch['object_points']]
+    print('max batch:', torch.max(torch.tensor(maxes)))
+
+    # print(data['hint_descriptions'])
+    # cv2.imshow("", plot_cell(data['cells'])); cv2.waitKey()

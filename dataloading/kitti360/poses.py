@@ -10,11 +10,15 @@ from easydict import EasyDict
 import torch
 from torch.utils.data import Dataset, DataLoader
 
+from torch_geometric.data import Data, Batch
+import torch_geometric.transforms as T 
+
 from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, CLASS_TO_INDEX, COLORS, COLOR_NAMES, SCENE_NAMES
 from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
 
+# TODO: remove
 class Kitti360PoseReferenceMockDataset(Dataset):
     def __init__(self, args, length=1024, fixed_seed=False):
         self.pad_size = args.pad_size
@@ -135,7 +139,25 @@ class Kitti360PoseReferenceMockDataset(Dataset):
                 known_words.extend(hint.replace('.','').replace(',','').lower().split())
         return list(np.unique(known_words))  
 
-def load_cell_data(cell, hints, pad_size):
+def batch_object_points(objects: List[Object3d], transform):
+    """Generates a PyG-Batch for the objects of a single cell.
+    Note: Aggregating an entire cell-batch into a single PyG-Batch would exceed the limit of 256 sub-graphs.
+    Note: The objects can be transformed / augmented freely, as their center-points are encoded separately.
+
+    Args:
+        objects (List[Object3d]): Cell objects
+        transform ([type]): PyG-Transform
+    """
+    # CARE: Transforms not working with batches?! Doing it object-by-object here!
+    data_list = [Data(x=torch.tensor(obj.rgb, dtype=torch.float), pos=torch.tensor(obj.xyz, dtype=torch.float)) for obj in objects]
+    for i in range(len(data_list)):
+        data_list[i] = transform(data_list[i])
+
+    batch = Batch.from_data_list(data_list)
+    return batch
+
+
+def load_cell_data(cell, hints, pad_size, transform):
         descriptions = cell.descriptions
         cell_objects_dict = {obj.id: obj for obj in cell.objects}
         mentioned_ids = [descr.object_id for descr in descriptions]
@@ -159,8 +181,9 @@ def load_cell_data(cell, hints, pad_size):
             objects = objects[0 : pad_size]
 
         while len(objects) < pad_size:
-            obj = Object3d(np.zeros((1,3)), np.zeros((1,3)), 'pad', -1)
-            _ = obj.get_closest_point(cell.pose) # run to set the point
+            # obj = Object3d(np.zeros((1,3)), np.zeros((1,3)), 'pad', -1)
+            # _ = obj.get_closest_point(cell.pose) # run to set the point
+            obj = Object3d.create_padding()
             objects.append(obj)
 
         # Build matches and all_matches
@@ -173,8 +196,11 @@ def load_cell_data(cell, hints, pad_size):
         matches, all_matches = np.array(matches), np.array(all_matches)
         assert np.sum(all_matches[:, 1] == len(descriptions)) == len(objects) - len(descriptions)
 
+        object_points = batch_object_points(objects, transform)
+
         return {
             'objects': objects,
+            'object_points': object_points,
             'hint_descriptions': hints,
             'matches': matches,
             'all_matches': all_matches,
@@ -184,24 +210,25 @@ def load_cell_data(cell, hints, pad_size):
         }            
 
 class Kitti360PoseReferenceDataset(Kitti360BaseDataset):
-    def __init__(self, base_path, scene_name, args, split=None):
+    def __init__(self, base_path, scene_name, transform, args, split=None):
         super().__init__(base_path, scene_name, split)
         self.pad_size = args.pad_size
+        self.transform = transform
 
     def __getitem__(self, idx):
         cell = self.cells[idx]
         hints = self.hint_descriptions[idx]
         
-        return load_cell_data(cell, hints, self.pad_size)
+        return load_cell_data(cell, hints, self.pad_size, self.transform)
 
     def __len__(self):
         return len(self.cells)
 
 class Kitti360PoseReferenceDatasetMulti(Dataset):
-    def __init__(self, base_path, scene_names, args, split=None):
+    def __init__(self, base_path, scene_names, transform, args, split=None):
         self.scene_names = scene_names
         self.split = split
-        self.datasets = [Kitti360PoseReferenceDataset(base_path, scene_name, args, split) for scene_name in scene_names]
+        self.datasets = [Kitti360PoseReferenceDataset(base_path, scene_name, transform, args, split) for scene_name in scene_names]
 
         print(str(self))
 
@@ -237,6 +264,9 @@ if __name__ == '__main__':
     base_path = './data/kitti360'
     folder_name = '2013_05_28_drive_0000_sync'    
     
-    args = EasyDict(pad_size=8, num_mentioned=6)
-    dataset = Kitti360PoseReferenceMockDataset(args)
+    args = EasyDict(pad_size=8, num_mentioned=6)    
+    transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale()])
+    dataset = Kitti360PoseReferenceDataset(base_path, folder_name, transform, args)
+    dataloader = DataLoader(dataset, batch_size=2, collate_fn=Kitti360PoseReferenceDataset.collate_fn)
     data = dataset[0]
+    batch = next(iter(dataloader))

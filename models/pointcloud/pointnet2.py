@@ -79,8 +79,6 @@ class PointNet2(nn.Module):
             
     def forward(self, data):
         data.to(self.device)
-        # unique, counts = np.unique(data.batch.cpu().detach().numpy(), return_counts=True)
-        # print(unique, counts)
 
         x, pos, batch = self.sa1(data.x, data.pos, data.batch)
         x, pos, batch = self.sa2(x, pos, batch)

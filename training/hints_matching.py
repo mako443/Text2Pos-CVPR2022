@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
+import torch_geometric.transforms as T 
+
 import time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -23,15 +25,10 @@ from training.plots import plot_metrics
 from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
-Problems:
--> train
-
-- objects are not run through PyG-Transform -> do in data-loading (real and mock), "object_points"
-    - including NormalizeScale, as closest/center is encoded separately
-
 TODO:
-- Start using PN++ (aux. train for color + class if necessary)
-- Train PN++ or not?
+- Aux. train color + class necessary?
+- Which augmentation: RandomFlips, RandomRotate, Nothing? -> Not much difference?
+- 512 points ok?
 
 - Refactoring: train (on-top, classes, center/closest point, color rgb/text, )
 - feature ablation
@@ -41,6 +38,7 @@ TODO:
 
 NOTES:
 - Random number of pads/distractors: acc. improved ✓
+- Keep PN frozen? -> Bad
 '''
 
 def train_epoch(model, dataloader, args):
@@ -61,7 +59,7 @@ def train_epoch(model, dataloader, args):
             break
 
         optimizer.zero_grad()
-        output = model(batch['objects'], batch['hint_descriptions'])
+        output = model(batch['objects'], batch['hint_descriptions'], batch['object_points'])
 
         loss_matching = criterion_matching(output.P, batch['all_matches'])
         loss_offsets = criterion_offsets(output.offsets, torch.tensor(batch['offsets'], dtype=torch.float, device=DEVICE))
@@ -101,7 +99,7 @@ def eval_epoch(model, dataloader, args):
     matches0_vectors = []
 
     for i_batch, batch in enumerate(dataloader):
-        output = model(batch['objects'], batch['hint_descriptions'])
+        output = model(batch['objects'], batch['hint_descriptions'], batch['object_points'])
         offset_vectors.append(output.offsets.detach().cpu().numpy())
         matches0_vectors.append(output.matches0.detach().cpu().numpy())
 
@@ -133,11 +131,18 @@ if __name__ == "__main__":
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)
 
     if args.dataset == 'K360':
-        # dataset_train = Kitti360PoseReferenceMockDataset(args)
-        dataset_train = Kitti360PoseReferenceMockDatasetPoints('./data/kitti360', SCENE_NAMES_K360, args)
+        if args.variation == 0:
+            train_transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale(), T.RandomFlip(0), T.RandomFlip(1), T.RandomFlip(2), T.NormalizeScale()])
+        if args.variation == 1:
+            train_transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale()])
+        if args.variation == 2:
+            train_transform = T.Compose([T.FixedPoints(1024), T.RandomRotate(180, axis=2), T.NormalizeScale()])                        
+        dataset_train = Kitti360PoseReferenceMockDatasetPoints('./data/kitti360', ['2013_05_28_drive_0000_sync', ], train_transform, args, length=1024)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceMockDatasetPoints.collate_fn)
 
-        dataset_val = Kitti360PoseReferenceDatasetMulti('./data/kitti360', SCENE_NAMES_TEST_K360, args, split=None)
+        print('CARE: Re-set scenes')
+        val_transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale()])
+        dataset_val = Kitti360PoseReferenceDatasetMulti('./data/kitti360', ['2013_05_28_drive_0000_sync', ], val_transform, args, split=None)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceDataset.collate_fn)  
         
     # print(sorted(dataset_train.get_known_classes()))
@@ -165,7 +170,7 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_rates = np.logspace(-3.0, -4.0 ,3) # Larger than -3 throws error (even with warm-up)
+    learning_rates = np.logspace(-3.0, -4.0 ,3)[0:1] # Larger than -3 throws error (even with warm-up)
 
     train_stats_loss = {lr: [] for lr in learning_rates}
     train_stats_loss_offsets = {lr: [] for lr in learning_rates}
@@ -227,13 +232,16 @@ if __name__ == "__main__":
 
         if np.mean((val_out.recall, val_out.precision)) > best_val_recallPrecision:
             print('Saving model to', model_path)
-            torch.save(model, model_path)
+            try:
+                torch.save(model, model_path)
+            except Exception as e:
+                print('Error saving model!', str(e))
             best_val_recallPrecision = np.mean((val_out.recall, val_out.precision)) 
 
     '''
     Save plots
     '''
-    plot_name = f'SG-Off-PN-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_f{"-".join(args.use_features)}_g{args.lr_gamma}.png'
+    plot_name = f'SG-Off-PN-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': train_stats_loss,
         'train-loss_offsets': train_stats_loss_offsets,

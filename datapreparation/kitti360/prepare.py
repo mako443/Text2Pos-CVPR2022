@@ -183,7 +183,7 @@ if __name__ == '__main__':
 
     # Incomplete folders: 3 corrupted...
     # for folder_name in SCENE_NAMES:
-    for folder_name in [scene_name, ]:
+    for folder_name in [scene_name, ]: # 2013_05_28_drive_0000_sync
         print(f'Folder: {folder_name}')
 
         poses, pose_objects = create_poses(base_path, folder_name, cell_size, return_pose_objects=True)
@@ -200,6 +200,8 @@ if __name__ == '__main__':
             print(f'Loaded objects from {path_objects}')
             objects = pickle.load(open(path_objects, 'rb'))
 
+        quit()
+
         # # Set colors
         # set_object_colors(objects)
 
@@ -215,6 +217,7 @@ if __name__ == '__main__':
         cell = cells[idx]
         print('idx', idx)
         print(cell.get_text())
+        print(cell.bbox_w)
 
         img = plot_cell(cell)
         cv2.imwrite(f'cell_demo_idx{idx}.png', img)
