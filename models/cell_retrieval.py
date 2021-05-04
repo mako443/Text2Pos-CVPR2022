@@ -138,7 +138,6 @@ class CellRetrievalNetwork(torch.nn.Module):
             embeddings = self.mlp_merge(torch.cat(embeddings, dim=-1))
         else:
             embeddings = embeddings[0]
-        # embeddings = torch.sum(torch.stack(embeddings), dim=0)
 
         if self.variation == 0:
             x = self.graph1(embeddings, batch)
