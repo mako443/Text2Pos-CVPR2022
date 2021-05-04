@@ -22,12 +22,14 @@ TODO:
 '''
 
 class CellRetrievalNetwork(torch.nn.Module):
-    def __init__(self, known_classes, known_words, args):
+    def __init__(self, known_classes, known_colors, known_words, args):
         super(CellRetrievalNetwork, self).__init__()
         self.embed_dim = args.embed_dim
         self.use_features = args.use_features
         self.variation = args.variation
         embed_dim = self.embed_dim
+
+        assert args.variation == 0
 
         '''
         Object path
@@ -58,14 +60,17 @@ class CellRetrievalNetwork(torch.nn.Module):
             self.lin = get_mlp([embed_dim, embed_dim, embed_dim])
 
         # PointNet++
-        print('CARE: Not loading PN state')
         self.pointnet = PointNet2(len(known_classes), args) # The known classes are all the same now, at least for K360
-        # self.pointnet.load_state_dict(torch.load(pointnet_path))
+        self.pointnet.load_state_dict(torch.load(args.pointnet_path))
         self.pointnet.lin3 = nn.Identity() # Remove the last layer
+        self.pointnet_dim = self.pointnet.lin2.weight.size(0)        
 
         self.mlp_object_merge = get_mlp([self.pointnet.lin2.weight.size(0) + self.embed_dim,
                                          max(self.pointnet.lin2.weight.size(0), self.embed_dim),
                                          self.embed_dim]) # TODO: other variation?        
+
+        self.mlp_class = get_mlp([self.pointnet_dim, self.pointnet_dim//2, len(known_classes)])                                        
+        self.mlp_color = get_mlp([self.pointnet_dim, self.pointnet_dim//2, len(known_colors)])                                            
 
 
         '''
@@ -91,7 +96,7 @@ class CellRetrievalNetwork(torch.nn.Module):
         '''
         batch_size = len(objects)
 
-        # PN++
+        ### PN++ version
         object_features = [self.pointnet(pyg_batch.to(self.get_device())) for pyg_batch in object_points] # [B, obj_counts, PN_dim]
         object_features = torch.cat(object_features, dim=0) # [total_objects, PN_dim]
         object_features = F.normalize(object_features, dim=-1) # [total_objects, PN_dim]
@@ -103,41 +108,51 @@ class CellRetrievalNetwork(torch.nn.Module):
         # Merge and norm
         object_encodings = self.mlp_object_merge(torch.cat((object_features, pos_embedding), dim=-1)) # [total_objects, DIM]
         object_encodings = F.normalize(object_encodings, dim=-1) # [total_objects, DIM]
-        # PN++   
 
-        # TODO: build batch       
-
-        class_indices = []
-        batch = [] #Batch tensor to send into PyG
-        for i_batch, objects_sample in enumerate(objects):
-            for obj in objects_sample:
-                class_idx = self.known_classes.get(obj.label, 0)
-                class_indices.append(class_idx)
-                batch.append(i_batch)
+        # Build batch: assign all objects of a sample to a combined batch-idx
+        batch = []
+        for i_sample in range(batch_size):
+            for i_obj in range(len(objects[i_sample])):
+                batch.append(i_sample)
+        assert len(batch) == len(object_encodings)
         batch = torch.tensor(batch, dtype=torch.long, device=self.device)
 
-        embeddings = []
-        if 'class' in self.use_features:
-            class_embedding = self.class_embedding(torch.tensor(class_indices, dtype=torch.long, device=self.device))
-            embeddings.append(F.normalize(class_embedding, dim=-1))
-        if 'color' in self.use_features:
-            colors = []
-            for objects_sample in objects:
-                colors.extend([obj.get_color_rgb() for obj in objects_sample])
-            color_embedding = self.color_embedding(torch.tensor(colors, dtype=torch.float, device=self.device))
-            embeddings.append(F.normalize(color_embedding, dim=-1))
-        if 'position' in self.use_features:
-            positions = []
-            for objects_sample in objects:
-                # positions.extend([obj.center_in_cell for obj in objects_sample])
-                positions.extend([obj.closest_point for obj in objects_sample])
-            pos_embedding = self.pos_embedding(torch.tensor(positions, dtype=torch.float, device=self.device))
-            embeddings.append(F.normalize(pos_embedding, dim=-1))
+        embeddings = object_encodings
+        ### PN++ version
 
-        if len(embeddings) > 1:
-            embeddings = self.mlp_merge(torch.cat(embeddings, dim=-1))
-        else:
-            embeddings = embeddings[0]
+        ### Embedding version
+        # class_indices = []
+        # batch = [] #Batch tensor to send into PyG
+        # for i_batch, objects_sample in enumerate(objects):
+        #     for obj in objects_sample:
+        #         class_idx = self.known_classes.get(obj.label, 0)
+        #         class_indices.append(class_idx)
+        #         batch.append(i_batch)
+        # batch = torch.tensor(batch, dtype=torch.long, device=self.device)
+
+        # embeddings = []
+        # if 'class' in self.use_features:
+        #     class_embedding = self.class_embedding(torch.tensor(class_indices, dtype=torch.long, device=self.device))
+        #     embeddings.append(F.normalize(class_embedding, dim=-1))
+        # if 'color' in self.use_features:
+        #     colors = []
+        #     for objects_sample in objects:
+        #         colors.extend([obj.get_color_rgb() for obj in objects_sample])
+        #     color_embedding = self.color_embedding(torch.tensor(colors, dtype=torch.float, device=self.device))
+        #     embeddings.append(F.normalize(color_embedding, dim=-1))
+        # if 'position' in self.use_features:
+        #     positions = []
+        #     for objects_sample in objects:
+        #         # positions.extend([obj.center_in_cell for obj in objects_sample])
+        #         positions.extend([obj.closest_point for obj in objects_sample])
+        #     pos_embedding = self.pos_embedding(torch.tensor(positions, dtype=torch.float, device=self.device))
+        #     embeddings.append(F.normalize(pos_embedding, dim=-1))
+
+        # if len(embeddings) > 1:
+        #     embeddings = self.mlp_merge(torch.cat(embeddings, dim=-1))
+        # else:
+        #     embeddings = embeddings[0]
+        ### Embedding version        
 
         if self.variation == 0:
             x = self.graph1(embeddings, batch)

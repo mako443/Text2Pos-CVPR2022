@@ -26,9 +26,11 @@ from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
 TODO:
-- Aux. train color + class necessary?
+- Aux. train color + class helpful?
 - Which augmentation: RandomFlips, RandomRotate, Nothing? -> Not much difference?
-- 512 points ok?
+- 512 points ok? -> 1024 maye slightly better but seems ok. Possibly re-check w/ aux-loss
+- Merge differently / variations?
+- Pre-train helpful?
 
 - Refactoring: train (on-top, classes, center/closest point, color rgb/text, )
 - feature ablation
@@ -66,9 +68,10 @@ def train_epoch(model, dataloader, args):
         loss_classes = 0.5 * criterion_class(output.class_preds, torch.tensor(batch['object_class_indices'], dtype=torch.long, device=DEVICE).flatten())
         loss_colors = 0.5 * criterion_color(output.color_preds, torch.tensor(batch['object_color_indices'], dtype=torch.long, device=DEVICE).flatten())
         
-        loss = loss_matching + 5 * loss_offsets + loss_classes + loss_colors # Currently fixed alpha seems enough, cell normed ∈ [0, 1]
+        loss = loss_matching + 5 * loss_offsets# + loss_classes + loss_colors # Currently fixed alpha seems enough, cell normed ∈ [0, 1]
         if not printed:
             print(f'Losses: {loss_matching.item():0.3f} {loss_classes.item():0.3f} {loss_colors.item():0.3f}')
+            printed = True
 
         loss.backward()
         optimizer.step()
@@ -135,27 +138,22 @@ if __name__ == "__main__":
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)
 
     if args.dataset == 'K360':
-        if args.variation == 0:
-            train_transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale(), T.RandomFlip(0), T.RandomFlip(1), T.RandomFlip(2), T.NormalizeScale()])
-        if args.variation == 1:
-            train_transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale()])
-        if args.variation == 2:
-            train_transform = T.Compose([T.FixedPoints(1024), T.RandomRotate(180, axis=2), T.NormalizeScale()])                        
-        dataset_train = Kitti360PoseReferenceMockDatasetPoints('./data/kitti360', ['2013_05_28_drive_0000_sync', ], train_transform, args, length=1024)
+        train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(180, axis=2), T.NormalizeScale()])
+        dataset_train = Kitti360PoseReferenceMockDatasetPoints('./data/kitti360', SCENE_NAMES_TRAIN_K360, train_transform, args, length=1024)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceMockDatasetPoints.collate_fn)
 
         print('CARE: Re-set scenes')
-        val_transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale()])
-        dataset_val = Kitti360PoseReferenceDatasetMulti('./data/kitti360', ['2013_05_28_drive_0000_sync', ], val_transform, args, split=None)
+        val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
+        dataset_val = Kitti360PoseReferenceDatasetMulti('./data/kitti360', SCENE_NAMES_TEST_K360, val_transform, args, split=None)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceDataset.collate_fn)  
         
     # print(sorted(dataset_train.get_known_classes()))
     # print(sorted(dataset_val.get_known_classes()))
     print(sorted(dataset_train.get_known_words()))
     print(sorted(dataset_val.get_known_words()))
-    train_words = dataset_train.get_known_words()
-    for w in dataset_val.get_known_words():
-        assert w in train_words
+    # train_words = dataset_train.get_known_words()
+    # for w in dataset_val.get_known_words():
+    #     assert w in train_words
     assert sorted(dataset_train.get_known_classes()) == sorted(dataset_val.get_known_classes())        
 
     # TODO: turn back on for multi
@@ -174,7 +172,7 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_rates = np.logspace(-3.0, -4.0 ,3)[0:1] # Larger than -3 throws error (even with warm-up)
+    learning_rates = np.logspace(-3.0, -4.0 ,3)[args.lr_idx : args.lr_idx + 1] # Larger than -3 throws error (even with warm-up)
 
     train_stats_loss = {lr: [] for lr in learning_rates}
     train_stats_loss_offsets = {lr: [] for lr in learning_rates}
@@ -191,7 +189,7 @@ if __name__ == "__main__":
     val_stats_pose_offsets = {lr: [] for lr in learning_rates}
     
     for lr in learning_rates:
-        model = SuperGlueMatch(dataset_train.get_known_classes(), COLOR_NAMES_K360, dataset_train.get_known_words(), args, './checkpoints/pointnet_K360.pth')
+        model = SuperGlueMatch(dataset_train.get_known_classes(), COLOR_NAMES_K360, dataset_train.get_known_words(), args)
         model.to(DEVICE)
 
         criterion_matching = MatchingLoss()
@@ -247,7 +245,7 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'SG-Off-PN-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_g{args.lr_gamma}.png'
+    plot_name = f'SG-Off-PrePN-{args.dataset}_bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': train_stats_loss,
         'train-loss_offsets': train_stats_loss_offsets,

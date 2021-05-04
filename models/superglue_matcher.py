@@ -45,7 +45,7 @@ def get_mlp_offset(dims, add_batchnorm=False):
     return nn.Sequential(*mlp)       
 
 class SuperGlueMatch(torch.nn.Module):
-    def __init__(self, known_classes, known_colors, known_words, args, pointnet_path):
+    def __init__(self, known_classes, known_colors, known_words, args):
         super(SuperGlueMatch, self).__init__()
         self.embed_dim = args.embed_dim
         self.num_layers = args.num_layers
@@ -54,13 +54,7 @@ class SuperGlueMatch(torch.nn.Module):
         self.args = args
 
         self.pointnet = PointNet2(len(known_classes), args) # The known classes are all the same now, at least for K360
-        
-        load_pn = True
-        if load_pn:
-            self.pointnet.load_state_dict(torch.load(pointnet_path))
-        else:
-            print('CARE: Not loading PN state')
-
+        self.pointnet.load_state_dict(torch.load(args.pointnet_path))
         self.pointnet.lin3 = nn.Identity() # Remove the last layer
         self.pointnet_dim = self.pointnet.lin2.weight.size(0)
 

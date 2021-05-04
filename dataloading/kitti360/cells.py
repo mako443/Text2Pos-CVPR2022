@@ -10,6 +10,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, SCENE_NAMES
+from datapreparation.kitti360.utils import CLASS_TO_INDEX, COLOR_NAMES
 from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
@@ -38,13 +39,18 @@ class Kitti360CellDataset(Kitti360BaseDataset):
 
         object_points = batch_object_points(cell.objects, self.transform)
 
+        object_class_indices = [CLASS_TO_INDEX[obj.label] for obj in cell.objects]
+        object_color_indices = [COLOR_NAMES.index(obj.get_color_text()) for obj in cell.objects]           
+
         return {
             'cells': cell,
             'objects': cell.objects,
             'object_points': object_points,
             'texts': text,
             # 'cell_indices': idx,
-            'scene_names': self.scene_name
+            'scene_names': self.scene_name,
+            'object_class_indices': object_class_indices,
+            'object_color_indices': object_color_indices            
         } 
 
     def __len__(self):
