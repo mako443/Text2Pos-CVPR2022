@@ -15,6 +15,7 @@ def parse_arguments():
     parser.add_argument('--shuffle', action='store_true')
     parser.add_argument('--variation', type=int, default=0)
     parser.add_argument('--dataset', type=str, default='K360')
+    parser.add_argument('--lr_idx', type=int)
 
     # SuperGlue
     parser.add_argument('--sinkhorn_iters', type=int, default=50)
@@ -33,7 +34,7 @@ def parse_arguments():
     parser.add_argument('--pointnet_variation', type=int, default=0)
     parser.add_argument('--pointnet_numpoints', type=int, default=512)
     parser.add_argument('--pointnet_transform', type=int, default=0)
-    parser.add_argument('--pointnet_path', type=str, default='./checkpoints/pointnet_K360.pth')
+    parser.add_argument('--pointnet_path', type=str, default='./checkpoints/pointnet_K360_t1_p512.pth')
 
     # Others
     parser.add_argument('--epochs', type=int, default=16)

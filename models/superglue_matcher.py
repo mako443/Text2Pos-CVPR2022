@@ -45,7 +45,7 @@ def get_mlp_offset(dims, add_batchnorm=False):
     return nn.Sequential(*mlp)       
 
 class SuperGlueMatch(torch.nn.Module):
-    def __init__(self, known_classes, known_colors, known_words, args, pointnet_path):
+    def __init__(self, known_classes, known_colors, known_words, args):
         super(SuperGlueMatch, self).__init__()
         self.embed_dim = args.embed_dim
         self.num_layers = args.num_layers
