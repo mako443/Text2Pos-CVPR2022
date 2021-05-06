@@ -9,12 +9,15 @@ def parse_arguments():
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--num_distractors', default='all')
     parser.add_argument('--max_batches', type=int, default=None)
+    parser.add_argument('--dataset', type=str, default='K360')
+    parser.add_argument('--base_path', type=str, default='./data/kitti360_shifted')
+
+    # Model
     parser.add_argument('--embed_dim', type=int, default=300)
     parser.add_argument('--num_layers', type=int, default=6)
     parser.add_argument('--use_features', nargs='+', default=['class', 'color', 'position'])
     parser.add_argument('--shuffle', action='store_true')
     parser.add_argument('--variation', type=int, default=0)
-    parser.add_argument('--dataset', type=str, default='K360')
     parser.add_argument('--lr_idx', type=int)
 
     # SuperGlue
@@ -69,6 +72,8 @@ def parse_arguments():
 
     if args.pointnet_path:
         assert osp.isfile(args.pointnet_path)
+
+    assert osp.isdir(args.base_path)
 
     return args
 

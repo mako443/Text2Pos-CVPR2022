@@ -9,6 +9,8 @@ import cv2
 import torch
 from torch.utils.data import Dataset, DataLoader
 
+import torch_geometric.transforms as T 
+
 from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, SCENE_NAMES
 from datapreparation.kitti360.utils import CLASS_TO_INDEX, COLOR_NAMES
 from datapreparation.kitti360.imports import Object3d, Cell
@@ -96,12 +98,9 @@ class Kitti360CellDatasetMulti(Dataset):
 
 if __name__ == '__main__':
     base_path = './data/kitti360'
-    # folder_name = '2013_05_28_drive_0000_sync'    
-    dataset = Kitti360CellDatasetMulti(base_path, SCENE_NAMES)
-    cell = dataset.cells[0]
-    
-    # dataset = Kitti360CellDataset(base_path, folder_name)          
-    # data = dataset[0]
+    folder_name = '2013_05_28_drive_0000_sync'    
 
-    # dataloader = DataLoader(dataset, batch_size=2, collate_fn=Kitti360BaseDataset.collate_fn)
-    # batch = next(iter(dataloader))
+    transform = T.FixedPoints(10000, replace=False, allow_duplicates=False)
+
+    dataset = Kitti360CellDatasetMulti(base_path, [folder_name, ], transform)
+    cell = dataset.cells[0]
