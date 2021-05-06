@@ -26,6 +26,7 @@ from datapreparation.kitti360.imports import Object3d as Object3d_K360
 '''
 TODO:
 - are L2-based distances better?
+- put ObjectEncoder in modules
 
 NOTES:
 - BatchNorm yes/no/where? -> Doesn't seem to make much difference
@@ -53,11 +54,10 @@ class SuperGlueMatch(torch.nn.Module):
         self.use_features = args.use_features
         self.args = args
 
-        self.pointnet = PointNet2(len(known_classes), args) # The known classes are all the same now, at least for K360
+        self.pointnet = PointNet2(len(known_classes), len(known_colors), args) # The known classes are all the same now, at least for K360
         self.pointnet.load_state_dict(torch.load(args.pointnet_path))
         self.pointnet.lin3 = nn.Identity() # Remove the last layer
         self.pointnet_dim = self.pointnet.lin2.weight.size(0)
-
 
         self.mlp_object_merge = get_mlp([self.pointnet_dim + self.embed_dim,
                                          max(self.pointnet_dim, self.embed_dim),
@@ -101,7 +101,7 @@ class SuperGlueMatch(torch.nn.Module):
         '''
         Get PN++ object features
         '''
-        object_features = [self.pointnet(pyg_batch.to(self.get_device())) for pyg_batch in object_points] # [B, pad_size, PN_size]
+        object_features = [self.pointnet(pyg_batch.to(self.get_device())).features for pyg_batch in object_points] # [B, pad_size, PN_size]
         object_features = torch.stack(object_features) # [B, pad_size, PN_size]
         object_features = object_features.reshape((batch_size * num_objects, -1))  # [B * pad_size, PN_size]
         object_features = F.normalize(object_features, dim=-1) # [B * pad_size, PN_size]

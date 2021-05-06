@@ -29,12 +29,15 @@ def parse_arguments():
     # parser.add_argument('--cell_size', type=float, default=60)
     # parser.add_argument('--cell_stride', type=float, default=40)
 
-    # PointNet
+    # Object-encoder / PointNet
     parser.add_argument('--pointnet_layers', type=int, default=3)
     parser.add_argument('--pointnet_variation', type=int, default=0)
     parser.add_argument('--pointnet_numpoints', type=int, default=512)
     parser.add_argument('--pointnet_transform', type=int, default=0)
-    parser.add_argument('--pointnet_path', type=str, default='./checkpoints/pointnet_K360_t1_p512.pth')
+    parser.add_argument('--pointnet_path', type=str, default='./checkpoints/pointnet_K360_lr2_t1_p512.pth')
+    parser.add_argument('--pointnet_freeze', action='store_true')
+    parser.add_argument('--pointnet_embed', action='store_true')    
+    parser.add_argument('--pointnet_features', type=int, default=2)
 
     # Others
     parser.add_argument('--epochs', type=int, default=16)

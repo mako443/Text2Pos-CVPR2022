@@ -31,6 +31,7 @@ TODO:
 - 512 points ok? -> 1024 maye slightly better but seems ok. Possibly re-check w/ aux-loss
 - Merge differently / variations?
 - Pre-train helpful?
+- Re-formulate forward() as in CellRetrieval regarding features/embedding
 
 - Refactoring: train (on-top, classes, center/closest point, color rgb/text, )
 - feature ablation
@@ -163,7 +164,7 @@ if __name__ == "__main__":
     batch = next(iter(dataloader_train))
 
     DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    print('device:', DEVICE)
+    print('device:', DEVICE, torch.cuda.get_device_name(0))
     torch.autograd.set_detect_anomaly(True)    
 
     best_val_recallPrecision = -1 # Measured by mean of recall and precision
@@ -245,7 +246,7 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'SG-Off-PrePN-{args.dataset}_bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
+    plot_name = f'SG-Off-{args.dataset}_bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': train_stats_loss,
         'train-loss_offsets': train_stats_loss_offsets,

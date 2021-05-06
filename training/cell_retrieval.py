@@ -29,17 +29,20 @@ from training.utils import plot_retrievals
 
 '''
 TODO:
-- Use PN: Add encoder but re-train w/ embedding ✓ 0.8 acc VERIFIED W/ ALL SCENES?
-- Use PN fully -> performance bad
-- Use aux. train
+- Use PN fully -> performance lower but ok (0.8 -> 0.55)
+- Use lower features 
+- Generalization gap? (Transform, shuffle, ask)
 - mlp_merge variations?
-- Learning rates?
+
 - Augmentation possible? -> hint-shuffle helped, 
 
 - max-dist for descriptions?
 - remove "identical negative" (currently does not occur in Kitti)
 
-NOTES:
+NOTE:
+- Use for select (if acc. still lower) -> Not better
+- Use PN: Add encoder but re-train w/ embedding ✓ 0.8 acc verified all scenes ✓
+- Learning rates? -> Apparently need lower here
 - Look at val-fails -> Not much to see
 - More Kitti-Cells helped ✓
 - Mock: train-acc high if same data every epoch, model still does not generalize. Mock valid??
@@ -48,14 +51,12 @@ NOTES:
 - (Performances can fluctuate from run to run)
 - stronger language model? (More layers) -> Doesn't change much 
 '''
-
 def train_epoch(model, dataloader, args):
     model.train()
     epoch_losses = []   
 
-    # cell_encodings = []
-    # text_encodings = []
     batches = []
+    printed = False    
     for i_batch, batch in enumerate(dataloader):
         if args.max_batches is not None and i_batch >= args.max_batches:
             break  
@@ -64,7 +65,7 @@ def train_epoch(model, dataloader, args):
  
         optimizer.zero_grad()
         anchor = model.encode_text(batch['texts']) 
-        # cell_objects = [cell.objects for cell in batch['cells']]
+        # positive = model.encode_objects(batch['objects'], batch['object_points'])
         positive = model.encode_objects(batch['objects'], batch['object_points'])
 
         if args.ranking_loss == 'triplet':
@@ -73,6 +74,16 @@ def train_epoch(model, dataloader, args):
             loss = criterion(anchor, positive, negative)
         else:
             loss = criterion(anchor, positive)
+
+        # gt_class_indices = [idx for sample in batch['object_class_indices'] for idx in sample]
+        # gt_color_indices = [idx for sample in batch['object_color_indices'] for idx in sample]
+        # loss_classes = 5 * criterion_class(class_preds, torch.tensor(gt_class_indices, dtype=torch.long, device=device))
+        # loss_colors = 5 * criterion_color(color_preds, torch.tensor(gt_color_indices, dtype=torch.long, device=device))            
+        # if not printed:
+        #     print(f'loss {loss.item():0.3f} class {loss_classes.item():0.3f} color {loss_colors.item():0.3f}')
+        #     printed = False
+
+        loss = loss #+ loss_classes + loss_colors
 
         loss.backward()
         optimizer.step()
@@ -103,22 +114,34 @@ def eval_epoch(model, dataloader, args):
     assert args.ranking_loss != 'triplet' # Else also update evaluation.pipeline
 
     model.eval() # Now eval() seems to increase results
+    accuracies = {k: [] for k in args.top_k}
+    stats = EasyDict(
+        class_accuracies = [],
+        color_accuracies = []
+    )
 
     num_samples = len(dataloader.dataset) if isinstance(dataloader, DataLoader) else np.sum([len(batch['texts']) for batch in dataloader])
     cell_encodings = np.zeros((num_samples, model.embed_dim))
     text_encodings = np.zeros((num_samples, model.embed_dim))
     index_offset = 0
     for batch in dataloader:
-        # cell_objects = [cell.objects for cell in batch['cells']]
+        # cell_enc = model.encode_objects(batch['objects'], batch['object_points'])
         cell_enc = model.encode_objects(batch['objects'], batch['object_points'])
         text_enc = model.encode_text(batch['texts'])
+
+        # gt_class_indices = [idx for sample in batch['object_class_indices'] for idx in sample]
+        # gt_color_indices = [idx for sample in batch['object_color_indices'] for idx in sample]
+        # stats.class_accuracies.append(np.mean(class_preds.cpu().detach().numpy().argmax(axis=-1) == gt_class_indices))
+        # stats.color_accuracies.append(np.mean(color_preds.cpu().detach().numpy().argmax(axis=-1) == gt_color_indices))
+        stats.class_accuracies.append(0)
+        stats.color_accuracies.append(0)
 
         batch_size = len(cell_enc)
         cell_encodings[index_offset : index_offset + batch_size, :] = cell_enc.cpu().detach().numpy()
         text_encodings[index_offset : index_offset + batch_size, :] = text_enc.cpu().detach().numpy()
         index_offset += batch_size
 
-    accuracies = {k: [] for k in args.top_k}
+    
     top_retrievals = {} # Top retrievals as {query_idx: sorted_indices}
     for query_idx in range(len(text_encodings)):
         if args.ranking_loss == 'triplet':
@@ -134,8 +157,10 @@ def eval_epoch(model, dataloader, args):
 
     for k in args.top_k:
         accuracies[k] = np.mean(accuracies[k])
+    stats.class_accuracies = np.mean(stats.class_accuracies)
+    stats.color_accuracies = np.mean(stats.color_accuracies)
     
-    return accuracies, top_retrievals
+    return accuracies, stats, top_retrievals
 
 if __name__ == "__main__":
     args = parse_arguments()
@@ -162,11 +187,13 @@ if __name__ == "__main__":
         if args.pointnet_transform == 1:
             train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(180, axis=2), T.NormalizeScale()])
         if args.pointnet_transform == 2:
+            train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(90, axis=2), T.NormalizeScale()])            
+        if args.pointnet_transform == 3:
             train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale(), T.RandomFlip(0), T.RandomFlip(1), T.RandomFlip(2), T.NormalizeScale()])
         dataset_train = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_TRAIN_K360, train_transform, split=None, shuffle_hints=True)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=args.shuffle)
 
-        val_transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale()])
+        val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
         dataset_val = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_TEST_K360, val_transform, split=None)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=False)    
 
@@ -181,13 +208,16 @@ if __name__ == "__main__":
     batch = next(iter(dataloader_train))
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    print('device:', device)
+    print('device:', device, torch.cuda.get_device_name(0))
     torch.autograd.set_detect_anomaly(True)     
 
     learning_rates = np.logspace(-2, -4, 5)[args.lr_idx : args.lr_idx + 1]
     dict_loss = {lr: [] for lr in learning_rates}
     dict_acc = {k: {lr: [] for lr in learning_rates} for k in args.top_k}
     dict_acc_val = {k: {lr: [] for lr in learning_rates} for k in args.top_k}    
+    
+    val_stats_class = {lr: [] for lr in learning_rates}
+    val_stats_color = {lr: [] for lr in learning_rates}
 
     best_val_accuracy = -1
     model_path = f"./checkpoints/retrieval_{args.dataset}.pth"
@@ -209,6 +239,9 @@ if __name__ == "__main__":
         if args.ranking_loss == 'triplet':
             criterion = nn.TripletMarginLoss(margin=args.margin)
 
+        criterion_class = nn.CrossEntropyLoss()
+        criterion_color = nn.CrossEntropyLoss()            
+
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)
 
         for epoch in range(args.epochs):
@@ -216,14 +249,17 @@ if __name__ == "__main__":
 
             loss, train_batches = train_epoch(model, dataloader_train, args)
             # train_acc, train_retrievals = eval_epoch(model, dataloader_train, args)
-            train_acc, train_retrievals = eval_epoch(model, train_batches, args)
-            val_acc, val_retrievals = eval_epoch(model, dataloader_val, args)
+            train_acc, train_stats, train_retrievals = eval_epoch(model, train_batches, args)
+            val_acc, val_stats, val_retrievals = eval_epoch(model, dataloader_val, args)
 
             key = lr
             dict_loss[key].append(loss)
             for k in args.top_k:
                 dict_acc[k][key].append(train_acc[k])
                 dict_acc_val[k][key].append(val_acc[k])
+
+            val_stats_class[lr].append(val_stats.class_accuracies)
+            val_stats_color[lr].append(val_stats.color_accuracies)
 
             scheduler.step()
             print(f'\t lr {lr:0.4} loss {loss:0.2f} epoch {epoch} train-acc: ', end="")
@@ -236,7 +272,7 @@ if __name__ == "__main__":
 
         # Saving best model (w/o early stopping)
         if val_acc[max(args.top_k)] > best_val_accuracy:
-            print('Saving model to', model_path)
+            print(f'Saving model at {val_acc[max(args.top_k)]:0.2f} to {model_path}')
             torch.save(model, model_path)
             best_val_accuracy = val_acc[max(args.top_k)]
 
@@ -246,85 +282,16 @@ if __name__ == "__main__":
     Save plots
     '''
     # plot_name = f'Cells-{args.dataset}_s{scene_name.split('_')[-2]}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_f{"-".join(args.use_features)}.png'
-    plot_name = f'CellsRealScene-PN-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_l-{args.ranking_loss}_t{args.pointnet_transform}_m{args.margin}_s{args.shuffle}_f{"-".join(args.use_features)}.png'
+    plot_name = f'CellsRealScene-PN-Pts{args.dataset}_e{args.epochs}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_em{args.pointnet_embed}_feat{args.pointnet_features}_p{args.pointnet_numpoints}_f{args.pointnet_freeze}_t{args.pointnet_transform}_m{args.margin}_s{args.shuffle}_g{args.lr_gamma}.png'
 
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
     val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}
     metrics = {
         'train-loss': dict_loss,
         **train_accs,
-        **val_accs
+        **val_accs,
+        'val-class-acc': val_stats_class,
+        'val-color-acc': val_stats_color
     }
     plot_metrics(metrics, './plots/'+plot_name)    
 
-    # show = 'val'
-    # retrievals = val_retrievals if show=='val' else train_retrievals
-    # dataset = dataset_val if show=='val' else dataset_train
-    # for pose_idx in retrievals.keys():
-    #     img = draw_retrieval(dataset, pose_idx, retrievals[pose_idx])          
-    #     cv2.imwrite(f"retrievals_{show}_{pose_idx:02.0f}.png", img)
-
-# DEPRECATED / Old function for S3D
-# @torch.no_grad()
-# def eval_epoch(model, dataloader, args, targets='all'):
-#     """Top-k retrieval for each pose against all cells in the dataset.
-#     Model might not have seen cells in pairwise-ranking-loss training.
-
-#     Args:
-#         model : The model
-#         dataloader : The dataloader
-#         args : Global arguments
-#         targets: <all> or <poses> to use all available cells as targets or only those matching a pose
-#     """
-#     global print_targets
-
-#     assert targets in ('all', 'poses')
-#     dataset = dataloader.dataset
-    
-#     #Encode all the cells
-#     cell_encodings = np.zeros((0, model.embed_dim))
-#     for i in range(0, len(dataset.cells), args.batch_size):
-#         cells = dataset.cells[i : i+args.batch_size]
-#         cell_objects = [cell.objects for cell in cells]
-#         encodings = model.encode_objects(cell_objects)
-#         cell_encodings = np.vstack((cell_encodings, encodings.cpu().detach().numpy()))
-
-#     #Encode all the poses
-#     pose_encodings = np.zeros((0, model.embed_dim))
-#     correct_indices = []
-#     for i_batch, batch in enumerate(dataloader):
-#         if args.max_batches is not None and i_batch >= args.max_batches:
-#             break 
-
-#         encodings = model.encode_text(batch['texts'])
-#         pose_encodings = np.vstack((pose_encodings, encodings.cpu().detach().numpy()))
-#         correct_indices.extend(batch['cell_indices'])
-#     assert len(correct_indices) == len(pose_encodings)
-
-#     if targets == 'poses': # Remove all the cells that are not the target of a pose
-#         for idx in range(len(cell_encodings)):
-#             if idx not in correct_indices:
-#                 cell_encodings[idx, :] = np.inf
-
-#     if print_targets:
-#         print('# targets: ', len(np.unique(correct_indices)))
-#         print_targets = False
-
-#     accuracies = {k: [] for k in args.top_k}
-#     top_retrievals = {} # Top retrievals as {query_pose_idx: sorted_indices}
-#     for i in range(len(pose_encodings)):
-#         if args.ranking_loss == 'triplet':
-#             dists = np.linalg.norm(cell_encodings[:] - pose_encodings[i], axis=1)
-#             sorted_indices = np.argsort(dists) #Low->high
-#         else:
-#             scores = cell_encodings[:] @ pose_encodings[i]
-#             sorted_indices = np.argsort(-1.0 * scores) #Sort high->low
-            
-#         for k in args.top_k:
-#             accuracies[k].append(correct_indices[i] in sorted_indices[0:k])
-
-#         top_retrievals[i] = sorted_indices
-    
-#     for k in args.top_k:
-#         accuracies[k] = np.mean(accuracies[k])
-#     return accuracies, top_retrievals    

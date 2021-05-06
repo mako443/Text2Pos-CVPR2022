@@ -30,7 +30,6 @@ def get_mlp(channels, add_batchnorm=True):
             for i in range(1, len(channels))
         ])    
 
-
 class LanguageEncoder(torch.nn.Module):
     def __init__(self, known_words, embedding_dim, bi_dir, num_layers=1):
         super(LanguageEncoder, self).__init__()

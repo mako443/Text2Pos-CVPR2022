@@ -12,6 +12,7 @@ from models.pointcloud.pointnet2 import PointNet2
 from dataloading.semantic3d.semantic3d_pointcloud import Semantic3dObjectDataset, Semantic3dObjectDatasetMulti
 from dataloading.kitti360.objects import Kitti360ObjectsDataset, Kitti360ObjectsDatasetMulti
 from datapreparation.kitti360.utils import SCENE_NAMES as SCENE_NAMES_K360, SCENE_NAMES_TRAIN as SCENE_NAMES_TRAIN_K360, SCENE_NAMES_TEST as SCENE_NAMES_TEST_K360
+from datapreparation.kitti360.utils import COLOR_NAMES as COLOR_NAMES_K360
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -30,38 +31,43 @@ def train_epoch(model, dataloader, args):
     model.train()
     epoch_losses = []
     epoch_accs = []
+    epoch_accs_color = []
     
     for i_batch, batch in enumerate(dataloader):
         if args.max_batches is not None and i_batch >= args.max_batches:
             break
 
         optimizer.zero_grad()
-        pred = model(batch)
+        output = model(batch)
 
-        loss = criterion(pred, batch.y)
+        loss = 1/2 * (criterion(output.class_pred, batch.y) + criterion(output.color_pred, batch.y_color))
         loss.backward()
         optimizer.step()
 
         epoch_losses.append(loss.item())
-        acc = torch.sum(torch.argmax(pred, dim=-1) == batch.y).item() / len(pred)
+        acc = torch.sum(torch.argmax(output.class_pred, dim=-1) == batch.y).item() / len(output.class_pred)
         epoch_accs.append(acc)
-    
-    pred = torch.argmax(pred, dim=-1).cpu().numpy()
-    # print(pred, batch.y.cpu().numpy())
-    
-    return np.mean(epoch_losses), np.mean(epoch_accs)
+        
+        acc_color = torch.sum(torch.argmax(output.color_pred, dim=-1) == batch.y_color).item() / len(output.color_pred)
+        epoch_accs_color.append(acc_color)
+        
+    return np.mean(epoch_losses), np.mean(epoch_accs), np.mean(epoch_accs_color)
 
 @torch.no_grad()
 def val_epoch(model, dataloader, args):
     model.eval() #TODO: yes/no?
     epoch_accs = []
+    epoch_accs_color = []    
 
     for i_batch, batch in enumerate(dataloader):
-        pred = model(batch)
-        acc = torch.sum(torch.argmax(pred, dim=-1) == batch.y).item() / len(pred)
+        output = model(batch)
+        acc = torch.sum(torch.argmax(output.class_pred, dim=-1) == batch.y).item() / len(output.class_pred)
         epoch_accs.append(acc)
 
-    return np.mean(epoch_accs)
+        acc_color = torch.sum(torch.argmax(output.color_pred, dim=1) == batch.y_color).item() / len(output.color_pred)
+        epoch_accs_color.append(acc_color)
+
+    return np.mean(epoch_accs), np.mean(epoch_accs_color)
 
 
 if __name__ == "__main__":
@@ -105,16 +111,18 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_reates = np.logspace(-2, -4.0, 5)
+    learning_reates = np.logspace(-2, -4.0, 5)[args.lr_idx : args.lr_idx + 1]
     dict_loss = {lr: [] for lr in learning_reates}    
     dict_acc = {lr: [] for lr in learning_reates}
+    dict_acc_color = {lr: [] for lr in learning_reates}
     dict_acc_val = {lr: [] for lr in learning_reates}
+    dict_acc_val_color = {lr: [] for lr in learning_reates}
 
     best_val_accuracy = -1
-    model_path = f"./checkpoints/pointnet_{args.dataset}_t{args.pointnet_transform}_p{args.pointnet_numpoints}.pth"    
+    model_path = f"./checkpoints/pointnet_{args.dataset}_lr{args.lr_idx}_t{args.pointnet_transform}_p{args.pointnet_numpoints}.pth"    
 
     for lr in learning_reates:
-        model = PointNet2(num_classes=len(dataset_train.class_to_index), args=args)
+        model = PointNet2(num_classes=len(dataset_train.class_to_index), num_colors=len(COLOR_NAMES_K360), args=args)
         model.to(device)
 
         optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -122,12 +130,14 @@ if __name__ == "__main__":
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)
 
         for epoch in range(args.epochs):
-            loss, acc_train = train_epoch(model, dataloader_train, args)
-            acc_val = val_epoch(model, dataloader_val, args)
+            loss, acc_train, acc_train_color = train_epoch(model, dataloader_train, args)
+            acc_val, acc_val_color = val_epoch(model, dataloader_val, args)
 
             dict_loss[lr].append(loss)
             dict_acc[lr].append(acc_train)
             dict_acc_val[lr].append(acc_val)
+            dict_acc_color[lr].append(acc_train_color)
+            dict_acc_val_color[lr].append(acc_val_color)
 
             scheduler.step()
 
@@ -144,10 +154,12 @@ if __name__ == "__main__":
     Save plots
     '''
     # plot_name = f'PN2_len{len(dataset_train)}_bs{args.batch_size}_mb{args.max_batches}_l{args.num_layers}_v{args.variation}_s{args.shuffle}_g{args.lr_gamma}.png'
-    plot_name = f'PN2-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_pl{args.pointnet_layers}_pv{args.pointnet_variation}_t{args.pointnet_transform}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}.png'
+    plot_name = f'PN2-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_lr{args.lr_idx}_pl{args.pointnet_layers}_pv{args.pointnet_variation}_t{args.pointnet_transform}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-acc': dict_acc,
-        'val-acc': dict_acc_val      
+        'train-acc-color': dict_acc_color,
+        'val-acc': dict_acc_val,
+        'val-acc-color': dict_acc_val_color
     }
     plot_metrics(metrics, './plots/'+plot_name)        

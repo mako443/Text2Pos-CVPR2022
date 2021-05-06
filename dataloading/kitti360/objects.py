@@ -35,8 +35,10 @@ class Kitti360ObjectsDataset(Kitti360BaseDataset):
         points = torch.tensor(np.float32(obj.xyz))
         colors = torch.tensor(np.float32(obj.rgb))
         label = self.class_to_index[obj.label]
+        label_color = COLOR_NAMES.index(obj.get_color_text())
+        assert label_color >= 0 and label_color < 8
 
-        data = Data(x=colors, y=label, pos=points) # 'x' refers to point-attributes in PyG, 'pos' is xyz
+        data = Data(x=colors, y=label, pos=points, y_color=label_color) # 'x' refers to point-attributes in PyG, 'pos' is xyz
         data = self.transform(data)
         return data
 
@@ -63,8 +65,10 @@ class Kitti360ObjectsDatasetMulti(Dataset):
         points = torch.tensor(np.float32(obj.xyz))
         colors = torch.tensor(np.float32(obj.rgb))
         label = self.class_to_index[obj.label]
+        label_color = COLOR_NAMES.index(obj.get_color_text())
+        assert label_color >= 0 and label_color < 8        
 
-        data = Data(x=colors, y=label, pos=points) # 'x' refers to point-attributes in PyG, 'pos' is xyz
+        data = Data(x=colors, y=label, pos=points, y_color=label_color) # 'x' refers to point-attributes in PyG, 'pos' is xyz
         data = self.transform(data)
         return data
 
