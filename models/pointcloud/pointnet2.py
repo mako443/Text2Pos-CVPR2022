@@ -55,7 +55,7 @@ class GlobalAbstractionLayer(nn.Module):
         return x
 
 class PointNet2(nn.Module):
-    def __init__(self, num_classes, args):
+    def __init__(self, num_classes, num_colors, args):
         super(PointNet2, self).__init__()
         assert args.pointnet_layers == 3 and args.pointnet_variation == 0
        
@@ -66,7 +66,12 @@ class PointNet2(nn.Module):
 
         self.lin1 = nn.Linear(1024, 512)
         self.lin2 = nn.Linear(512, 256)
-        self.lin3 = nn.Linear(256, num_classes)                     
+        self.class_classifier = nn.Linear(256, num_classes)   
+        self.color_classifier = nn.Linear(256, num_colors)      
+
+        self.dim0 = 1024
+        self.dim1 = 512
+        self.dim2 = 256            
         
         # Slightly better but larger:
             # self.sa1 = SetAbstractionLayer(0.5, 0.2, get_mlp([3 + 3, 32, 64], add_batchnorm=True))
@@ -83,14 +88,15 @@ class PointNet2(nn.Module):
         x, pos, batch = self.sa1(data.x, data.pos, data.batch)
         x, pos, batch = self.sa2(x, pos, batch)
         x, pos, batch = self.sa3(x, pos, batch)
-        x = self.ga(x, pos, batch)
+        features0 = self.ga(x, pos, batch)
 
         # Dropout did not seem helpful
-        x = F.relu(self.lin1(x))           
-        x = F.relu(self.lin2(x))
-        x = self.lin3(x)
+        features1 = F.relu(self.lin1(features0))           
+        features2 = F.relu(self.lin2(features1))
+        class_pred = self.class_classifier(features2)
+        color_pred = self.color_classifier(features2)
 
-        return x
+        return EasyDict(features0=features0, features1=features1, features2=features2, class_pred=class_pred, color_pred=color_pred)
 
     @property
     def device(self):

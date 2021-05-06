@@ -11,4 +11,4 @@
 
 source /usr/stud/kolmet/venv/pyg/bin/activate
 module load cuda/10.2
-srun python3 -m training.cell_retrieval2 "$@"
+srun python3 -m training.cell_retrieval "$@"
