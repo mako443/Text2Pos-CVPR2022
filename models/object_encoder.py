@@ -8,6 +8,10 @@ import numpy as np
 from models.modules import get_mlp
 from models.pointcloud.pointnet2 import PointNet2
 
+'''
+TODO: remove color encoding
+'''
+
 class ObjectEncoder(torch.nn.Module):
     def __init__(self, embed_dim, known_classes, known_colors, args):
         super(ObjectEncoder, self).__init__()
