@@ -67,10 +67,10 @@ def extract_objects(xyz, rgb, lbl, iid):
 
     return objects
     
-def gather_objects(base_path, folder_name):
+def gather_objects(path_input, folder_name):
     print(f'Loading objects for {folder_name}')
 
-    path = osp.join(base_path, 'data_3d_semantics', folder_name, 'static')
+    path = osp.join(path_input, 'data_3d_semantics', folder_name, 'static')
     assert osp.isdir(path)
     file_names = [f for f in os.listdir(path) if not f.startswith('._')]
 
@@ -114,8 +114,8 @@ def gather_objects(base_path, folder_name):
     return objects_threshed
     # return list(scene_objects.values())
 
-def create_poses(base_path, folder_name, pose_distance, return_pose_objects=False):
-    path = osp.join(base_path, 'data_poses', folder_name, 'poses.txt')
+def create_poses(path_input, path_output, folder_name, pose_distance, return_pose_objects=False):
+    path = osp.join(path_input, 'data_poses', folder_name, 'poses.txt')
     poses = np.loadtxt(path)
     poses = poses[:, 1:].reshape((-1, 3,4)) # Convert to 3x4 matrices
     poses = poses[:, :, -1] # Take last column
@@ -151,7 +151,13 @@ def create_cells(objects, poses, scene_name, cell_size):
     none_indices = []
     for i_pose, pose in enumerate(poses):
         # print(f'\r \t pose {i_pose} / {len(poses)}', end='')
-        bbox = np.hstack((pose - cell_size/2, pose + cell_size/2))
+        bbox = np.hstack((pose - cell_size/2, pose + cell_size/2)) # [x0, y0, z0, x1, y1, z1]
+
+        # Shift the cell in x-y-plane
+        shift = np.random.randint(-cell_size//2.2, cell_size//2.2, size=2) # Shift so that pose is guaranteed to be in cell
+        bbox[0:2] += shift
+        bbox[3:5] += shift
+
         cell = describe_cell(bbox, objects, pose, scene_name)
         if cell is not None:
             cells.append(cell)
@@ -171,37 +177,33 @@ def create_cells(objects, poses, scene_name, cell_size):
     
 if __name__ == '__main__':
     np.random.seed(4096) # Set seed to re-produce results
-    base_path = './data/kitti360'
+    path_input = './data/kitti360'
+    path_output = './data/kitti360_shifted'
     scene_name = sys.argv[-1]
-    print('Scene:', scene_name)
-    scene_names = SCENE_NAMES if scene_name=='all' else [scene_name, ]
+    # print('Scene:', scene_name)
+    # scene_names = SCENE_NAMES if scene_name=='all' else [scene_name, ]
 
     cell_size = 30
-    print('Using cell-size', cell_size)
+    print(f'Preparing {path_input} -> {path_output}, cell_size {cell_size}')
 
     # Incomplete folders: 3 corrupted...
     # for folder_name in SCENE_NAMES:
-    for folder_name in [scene_name, ]: # 2013_05_28_drive_0000_sync
+    for folder_name in ['2013_05_28_drive_0003_sync', ]: # 2013_05_28_drive_0000_sync
         print(f'Folder: {folder_name}')
 
-        poses, pose_objects = create_poses(base_path, folder_name, cell_size, return_pose_objects=True)
+        poses, pose_objects = create_poses(path_input, path_output, folder_name, cell_size, return_pose_objects=True)
 
-        path_objects = osp.join(base_path, 'objects', f'{folder_name}.pkl')
-        path_cells = osp.join(base_path, 'cells', f'{folder_name}.pkl')
+        path_objects = osp.join(path_output, 'objects', f'{folder_name}.pkl')
+        path_cells = osp.join(path_output, 'cells', f'{folder_name}.pkl')
 
         # Load or gather objects
         if not osp.isfile(path_objects): # Build if not cached
-            objects = gather_objects(base_path, folder_name)
+            objects = gather_objects(path_input, folder_name)
             pickle.dump(objects, open(path_objects, 'wb'))
             print(f'Saved objects to {path_objects}')  
         else:
             print(f'Loaded objects from {path_objects}')
             objects = pickle.load(open(path_objects, 'rb'))
-
-        quit()
-
-        # # Set colors
-        # set_object_colors(objects)
 
         # Create cells
         res, cells = create_cells(objects, poses, folder_name, cell_size)
@@ -211,6 +213,7 @@ if __name__ == '__main__':
         print(f'Saved {len(cells)} cells to {path_cells}')   
 
         # Debugging 
+        idx = np.random.randint(len(cells))
         idx = np.random.randint(len(cells))
         cell = cells[idx]
         print('idx', idx)

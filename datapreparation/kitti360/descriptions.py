@@ -69,6 +69,7 @@ def describe_cell(bbox, scene_objects: List[Object3d], pose_w, scene_name, is_sy
         for obj in cell_objects:
             obj.xyz = (obj.xyz - bbox[0:3]) / cell_size
         pose = (pose_w - bbox[0:3]) / cell_size
+        assert np.all(pose > 0) and np.all(pose < 1), f'{pose} {pose_w} {bbox}'
     else: # If cell is synthetic, only copy objects, cell-size and pose
         cell_objects = scene_objects
         cell_size = np.max(bbox[3:6] - bbox[0:3])

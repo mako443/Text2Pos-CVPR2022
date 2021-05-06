@@ -190,11 +190,11 @@ if __name__ == "__main__":
             train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(90, axis=2), T.NormalizeScale()])            
         if args.pointnet_transform == 3:
             train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale(), T.RandomFlip(0), T.RandomFlip(1), T.RandomFlip(2), T.NormalizeScale()])
-        dataset_train = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_TRAIN_K360, train_transform, split=None, shuffle_hints=True)
+        dataset_train = Kitti360CellDatasetMulti(args.base_path, SCENE_NAMES_TRAIN_K360, train_transform, split=None, shuffle_hints=True)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=args.shuffle)
 
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        dataset_val = Kitti360CellDatasetMulti('./data/kitti360', SCENE_NAMES_TEST_K360, val_transform, split=None)
+        dataset_val = Kitti360CellDatasetMulti(args.base_path, SCENE_NAMES_TEST_K360, val_transform, split=None)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=False)    
 
     # train_words = dataset_train.get_known_words()
