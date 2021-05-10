@@ -136,11 +136,7 @@ if __name__ == '__main__':
     dataloader = DataLoader(dataset, batch_size=32, collate_fn=Kitti360PoseReferenceMockDatasetPoints.collate_fn)
 
     data = dataset[0]
-    print('max data:', torch.max(data['object_points'].pos))
 
-    batch = next(iter(dataloader))
-    maxes = [torch.max(b.pos) for b in batch['object_points']]
-    print('max batch:', torch.max(torch.tensor(maxes)))
 
     # print(data['hint_descriptions'])
     # cv2.imshow("", plot_cell(data['cells'])); cv2.waitKey()

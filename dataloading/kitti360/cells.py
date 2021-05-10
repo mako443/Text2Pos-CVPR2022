@@ -23,7 +23,7 @@ from dataloading.kitti360.poses import batch_object_points
 Augmentations:
 - hints order (care not to influence matches)
 - pads to random objects and vice-versa
-- 
+- flip cell
 '''
 class Kitti360CellDataset(Kitti360BaseDataset):
     def __init__(self, base_path, scene_name, transform, split=None, shuffle_hints=False, flip_cells=False):
@@ -151,4 +151,4 @@ if __name__ == '__main__':
     transform = T.FixedPoints(10000, replace=False, allow_duplicates=False)
 
     dataset = Kitti360CellDatasetMulti(base_path, [folder_name, ], transform)
-    cell = dataset.cells[0]
+    data = dataset[0]
