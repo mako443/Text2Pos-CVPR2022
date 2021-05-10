@@ -1,3 +1,5 @@
+from typing import List
+
 import cv2
 import os
 import os.path as osp
@@ -14,7 +16,7 @@ from plyfile import PlyData, PlyElement
 
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, COLORS, COLOR_NAMES, SCENE_NAMES
-from datapreparation.kitti360.utils import CLASS_TO_MINPOINTS, CLASS_TO_VOXELSIZE
+from datapreparation.kitti360.utils import CLASS_TO_MINPOINTS, CLASS_TO_VOXELSIZE, STUFF_CLASSES
 from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.descriptions import describe_cell
 
@@ -141,9 +143,36 @@ def create_poses(path_input, path_output, folder_name, pose_distance, return_pos
     else:
         return sampled_poses
 
-# def set_object_colors(objects):
-#     for obj in objects:
-#         obj.set_color(COLORS_HSV, COLOR_NAMES)
+def get_close_poses(poses: List[np.ndarray], scene_objects: List[Object3d], cell_size, pose_objects=None):
+    """Retains all poses that are at most cell_size / 2 distant from an instance-object.
+
+    Args:
+        poses (List[np.ndarray]): [description]
+        scene_objects (List[Object3d]): [description]
+        cell_size ([type]): [description]
+        pose_objects ([type], optional): [description]. Defaults to None.
+
+    Returns:
+        [type]: [description]
+    """
+    instance_objects = [obj for obj in scene_objects if obj.label not in STUFF_CLASSES]
+    close_poses, close_pose_objects = [], []
+    for i_pose, pose in enumerate(poses):
+        for obj in instance_objects:
+            closest_point = obj.get_closest_point(pose)
+            dist = np.linalg.norm(pose - closest_point)
+            obj.closest_point = None
+            if dist < cell_size / 2:
+                close_poses.append(pose)
+                close_pose_objects.append(pose_objects[i_pose])
+                break
+    
+    assert len(close_poses) > len(poses) * 2/5, f'Too few poses retained ({len(close_poses)} of {len(poses)}), are all objects loaded?'
+
+    if pose_objects:
+        return close_poses, close_pose_objects
+    else:
+        return close_poses
 
 def create_cells(objects, poses, scene_name, cell_size):
     print('Creating cells...')
@@ -167,18 +196,18 @@ def create_cells(objects, poses, scene_name, cell_size):
     # print()
     
     print(f'Nones: {len(none_indices)} / {len(poses)}')
-    if len(none_indices) > len(poses)/3:
+    if len(none_indices) > len(poses)/5:
         print(f'Too many nones, are all objects gathered?')
         return False, none_indices
     else:
         return True, cells
 
     return cells
-    
+
 if __name__ == '__main__':
     np.random.seed(4096) # Set seed to re-produce results
     path_input = './data/kitti360'
-    path_output = './data/kitti360_shifted'
+    path_output = './data/kitti360_shifted_9'
     scene_name = sys.argv[-1]
     # print('Scene:', scene_name)
     # scene_names = SCENE_NAMES if scene_name=='all' else [scene_name, ]
@@ -188,10 +217,10 @@ if __name__ == '__main__':
 
     # Incomplete folders: 3 corrupted...
     # for folder_name in SCENE_NAMES:
-    for folder_name in ['2013_05_28_drive_0003_sync', ]: # 2013_05_28_drive_0000_sync
+    for folder_name in ['2013_05_28_drive_0002_sync', ]: # 2013_05_28_drive_0000_sync
         print(f'Folder: {folder_name}')
 
-        poses, pose_objects = create_poses(path_input, path_output, folder_name, cell_size, return_pose_objects=True)
+        poses, pose_objects = create_poses(path_input, path_output, folder_name, cell_size, return_pose_objects=True)        
 
         path_objects = osp.join(path_output, 'objects', f'{folder_name}.pkl')
         path_cells = osp.join(path_output, 'cells', f'{folder_name}.pkl')
@@ -204,6 +233,8 @@ if __name__ == '__main__':
         else:
             print(f'Loaded objects from {path_objects}')
             objects = pickle.load(open(path_objects, 'rb'))
+
+        poses, pose_objects = get_close_poses(poses, objects, cell_size, pose_objects)
 
         # Create cells
         res, cells = create_cells(objects, poses, folder_name, cell_size)

@@ -5,6 +5,7 @@ import os.path as osp
 import pickle
 import numpy as np
 import cv2
+from copy import deepcopy
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -22,7 +23,7 @@ from dataloading.kitti360.poses import batch_object_points
 Augmentations:
 - hints order (care not to influence matches)
 - pads to random objects and vice-versa
-- 
+- flip cell
 '''
 class Kitti360CellDataset(Kitti360BaseDataset):
     def __init__(self, base_path, scene_name, transform, split=None, shuffle_hints=False):
@@ -57,6 +58,43 @@ class Kitti360CellDataset(Kitti360BaseDataset):
 
     def __len__(self):
         return len(self.cells)
+
+# TODO: for free orientations, possibly flip cell only, create descriptions and hints again
+# OR: numeric vectors in descriptions, flip cell objects and description.direction, then create hints again
+# Flip pose, too?
+def flip_cell(cell, text, direction):
+    """Flips the cell horizontally or vertically
+    CARE: Needs adjustment for non-compass directions
+
+    Args:
+        cell (Cell): The cell to flip, is copied before modification
+        text (str): The text description to flip
+        direction (int): Horizontally (+1) or vertically (-1)
+
+    Returns:
+        Cell: flipped cell
+        str: flipped text
+    """
+    assert direction in (-1, 1)
+
+    cell = deepcopy(cell)
+
+    if direction == 1: #Horizontally
+        for obj in cell.objects:
+            obj.xyz[:, 0] = 1 - obj.xyz[:, 0]
+            obj.closest_point[0] = 1 - obj.closest_point[0]
+
+        text = text.replace('east','east-flipped').replace('west','east').replace('east-flipped', 'west')
+    elif direction == -1: #Vertically
+        for obj in cell.objects:
+            obj.xyz[:, 1] = 1 - obj.xyz[:, 1]
+            obj.closest_point[1] = 1 - obj.closest_point[1]  
+              
+        text = text.replace('north', 'north-flipped'). replace('south', 'north').replace('north-flipped', 'south')
+
+    assert 'flipped' not in text
+
+    return cell, text
 
 class Kitti360CellDatasetMulti(Dataset):
     def __init__(self, base_path, scene_names, transform, split=None, shuffle_hints=False):
@@ -103,4 +141,4 @@ if __name__ == '__main__':
     transform = T.FixedPoints(10000, replace=False, allow_duplicates=False)
 
     dataset = Kitti360CellDatasetMulti(base_path, [folder_name, ], transform)
-    cell = dataset.cells[0]
+    data = dataset[0]
