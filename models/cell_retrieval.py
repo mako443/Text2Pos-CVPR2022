@@ -13,7 +13,7 @@ from easydict import EasyDict
 
 from models.modules import get_mlp, LanguageEncoder
 from models.object_encoder import ObjectEncoder
-from models.pointcloud.pointnet2 import PointNet2
+# from models.pointcloud.pointnet2 import PointNet2
 
 from dataloading.semantic3d.semantic3d import Semantic3dCellRetrievalDataset
 from dataloading.semantic3d.semantic3d_poses import Semantic3dPosesDataset
@@ -37,14 +37,14 @@ class CellRetrievalNetwork(torch.nn.Module):
         Object path
         '''
         # Set idx=0 for padding
-        self.known_classes = {c: (i+1) for i,c in enumerate(known_classes)}
-        self.known_classes['<unk>'] = 0
-        self.class_embedding = nn.Embedding(len(self.known_classes), embed_dim, padding_idx=0)
+        # self.known_classes = {c: (i+1) for i,c in enumerate(known_classes)}
+        # self.known_classes['<unk>'] = 0
+        # self.class_embedding = nn.Embedding(len(self.known_classes), embed_dim, padding_idx=0)
 
-        self.pos_embedding = get_mlp([3, 64, embed_dim]) #OPTION: pos_embedding layers
-        self.color_embedding = get_mlp([3, 64, embed_dim]) #OPTION: color_embedding layers
+        # self.pos_embedding = get_mlp([3, 64, embed_dim]) #OPTION: pos_embedding layers
+        # self.color_embedding = get_mlp([3, 64, embed_dim]) #OPTION: color_embedding layers
 
-        self.mlp_merge = get_mlp([len(self.use_features)*embed_dim, embed_dim])
+        # self.mlp_merge = get_mlp([len(self.use_features)*embed_dim, embed_dim])
 
         # CARE: possibly handle variation in forward()!
         if self.variation == 0:
@@ -53,7 +53,6 @@ class CellRetrievalNetwork(torch.nn.Module):
         elif self.variation == 1:
             self.graph1 = gnn.DynamicEdgeConv(get_mlp([2 * embed_dim, embed_dim, embed_dim], add_batchnorm=True), k=8, aggr='mean') # Originally: k=4            
             self.lin = get_mlp([embed_dim, embed_dim, embed_dim])
-
 
         # PointNet++
         # self.pointnet = PointNet2(len(known_classes), len(known_colors), args) # The known classes are all the same now, at least for K360
@@ -138,8 +137,8 @@ class CellRetrievalNetwork(torch.nn.Module):
         batch = [] #Batch tensor to send into PyG
         for i_batch, objects_sample in enumerate(objects):
             for obj in objects_sample:
-                class_idx = self.known_classes.get(obj.label, 0)
-                class_indices.append(class_idx)
+                # class_idx = self.known_classes.get(obj.label, 0)
+                # class_indices.append(class_idx)
                 batch.append(i_batch)
         batch = torch.tensor(batch, dtype=torch.long, device=self.device)
 
@@ -195,10 +194,10 @@ class CellRetrievalNetwork(torch.nn.Module):
 
     @property
     def device(self):
-        return next(self.pos_embedding.parameters()).device   
+        return next(self.lin.parameters()).device   
 
     def get_device(self):
-        return next(self.pos_embedding.parameters()).device           
+        return next(self.lin.parameters()).device           
 
 if __name__ == "__main__":
     model = CellRetrievalNetwork(['high vegetation', 'low vegetation', 'buildings', 'hard scape', 'cars'], 'a b c d e'.split(), embed_dim=32, k=2)      

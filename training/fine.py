@@ -66,12 +66,12 @@ def train_epoch(model, dataloader, args):
 
         loss_matching = criterion_matching(output.P, batch['all_matches'])
         loss_offsets = criterion_offsets(output.offsets, torch.tensor(batch['offsets'], dtype=torch.float, device=DEVICE))
-        loss_classes = 0.5 * criterion_class(output.class_preds, torch.tensor(batch['object_class_indices'], dtype=torch.long, device=DEVICE).flatten())
-        loss_colors = 0.5 * criterion_color(output.color_preds, torch.tensor(batch['object_color_indices'], dtype=torch.long, device=DEVICE).flatten())
+        # loss_classes = 0.5 * criterion_class(output.class_preds, torch.tensor(batch['object_class_indices'], dtype=torch.long, device=DEVICE).flatten())
+        # loss_colors = 0.5 * criterion_color(output.color_preds, torch.tensor(batch['object_color_indices'], dtype=torch.long, device=DEVICE).flatten())
         
         loss = loss_matching + 5 * loss_offsets# + loss_classes + loss_colors # Currently fixed alpha seems enough, cell normed ∈ [0, 1]
         if not printed:
-            print(f'Losses: {loss_matching.item():0.3f} {loss_classes.item():0.3f} {loss_colors.item():0.3f}')
+            print(f'Losses: {loss_matching.item():0.3f} {loss_offsets.item():0.3f}')
             printed = True
 
         loss.backward()
@@ -247,7 +247,7 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'Fine-Shifted-{args.dataset}_bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
+    plot_name = f'Fine-Shifted-ObjEnc-{args.dataset}_bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': train_stats_loss,
         'train-loss_offsets': train_stats_loss_offsets,

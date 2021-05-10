@@ -18,7 +18,7 @@ from datapreparation.semantic3d.imports import COMBINED_SCENE_NAMES as SCENE_NAM
 from datapreparation.semantic3d.drawing import draw_retrieval
 
 from datapreparation.kitti360.utils import SCENE_NAMES as SCENE_NAMES_K360, SCENE_NAMES_TRAIN as SCENE_NAMES_TRAIN_K360, SCENE_NAMES_TEST as SCENE_NAMES_TEST_K360
-from datapreparation.kitti360.utils import COLOR_NAMES as COLOR_NAMES_K360
+from datapreparation.kitti360.utils import COLOR_NAMES as COLOR_NAMES_K360, SCENE_NAMES_9
 from dataloading.kitti360.cells import Kitti360CellDataset, Kitti360CellDatasetMulti
 from dataloading.kitti360.synthetic import Kitti360PoseReferenceMockDatasetPoints
 
@@ -37,7 +37,7 @@ TODO:
 - mlp_merge variations?
 - Vary LR and margin
 
-- Embed much stronger, try perfect PN++ (trained on val)
+- Embed still much stronger: try perfect PN++ (trained on val)
 - Augmentations -> w/o hint-shuffle very bad, cell-fip: helped
 - Syn-Fixed: Train 1.0, Val 0.25
 - Syn-Rand:  Train 0.2 Val 0.25, more capacity?
@@ -175,8 +175,6 @@ if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
 
-    FLIP: CARE PADDING!
-    
     '''
     Create data loaders
     '''
@@ -194,6 +192,16 @@ if __name__ == "__main__":
 
     if args.dataset == 'K360':
         assert args.pointnet_transform == 0
+
+        if args.data_split == 0:
+            scenes_test = ['2013_05_28_drive_0000_sync', '2013_05_28_drive_0002_sync', '2013_05_28_drive_0010_sync']
+        elif args.data_split == 1:
+            scenes_test = ['2013_05_28_drive_0002_sync', '2013_05_28_drive_0004_sync', '2013_05_28_drive_0007_sync']
+        elif args.data_split == 2:            
+            scenes_test = ['2013_05_28_drive_0003_sync', '2013_05_28_drive_0005_sync', '2013_05_28_drive_0009_sync']
+
+        scenes_train = [scene_name for scene_name in SCENE_NAMES_9 if scene_name not in scenes_test]
+
         train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
         dataset_train = Kitti360CellDatasetMulti(args.base_path, SCENE_NAMES_TRAIN_K360, train_transform, split=None, shuffle_hints=True, flip_cells=True)
         # dataset_train = Kitti360PoseReferenceMockDatasetPoints(args.base_path, SCENE_NAMES_TRAIN_K360, train_transform, args, length=2048, fixed_seed=True)
@@ -288,7 +296,7 @@ if __name__ == "__main__":
     Save plots
     '''
     # plot_name = f'Cells-{args.dataset}_s{scene_name.split('_')[-2]}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_f{"-".join(args.use_features)}.png'
-    plot_name = f'Coarse-Shift-Flip2-{args.dataset}_e{args.epochs}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_em{args.pointnet_embed}_feat{args.pointnet_features}_p{args.pointnet_numpoints}_freeze{args.pointnet_freeze}_t{args.pointnet_transform}_m{args.margin:0.2f}_s{args.shuffle}_g{args.lr_gamma}.png'
+    plot_name = f'Coarse-Shift-Flip2-{args.dataset}_e{args.epochs}_bs{args.batch_size}_sp{args.data_split}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_em{args.pointnet_embed}_feat{args.pointnet_features}_p{args.pointnet_numpoints}_freeze{args.pointnet_freeze}_t{args.pointnet_transform}_m{args.margin:0.2f}_s{args.shuffle}_g{args.lr_gamma}.png'
 
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
     val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}

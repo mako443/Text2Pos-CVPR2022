@@ -13,7 +13,7 @@ from torch.utils.data import Dataset, DataLoader
 import torch_geometric.transforms as T 
 
 from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, SCENE_NAMES
-from datapreparation.kitti360.utils import CLASS_TO_INDEX, COLOR_NAMES
+from datapreparation.kitti360.utils import CLASS_TO_INDEX, COLOR_NAMES, SCENE_NAMES_9
 from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
@@ -47,7 +47,6 @@ class Kitti360CellDataset(Kitti360BaseDataset):
                 cell, text = flip_cell(cell, text, 1)
             if np.random.choice((True, False)): # Vertical
                 cell, text = flip_cell(cell, text, -1)                
-                
 
         object_points = batch_object_points(cell.objects, self.transform)
 
@@ -145,10 +144,12 @@ class Kitti360CellDatasetMulti(Dataset):
         return list(np.unique(known_classes))
 
 if __name__ == '__main__':
-    base_path = './data/kitti360'
+    base_path = './data/kitti360_shifted_9'
     folder_name = '2013_05_28_drive_0000_sync'    
 
     transform = T.FixedPoints(10000, replace=False, allow_duplicates=False)
 
-    dataset = Kitti360CellDatasetMulti(base_path, [folder_name, ], transform)
+    dataset = Kitti360CellDatasetMulti(base_path, SCENE_NAMES_9, transform)
+    for ds in dataset.datasets:
+        print(f'{ds.scene_name}: {len(ds)}')
     data = dataset[0]

@@ -168,6 +168,7 @@ def get_close_poses(poses: List[np.ndarray], scene_objects: List[Object3d], cell
                 break
     
     assert len(close_poses) > len(poses) * 2/5, f'Too few poses retained ({len(close_poses)} of {len(poses)}), are all objects loaded?'
+    print(f'closest poses: {len(close_poses)} of {len(poses)}')
 
     if pose_objects:
         return close_poses, close_pose_objects
@@ -196,7 +197,7 @@ def create_cells(objects, poses, scene_name, cell_size):
     # print()
     
     print(f'Nones: {len(none_indices)} / {len(poses)}')
-    if len(none_indices) > len(poses)/5:
+    if len(none_indices) > len(poses)/4:
         print(f'Too many nones, are all objects gathered?')
         return False, none_indices
     else:
