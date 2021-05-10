@@ -36,6 +36,8 @@ TODO:
 
 - Augmentation possible? -> hint-shuffle helped, 
 
+- Remove separate color encoding
+
 - max-dist for descriptions?
 - remove "identical negative" (currently does not occur in Kitti)
 
@@ -189,6 +191,10 @@ if __name__ == "__main__":
         if args.pointnet_transform == 2:
             train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(90, axis=2), T.NormalizeScale()])            
         if args.pointnet_transform == 3:
+            train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(45, axis=2), T.NormalizeScale()])            
+        if args.pointnet_transform == 4:
+            train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
+        if args.pointnet_transform == 5:
             train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale(), T.RandomFlip(0), T.RandomFlip(1), T.RandomFlip(2), T.NormalizeScale()])
         dataset_train = Kitti360CellDatasetMulti(args.base_path, SCENE_NAMES_TRAIN_K360, train_transform, split=None, shuffle_hints=True)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=args.shuffle)
@@ -282,7 +288,7 @@ if __name__ == "__main__":
     Save plots
     '''
     # plot_name = f'Cells-{args.dataset}_s{scene_name.split('_')[-2]}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_f{"-".join(args.use_features)}.png'
-    plot_name = f'CellsRealScene-PN-Pts{args.dataset}_e{args.epochs}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_em{args.pointnet_embed}_feat{args.pointnet_features}_p{args.pointnet_numpoints}_f{args.pointnet_freeze}_t{args.pointnet_transform}_m{args.margin}_s{args.shuffle}_g{args.lr_gamma}.png'
+    plot_name = f'Coarse-Shifted-{args.dataset}_e{args.epochs}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_em{args.pointnet_embed}_feat{args.pointnet_features}_p{args.pointnet_numpoints}_freeze{args.pointnet_freeze}_t{args.pointnet_transform}_m{args.margin}_s{args.shuffle}_g{args.lr_gamma}.png'
 
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
     val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}

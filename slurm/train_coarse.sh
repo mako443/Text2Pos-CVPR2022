@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name="T2P SG-match train"
+#SBATCH --job-name="Cell retrieval train"
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1,VRAM:32G
@@ -11,4 +11,4 @@
 
 source /usr/stud/kolmet/venv/pyg/bin/activate
 module load cuda/10.2
-srun python3 -m training.hints_matching "$@"
+srun python3 -m training.coarse "$@"

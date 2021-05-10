@@ -209,15 +209,15 @@ if __name__ == '__main__':
     path_input = './data/kitti360'
     path_output = './data/kitti360_shifted_9'
     scene_name = sys.argv[-1]
-    # print('Scene:', scene_name)
-    # scene_names = SCENE_NAMES if scene_name=='all' else [scene_name, ]
+    print('Scene:', scene_name)
+    scene_names = SCENE_NAMES if scene_name=='all' else [scene_name, ]
 
     cell_size = 30
-    print(f'Preparing {path_input} -> {path_output}, cell_size {cell_size}')
+    print(f'Preparing {scene_names} {path_input} -> {path_output}, cell_size {cell_size}')
 
     # Incomplete folders: 3 corrupted...
     # for folder_name in SCENE_NAMES:
-    for folder_name in ['2013_05_28_drive_0002_sync', ]: # 2013_05_28_drive_0000_sync
+    for folder_name in scene_names: # 2013_05_28_drive_0000_sync
         print(f'Folder: {folder_name}')
 
         poses, pose_objects = create_poses(path_input, path_output, folder_name, cell_size, return_pose_objects=True)        
