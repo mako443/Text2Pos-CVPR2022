@@ -54,7 +54,11 @@ class Kitti360PoseReferenceMockDatasetPoints(Dataset):
         self.length = length
         self.fixed_seed = fixed_seed
         self.colors = COLORS
-        self.color_names = COLOR_NAMES        
+        self.color_names = COLOR_NAMES 
+
+        # print('CARE: Not padding!')   
+
+        print(f'Kitti360PoseReferenceMockDatasetPoints, fixed: {fixed_seed}, length: {length}')    
 
     def create_synthetic_cell(self, idx):
         pose = np.random.rand(3)
@@ -91,7 +95,6 @@ class Kitti360PoseReferenceMockDatasetPoints(Dataset):
 
     def __getitem__(self, idx):
         """Return the data of a synthetic cell.
-        CARE: Logic is shared with Kitti360PoseReferenceDataset, refactor if used at another place
         """
         if self.fixed_seed:
             np.random.seed(idx)

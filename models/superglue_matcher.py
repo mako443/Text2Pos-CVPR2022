@@ -101,7 +101,7 @@ class SuperGlueMatch(torch.nn.Module):
         '''
         Get PN++ object features
         '''
-        object_features = [self.pointnet(pyg_batch.to(self.get_device())).features for pyg_batch in object_points] # [B, pad_size, PN_size]
+        object_features = [self.pointnet(pyg_batch.to(self.get_device())).features2 for pyg_batch in object_points] # [B, pad_size, PN_size]
         object_features = torch.stack(object_features) # [B, pad_size, PN_size]
         object_features = object_features.reshape((batch_size * num_objects, -1))  # [B * pad_size, PN_size]
         object_features = F.normalize(object_features, dim=-1) # [B * pad_size, PN_size]

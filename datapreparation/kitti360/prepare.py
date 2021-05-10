@@ -178,7 +178,7 @@ def create_cells(objects, poses, scene_name, cell_size):
 if __name__ == '__main__':
     np.random.seed(4096) # Set seed to re-produce results
     path_input = './data/kitti360'
-    path_output = './data/kitti360_shifted'
+    path_output = './data/kitti360_shifted_9'
     scene_name = sys.argv[-1]
     print('Scene:', scene_name)
     scene_names = SCENE_NAMES if scene_name=='all' else [scene_name, ]

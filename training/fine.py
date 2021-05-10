@@ -139,13 +139,14 @@ if __name__ == "__main__":
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)
 
     if args.dataset == 'K360':
-        train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(180, axis=2), T.NormalizeScale()])
-        dataset_train = Kitti360PoseReferenceMockDatasetPoints('./data/kitti360', SCENE_NAMES_TRAIN_K360, train_transform, args, length=1024)
+        # train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(180, axis=2), T.NormalizeScale()])
+        train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])
+        dataset_train = Kitti360PoseReferenceMockDatasetPoints(args.base_path, SCENE_NAMES_TRAIN_K360, train_transform, args, length=1024)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceMockDatasetPoints.collate_fn)
 
         print('CARE: Re-set scenes')
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        dataset_val = Kitti360PoseReferenceDatasetMulti('./data/kitti360', SCENE_NAMES_TEST_K360, val_transform, args, split=None)
+        dataset_val = Kitti360PoseReferenceDatasetMulti(args.base_path, SCENE_NAMES_TEST_K360, val_transform, args, split=None)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceDataset.collate_fn)  
         
     # print(sorted(dataset_train.get_known_classes()))
@@ -173,7 +174,7 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_rates = np.logspace(-3.0, -4.0 ,3)[args.lr_idx : args.lr_idx + 1] # Larger than -3 throws error (even with warm-up)
+    learning_rates = np.logspace(-3.0, -4.0 ,3) #[args.lr_idx : args.lr_idx + 1] # Larger than -3 throws error (even with warm-up)
 
     train_stats_loss = {lr: [] for lr in learning_rates}
     train_stats_loss_offsets = {lr: [] for lr in learning_rates}
@@ -246,7 +247,7 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'SG-Off-{args.dataset}_bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
+    plot_name = f'Fine-Shifted-{args.dataset}_bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': train_stats_loss,
         'train-loss_offsets': train_stats_loss_offsets,

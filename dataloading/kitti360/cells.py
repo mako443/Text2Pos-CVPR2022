@@ -5,6 +5,7 @@ import os.path as osp
 import pickle
 import numpy as np
 import cv2
+from copy import deepcopy
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -25,10 +26,11 @@ Augmentations:
 - 
 '''
 class Kitti360CellDataset(Kitti360BaseDataset):
-    def __init__(self, base_path, scene_name, transform, split=None, shuffle_hints=False):
+    def __init__(self, base_path, scene_name, transform, split=None, shuffle_hints=False, flip_cells=False):
         super().__init__(base_path, scene_name, split)
         self.shuffle_hints = shuffle_hints
         self.transform = transform
+        self.flip_cells = flip_cells
 
     def __getitem__(self, idx):
         cell = self.cells[idx]
@@ -38,6 +40,14 @@ class Kitti360CellDataset(Kitti360BaseDataset):
             hints = np.random.choice(hints, size=len(hints), replace=False)
 
         text = ' '.join(hints)
+
+        # CARE: hints are currently not flipped!
+        if self.flip_cells:
+            if np.random.choice((True, False)): # Horizontal
+                cell, text = flip_cell(cell, text, 1)
+            if np.random.choice((True, False)): # Vertical
+                cell, text = flip_cell(cell, text, -1)                
+                
 
         object_points = batch_object_points(cell.objects, self.transform)
 
@@ -58,12 +68,50 @@ class Kitti360CellDataset(Kitti360BaseDataset):
     def __len__(self):
         return len(self.cells)
 
+# TODO: for free orientations, possibly flip cell only, create descriptions and hints again
+# OR: numeric vectors in descriptions, flip cell objects and description.direction, then create hints again
+# Flip pose, too?
+def flip_cell(cell, text, direction):
+    """Flips the cell horizontally or vertically
+    CARE: Needs adjustment for non-compass directions
+
+    Args:
+        cell (Cell): The cell to flip, is copied before modification
+        text (str): The text description to flip
+        direction (int): Horizontally (+1) or vertically (-1)
+
+    Returns:
+        Cell: flipped cell
+        str: flipped text
+    """
+    assert direction in (-1, 1)
+
+    cell = deepcopy(cell)
+
+    if direction == 1: #Horizontally
+        for obj in cell.objects:
+            obj.xyz[:, 0] = 1 - obj.xyz[:, 0]
+            obj.closest_point[0] = 1 - obj.closest_point[0]
+
+        text = text.replace('east','east-flipped').replace('west','east').replace('east-flipped', 'west')
+    elif direction == -1: #Vertically
+        for obj in cell.objects:
+            obj.xyz[:, 1] = 1 - obj.xyz[:, 1]
+            obj.closest_point[1] = 1 - obj.closest_point[1]  
+              
+        text = text.replace('north', 'north-flipped'). replace('south', 'north').replace('north-flipped', 'south')
+
+    assert 'flipped' not in text
+
+    return cell, text
+    
 class Kitti360CellDatasetMulti(Dataset):
-    def __init__(self, base_path, scene_names, transform, split=None, shuffle_hints=False):
+    def __init__(self, base_path, scene_names, transform, split=None, shuffle_hints=False, flip_cells=False):
         self.scene_names = scene_names
         self.transform = transform
         self.split = split
-        self.datasets = [Kitti360CellDataset(base_path, scene_name, transform, split, shuffle_hints) for scene_name in scene_names]
+        self.flip_cells = flip_cells
+        self.datasets = [Kitti360CellDataset(base_path, scene_name, transform, split, shuffle_hints, flip_cells) for scene_name in scene_names]
         self.cells = [cell for dataset in self.datasets for cell in dataset.cells] # Gathering cells for retrieval plotting
 
         print(str(self))
@@ -82,7 +130,7 @@ class Kitti360CellDatasetMulti(Dataset):
         return np.sum([len(ds) for ds in self.datasets])
 
     def __repr__(self):
-        return f'Kitti360CellDatasetMulti: {len(self.scene_names)} scenes, {len(self)} cells, split {self.split}'
+        return f'Kitti360CellDatasetMulti: {len(self.scene_names)} scenes, {len(self)} cells, split {self.split}, flip {self.flip_cells}'
 
     def get_known_words(self):
         known_words = []

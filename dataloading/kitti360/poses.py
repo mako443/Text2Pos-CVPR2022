@@ -180,6 +180,10 @@ def load_cell_data(cell, hints, pad_size, transform):
         if len(objects) > pad_size:
             objects = objects[0 : pad_size]
 
+        # '''
+        # CARE: Padding turned off!
+        # '''
+        # if False:
         while len(objects) < pad_size:
             # obj = Object3d(np.zeros((1,3)), np.zeros((1,3)), 'pad', -1)
             # _ = obj.get_closest_point(cell.pose) # run to set the point
@@ -201,15 +205,18 @@ def load_cell_data(cell, hints, pad_size, transform):
         object_class_indices = [CLASS_TO_INDEX[obj.label] for obj in objects]
         object_color_indices = [COLOR_NAMES.index(obj.get_color_text()) for obj in objects]        
 
+        text = ' '.join(hints)
+
         return {
+            'cells': cell,
             'objects': objects,
             'object_points': object_points,
             'hint_descriptions': hints,
+            'texts': text,
             'matches': matches,
             'all_matches': all_matches,
             'poses': cell.pose,
             'offsets': np.array(offsets),
-            'cells': cell,
             'object_class_indices': object_class_indices,
             'object_color_indices': object_color_indices
         }            

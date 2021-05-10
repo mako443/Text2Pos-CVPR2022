@@ -20,7 +20,7 @@ from datapreparation.semantic3d.drawing import draw_retrieval
 from datapreparation.kitti360.utils import SCENE_NAMES as SCENE_NAMES_K360, SCENE_NAMES_TRAIN as SCENE_NAMES_TRAIN_K360, SCENE_NAMES_TEST as SCENE_NAMES_TEST_K360
 from datapreparation.kitti360.utils import COLOR_NAMES as COLOR_NAMES_K360
 from dataloading.kitti360.cells import Kitti360CellDataset, Kitti360CellDatasetMulti
-from dataloading.kitti360.poses import Kitti360PoseReferenceMockDataset
+from dataloading.kitti360.synthetic import Kitti360PoseReferenceMockDatasetPoints
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -29,19 +29,27 @@ from training.utils import plot_retrievals
 
 '''
 TODO:
-- Use PN fully -> performance lower but ok (0.8 -> 0.55)
-- Use lower features 
-- Generalization gap? (Transform, shuffle, ask)
-- mlp_merge variations?
+- synthetic cells -> Ok (0.25), gap smaller
+- flip the training cells (pose, objects, direction words) -> Good, 0.42 now
+- failure cases
 
-- Augmentation possible? -> hint-shuffle helped, 
+- Generalization gap exists: (Transform ✓, shuffle ✓, ask)
+- mlp_merge variations?
+- Vary LR and margin
+
+- Embed much stronger, try perfect PN++ (trained on val)
+- Augmentations -> w/o hint-shuffle very bad, cell-fip: helped
+- Syn-Fixed: Train 1.0, Val 0.25
+- Syn-Rand:  Train 0.2 Val 0.25, more capacity?
 
 - Remove separate color encoding
-
 - max-dist for descriptions?
 - remove "identical negative" (currently does not occur in Kitti)
 
 NOTE:
+- margin 0.35 better? -> Taken for now
+- Use PN fully -> performance lower but ok (0.8 -> 0.6), generalization gap!
+- Use lower features -> ok but not helping
 - Use for select (if acc. still lower) -> Not better
 - Use PN: Add encoder but re-train w/ embedding ✓ 0.8 acc verified all scenes ✓
 - Learning rates? -> Apparently need lower here
@@ -67,7 +75,6 @@ def train_epoch(model, dataloader, args):
  
         optimizer.zero_grad()
         anchor = model.encode_text(batch['texts']) 
-        # positive = model.encode_objects(batch['objects'], batch['object_points'])
         positive = model.encode_objects(batch['objects'], batch['object_points'])
 
         if args.ranking_loss == 'triplet':
@@ -167,6 +174,8 @@ def eval_epoch(model, dataloader, args):
 if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
+
+    FLIP: CARE PADDING!
     
     '''
     Create data loaders
@@ -184,20 +193,11 @@ if __name__ == "__main__":
         print("\t\t Stats: ", args.cell_size, args.cell_stride, dataset_train.gather_stats())
 
     if args.dataset == 'K360':
-        if args.pointnet_transform == 0:
-            train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        if args.pointnet_transform == 1:
-            train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(180, axis=2), T.NormalizeScale()])
-        if args.pointnet_transform == 2:
-            train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(90, axis=2), T.NormalizeScale()])            
-        if args.pointnet_transform == 3:
-            train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(45, axis=2), T.NormalizeScale()])            
-        if args.pointnet_transform == 4:
-            train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
-        if args.pointnet_transform == 5:
-            train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale(), T.RandomFlip(0), T.RandomFlip(1), T.RandomFlip(2), T.NormalizeScale()])
-        dataset_train = Kitti360CellDatasetMulti(args.base_path, SCENE_NAMES_TRAIN_K360, train_transform, split=None, shuffle_hints=True)
-        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=args.shuffle)
+        assert args.pointnet_transform == 0
+        train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
+        dataset_train = Kitti360CellDatasetMulti(args.base_path, SCENE_NAMES_TRAIN_K360, train_transform, split=None, shuffle_hints=True, flip_cells=True)
+        # dataset_train = Kitti360PoseReferenceMockDatasetPoints(args.base_path, SCENE_NAMES_TRAIN_K360, train_transform, args, length=2048, fixed_seed=True)
+        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceMockDatasetPoints.collate_fn, shuffle=args.shuffle)
 
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
         dataset_val = Kitti360CellDatasetMulti(args.base_path, SCENE_NAMES_TEST_K360, val_transform, split=None)
@@ -288,7 +288,7 @@ if __name__ == "__main__":
     Save plots
     '''
     # plot_name = f'Cells-{args.dataset}_s{scene_name.split('_')[-2]}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_f{"-".join(args.use_features)}.png'
-    plot_name = f'Coarse-Shifted-{args.dataset}_e{args.epochs}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_em{args.pointnet_embed}_feat{args.pointnet_features}_p{args.pointnet_numpoints}_freeze{args.pointnet_freeze}_t{args.pointnet_transform}_m{args.margin}_s{args.shuffle}_g{args.lr_gamma}.png'
+    plot_name = f'Coarse-Shift-Flip2-{args.dataset}_e{args.epochs}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_em{args.pointnet_embed}_feat{args.pointnet_features}_p{args.pointnet_numpoints}_freeze{args.pointnet_freeze}_t{args.pointnet_transform}_m{args.margin:0.2f}_s{args.shuffle}_g{args.lr_gamma}.png'
 
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
     val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}

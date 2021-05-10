@@ -5,6 +5,8 @@ SCENE_NAMES = ('2013_05_28_drive_0000_sync','2013_05_28_drive_0003_sync','2013_0
 SCENE_NAMES_TRAIN = ('2013_05_28_drive_0000_sync','2013_05_28_drive_0003_sync','2013_05_28_drive_0006_sync','2013_05_28_drive_0009_sync')
 SCENE_NAMES_TEST = ('2013_05_28_drive_0005_sync','2013_05_28_drive_0010_sync')
 
+# SCENE_NAMES9 = ('2013_05_28_drive_0000_sync','2013_05_28_drive_0002_sync','2013_05_28_drive_0003_sync','2013_05_28_drive_0004_sync','2013_05_28_drive_0005_sync','2013_05_28_drive_0006_sync','2013_05_28_drive_0007_sync','2013_05_28_drive_0009_sync','2013_05_28_drive_0010_sync')
+
 CLASS_TO_INDEX = {
     'building':0,
     'pole':1,

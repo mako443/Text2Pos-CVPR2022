@@ -26,7 +26,7 @@ def parse_arguments():
     parser.add_argument('--pad_size', type=int, default=16)
 
     # Cell retrieval
-    parser.add_argument('--margin', type=float, default=0.5)
+    parser.add_argument('--margin', type=float, default=0.35) # Before: 0.5
     parser.add_argument('--top_k', type=int, nargs='+', default=[1, 3, 5])
     parser.add_argument('--ranking_loss', type=str, default='pairwise')
     # parser.add_argument('--cell_size', type=float, default=60)
