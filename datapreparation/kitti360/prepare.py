@@ -234,6 +234,8 @@ if __name__ == '__main__':
             print(f'Loaded objects from {path_objects}')
             objects = pickle.load(open(path_objects, 'rb'))
 
+        quit()
+
         poses, pose_objects = get_close_poses(poses, objects, cell_size, pose_objects)
 
         # Create cells
