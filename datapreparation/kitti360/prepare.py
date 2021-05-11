@@ -116,33 +116,6 @@ def gather_objects(path_input, folder_name):
     return objects_threshed
     # return list(scene_objects.values())
 
-def create_poses(path_input, path_output, folder_name, pose_distance, return_pose_objects=False):
-    path = osp.join(path_input, 'data_poses', folder_name, 'poses.txt')
-    poses = np.loadtxt(path)
-    poses = poses[:, 1:].reshape((-1, 3,4)) # Convert to 3x4 matrices
-    poses = poses[:, :, -1] # Take last column
-
-    # CARE: This can still lead to two very close-by poses if the trajectory "went around a corner"
-    sampled_poses = [poses[0], ]
-    for pose in poses:
-        dist = np.linalg.norm(pose - sampled_poses[-1])
-        if dist >= pose_distance:
-            sampled_poses.append(pose)
-
-    if return_pose_objects:
-        pose_objects = []
-        for pose in sampled_poses:
-            pose_objects.append(Object3d(
-                np.random.rand(50, 3)*3 + pose,
-                np.ones((50, 3)),
-                '_pose',
-                99
-            ))
-        print(f'{folder_name} sampled {len(sampled_poses)} poses')
-        return sampled_poses, pose_objects
-    else:
-        return sampled_poses
-
 def get_close_poses(poses: List[np.ndarray], scene_objects: List[Object3d], cell_size, pose_objects=None):
     """Retains all poses that are at most cell_size / 2 distant from an instance-object.
 
@@ -174,6 +147,36 @@ def get_close_poses(poses: List[np.ndarray], scene_objects: List[Object3d], cell
         return close_poses, close_pose_objects
     else:
         return close_poses
+
+def create_poses(path_input, path_output, folder_name, pose_distance, return_pose_objects=False):
+    path = osp.join(path_input, 'data_poses', folder_name, 'poses.txt')
+    poses = np.loadtxt(path)
+    poses = poses[:, 1:].reshape((-1, 3,4)) # Convert to 3x4 matrices
+    poses = poses[:, :, -1] # Take last column
+
+    # CARE: This can still lead to two very close-by poses if the trajectory "went around a corner"
+    sampled_poses = [poses[0], ]
+    for pose in poses:
+        # dist = np.linalg.norm(pose - sampled_poses[-1])
+        # if dist >= pose_distance:
+        #     sampled_poses.append(pose)
+        dists = np.linalg.norm(pose - sampled_poses, axis=1)
+        if np.min(dists) >= pose_distance:
+            sampled_poses.append(pose)
+
+    if return_pose_objects:
+        pose_objects = []
+        for pose in sampled_poses:
+            pose_objects.append(Object3d(
+                np.random.rand(50, 3)*3 + pose,
+                np.ones((50, 3)),
+                '_pose',
+                99
+            ))
+        print(f'{folder_name} sampled {len(sampled_poses)} poses')
+        return sampled_poses, pose_objects
+    else:
+        return sampled_poses
 
 def create_cells(objects, poses, scene_name, cell_size):
     print('Creating cells...')
@@ -208,7 +211,7 @@ def create_cells(objects, poses, scene_name, cell_size):
 if __name__ == '__main__':
     np.random.seed(4096) # Set seed to re-produce results
     path_input = './data/kitti360'
-    path_output = './data/kitti360_shifted_9'
+    path_output = './data/kitti360_overlap_2_3'
     scene_name = sys.argv[-1]
     print('Scene:', scene_name)
     scene_names = SCENE_NAMES if scene_name=='all' else [scene_name, ]
@@ -221,7 +224,8 @@ if __name__ == '__main__':
     for folder_name in scene_names: # 2013_05_28_drive_0000_sync
         print(f'Folder: {folder_name}')
 
-        poses, pose_objects = create_poses(path_input, path_output, folder_name, cell_size, return_pose_objects=True)        
+        # poses, pose_objects = create_poses(path_input, path_output, folder_name, cell_size, return_pose_objects=True)        
+        poses, pose_objects = create_poses(path_input, path_output, folder_name, pose_distance=cell_size * 2 / 3, return_pose_objects=True)        
 
         path_objects = osp.join(path_output, 'objects', f'{folder_name}.pkl')
         path_cells = osp.join(path_output, 'cells', f'{folder_name}.pkl')
@@ -235,9 +239,10 @@ if __name__ == '__main__':
             print(f'Loaded objects from {path_objects}')
             objects = pickle.load(open(path_objects, 'rb'))
 
-        quit()
+        # poses, pose_objects = get_close_poses(poses, objects, cell_size, pose_objects)
 
-        poses, pose_objects = get_close_poses(poses, objects, cell_size, pose_objects)
+        show_objects(objects + pose_objects)
+        quit()
 
         # Create cells
         res, cells = create_cells(objects, poses, folder_name, cell_size)
