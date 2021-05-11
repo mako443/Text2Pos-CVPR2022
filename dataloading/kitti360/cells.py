@@ -13,7 +13,7 @@ from torch.utils.data import Dataset, DataLoader
 import torch_geometric.transforms as T 
 
 from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, SCENE_NAMES
-from datapreparation.kitti360.utils import CLASS_TO_INDEX, COLOR_NAMES, SCENE_NAMES_9
+from datapreparation.kitti360.utils import CLASS_TO_INDEX, COLOR_NAMES
 from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
@@ -149,7 +149,7 @@ if __name__ == '__main__':
 
     transform = T.FixedPoints(10000, replace=False, allow_duplicates=False)
 
-    dataset = Kitti360CellDatasetMulti(base_path, SCENE_NAMES_9, transform)
+    dataset = Kitti360CellDatasetMulti(base_path, [], transform)
     for ds in dataset.datasets:
         print(f'{ds.scene_name}: {len(ds)}')
     data = dataset[0]

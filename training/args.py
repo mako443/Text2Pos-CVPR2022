@@ -11,7 +11,7 @@ def parse_arguments():
     parser.add_argument('--max_batches', type=int, default=None)
     parser.add_argument('--dataset', type=str, default='K360')
     parser.add_argument('--base_path', type=str, default='./data/kitti360_shifted_9')
-    parser.add_argument('--data_split', type=int, default=0)
+    # parser.add_argument('--data_split', type=int, default=0)
 
     # Model
     parser.add_argument('--embed_dim', type=int, default=300)
@@ -37,11 +37,12 @@ def parse_arguments():
     parser.add_argument('--pointnet_layers', type=int, default=3)
     parser.add_argument('--pointnet_variation', type=int, default=0)
     parser.add_argument('--pointnet_numpoints', type=int, default=256)
-    parser.add_argument('--pointnet_transform', type=int, default=0)
-    parser.add_argument('--pointnet_path', type=str, default='./checkpoints/pointnet_K360_lr2_t1_p512.pth')
+    # parser.add_argument('--pointnet_transform', type=int, default=0)
+    parser.add_argument('--pointnet_path', type=str, default='./checkpoints/pointnet_acc0.82_lr1_p256.pth')
     parser.add_argument('--pointnet_freeze', action='store_true')
     parser.add_argument('--pointnet_embed', action='store_true')    
     parser.add_argument('--pointnet_features', type=int, default=2)
+    # parser.add_argument('--pointnet_center', action='store_true')   
 
     # Others
     parser.add_argument('--epochs', type=int, default=16)

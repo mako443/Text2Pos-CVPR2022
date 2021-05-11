@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name="Cell retrieval train"
+#SBATCH --job-name="Coarse train"
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1,VRAM:32G

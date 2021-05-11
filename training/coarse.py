@@ -13,12 +13,12 @@ from easydict import EasyDict
 
 from models.cell_retrieval import CellRetrievalNetwork
 
-from dataloading.semantic3d.semantic3d_poses import Semantic3dPosesDataset, Semantic3dPosesDatasetMulti
-from datapreparation.semantic3d.imports import COMBINED_SCENE_NAMES as SCENE_NAMES_S3D
-from datapreparation.semantic3d.drawing import draw_retrieval
+# from dataloading.semantic3d.semantic3d_poses import Semantic3dPosesDataset, Semantic3dPosesDatasetMulti
+# from datapreparation.semantic3d.imports import COMBINED_SCENE_NAMES as SCENE_NAMES_S3D
+# from datapreparation.semantic3d.drawing import draw_retrieval
 
-from datapreparation.kitti360.utils import SCENE_NAMES as SCENE_NAMES_K360, SCENE_NAMES_TRAIN as SCENE_NAMES_TRAIN_K360, SCENE_NAMES_TEST as SCENE_NAMES_TEST_K360
-from datapreparation.kitti360.utils import COLOR_NAMES as COLOR_NAMES_K360, SCENE_NAMES_9
+from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_TEST
+from datapreparation.kitti360.utils import COLOR_NAMES as COLOR_NAMES_K360
 from dataloading.kitti360.cells import Kitti360CellDataset, Kitti360CellDatasetMulti
 from dataloading.kitti360.synthetic import Kitti360PoseReferenceMockDatasetPoints
 
@@ -193,22 +193,13 @@ if __name__ == "__main__":
     if args.dataset == 'K360':
         assert args.pointnet_transform == 0
 
-        if args.data_split == 0:
-            scenes_test = ['2013_05_28_drive_0000_sync', '2013_05_28_drive_0002_sync', '2013_05_28_drive_0010_sync']
-        elif args.data_split == 1:
-            scenes_test = ['2013_05_28_drive_0002_sync', '2013_05_28_drive_0004_sync', '2013_05_28_drive_0007_sync']
-        elif args.data_split == 2:            
-            scenes_test = ['2013_05_28_drive_0003_sync', '2013_05_28_drive_0005_sync', '2013_05_28_drive_0009_sync']
-
-        scenes_train = [scene_name for scene_name in SCENE_NAMES_9 if scene_name not in scenes_test]
-
         train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
-        dataset_train = Kitti360CellDatasetMulti(args.base_path, SCENE_NAMES_TRAIN_K360, train_transform, split=None, shuffle_hints=True, flip_cells=True)
-        # dataset_train = Kitti360PoseReferenceMockDatasetPoints(args.base_path, SCENE_NAMES_TRAIN_K360, train_transform, args, length=2048, fixed_seed=True)
+        dataset_train = Kitti360CellDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, split=None, shuffle_hints=True, flip_cells=True)
+        # dataset_train = Kitti360PoseReferenceMockDatasetPoints(args.base_path, scenes_train, train_transform, args, length=2048, fixed_seed=True)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceMockDatasetPoints.collate_fn, shuffle=args.shuffle)
 
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        dataset_val = Kitti360CellDatasetMulti(args.base_path, SCENE_NAMES_TEST_K360, val_transform, split=None)
+        dataset_val = Kitti360CellDatasetMulti(args.base_path, SCENE_NAMES_TEST, val_transform, split=None)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=False)    
 
     # train_words = dataset_train.get_known_words()
@@ -225,7 +216,8 @@ if __name__ == "__main__":
     print('device:', device, torch.cuda.get_device_name(0))
     torch.autograd.set_detect_anomaly(True)     
 
-    learning_rates = np.logspace(-2, -4, 5)[args.lr_idx : args.lr_idx + 1]
+    # learning_rates = np.logspace(-2, -4, 5)[args.lr_idx : args.lr_idx + 1]
+    learning_rates = np.logspace(-2.5, -3.5, 3)[args.lr_idx : args.lr_idx + 1]
     dict_loss = {lr: [] for lr in learning_rates}
     dict_acc = {k: {lr: [] for lr in learning_rates} for k in args.top_k}
     dict_acc_val = {k: {lr: [] for lr in learning_rates} for k in args.top_k}    
@@ -234,7 +226,6 @@ if __name__ == "__main__":
     val_stats_color = {lr: [] for lr in learning_rates}
 
     best_val_accuracy = -1
-    model_path = f"./checkpoints/retrieval_{args.dataset}.pth"
 
     # ACC_TARGET = 'all'
     for lr in learning_rates:
@@ -285,10 +276,12 @@ if __name__ == "__main__":
             print()    
 
         # Saving best model (w/o early stopping)
-        if val_acc[max(args.top_k)] > best_val_accuracy:
-            print(f'Saving model at {val_acc[max(args.top_k)]:0.2f} to {model_path}')
+        acc = val_acc[max(args.top_k)]
+        if acc > best_val_accuracy:
+            model_path = f"./checkpoints/coarse_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"
+            print(f'Saving model at {acc:0.2f} to {model_path}')
             torch.save(model, model_path)
-            best_val_accuracy = val_acc[max(args.top_k)]
+            best_val_accuracy = acc
 
         # plot_retrievals(val_retrievals, dataset_val)
 
@@ -296,7 +289,7 @@ if __name__ == "__main__":
     Save plots
     '''
     # plot_name = f'Cells-{args.dataset}_s{scene_name.split('_')[-2]}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_f{"-".join(args.use_features)}.png'
-    plot_name = f'Coarse-Shift-Flip2-{args.dataset}_e{args.epochs}_bs{args.batch_size}_sp{args.data_split}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_em{args.pointnet_embed}_feat{args.pointnet_features}_p{args.pointnet_numpoints}_freeze{args.pointnet_freeze}_t{args.pointnet_transform}_m{args.margin:0.2f}_s{args.shuffle}_g{args.lr_gamma}.png'
+    plot_name = f'Coarse-Shift-9-{args.dataset}_e{args.epochs}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_em{args.pointnet_embed}_feat{args.pointnet_features}_p{args.pointnet_numpoints}_freeze{args.pointnet_freeze}_t{args.pointnet_transform}_m{args.margin:0.2f}_s{args.shuffle}_g{args.lr_gamma}.png'
 
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
     val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}

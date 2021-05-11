@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from models.pointcloud.pointnet2 import PointNet2
 from dataloading.semantic3d.semantic3d_pointcloud import Semantic3dObjectDataset, Semantic3dObjectDatasetMulti
 from dataloading.kitti360.objects import Kitti360ObjectsDataset, Kitti360ObjectsDatasetMulti
-from datapreparation.kitti360.utils import SCENE_NAMES as SCENE_NAMES_K360, SCENE_NAMES_TRAIN as SCENE_NAMES_TRAIN_K360, SCENE_NAMES_TEST as SCENE_NAMES_TEST_K360
+from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_TEST
 from datapreparation.kitti360.utils import COLOR_NAMES as COLOR_NAMES_K360
 
 from training.args import parse_arguments
@@ -19,8 +19,9 @@ from training.plots import plot_metrics
 
 '''
 TODO:
+- train w/ color-pred or not?
 - why shuffle bad?
-- num-points?
+
 
 NOTES:
 - more points not helpful, but might be if better sampling earlier in pipeline
@@ -40,7 +41,8 @@ def train_epoch(model, dataloader, args):
         optimizer.zero_grad()
         output = model(batch)
 
-        loss = 1/2 * (criterion(output.class_pred, batch.y) + criterion(output.color_pred, batch.y_color))
+        # loss = 1/2 * (criterion(output.class_pred, batch.y) + criterion(output.color_pred, batch.y_color))
+        loss = criterion(output.class_pred, batch.y)
         loss.backward()
         optimizer.step()
 
@@ -48,8 +50,8 @@ def train_epoch(model, dataloader, args):
         acc = torch.sum(torch.argmax(output.class_pred, dim=-1) == batch.y).item() / len(output.class_pred)
         epoch_accs.append(acc)
         
-        acc_color = torch.sum(torch.argmax(output.color_pred, dim=-1) == batch.y_color).item() / len(output.color_pred)
-        epoch_accs_color.append(acc_color)
+        # acc_color = torch.sum(torch.argmax(output.color_pred, dim=-1) == batch.y_color).item() / len(output.color_pred)
+        epoch_accs_color.append(-1)
         
     return np.mean(epoch_losses), np.mean(epoch_accs), np.mean(epoch_accs_color)
 
@@ -64,8 +66,8 @@ def val_epoch(model, dataloader, args):
         acc = torch.sum(torch.argmax(output.class_pred, dim=-1) == batch.y).item() / len(output.class_pred)
         epoch_accs.append(acc)
 
-        acc_color = torch.sum(torch.argmax(output.color_pred, dim=1) == batch.y_color).item() / len(output.color_pred)
-        epoch_accs_color.append(acc_color)
+        # acc_color = torch.sum(torch.argmax(output.color_pred, dim=1) == batch.y_color).item() / len(output.color_pred)
+        epoch_accs_color.append(-1)
 
     return np.mean(epoch_accs), np.mean(epoch_accs_color)
 
@@ -74,7 +76,7 @@ if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
 
-    # WEITER: Debug instability, remove small, smaller LR?
+    print('CARE: TRAINING ORACLE MODEL!')
 
     '''
     Create data loaders
@@ -90,16 +92,16 @@ if __name__ == "__main__":
         dataset_val = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='test')
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)    
 
-    if args.dataset == 'K360':
-        base_path = './data/kitti360'
-        
-        train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(180, axis=2), T.NormalizeScale()]) # This proved best
+    if args.dataset == 'K360':     
+        # train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(180, axis=2), T.NormalizeScale()]) # This proved best
+        # train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
+        train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
 
-        dataset_train = Kitti360ObjectsDatasetMulti(base_path, SCENE_NAMES_TRAIN_K360, split=None, transform=train_transform)
+        dataset_train = Kitti360ObjectsDatasetMulti(args.base_path, SCENE_NAMES, split=None, transform=train_transform)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle)
         
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        dataset_val = Kitti360ObjectsDatasetMulti(base_path, SCENE_NAMES_TEST_K360, split=None, transform=val_transform)
+        dataset_val = Kitti360ObjectsDatasetMulti(args.base_path, SCENE_NAMES_TEST, split=None, transform=val_transform)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False)
 
     assert sorted(dataset_train.get_known_classes()) == sorted(dataset_val.get_known_classes())
@@ -119,7 +121,6 @@ if __name__ == "__main__":
     dict_acc_val_color = {lr: [] for lr in learning_reates}
 
     best_val_accuracy = -1
-    model_path = f"./checkpoints/pointnet_{args.dataset}_lr{args.lr_idx}_t{args.pointnet_transform}_p{args.pointnet_numpoints}.pth"    
 
     for lr in learning_reates:
         model = PointNet2(num_classes=len(dataset_train.class_to_index), num_colors=len(COLOR_NAMES_K360), args=args)
@@ -144,6 +145,7 @@ if __name__ == "__main__":
             print(f'\t lr {lr:0.6f} epoch {epoch} loss {loss:0.3f} acc-train {acc_train:0.2f} acc-val {acc_val:0.2f}')
 
         if acc_val > best_val_accuracy:
+            model_path = f"./checkpoints/pointnet_perfect_acc{acc_val:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"    
             print(f'Saving model to {model_path}')
             torch.save(model.state_dict(), model_path)
             best_val_accuracy = acc_val
@@ -154,7 +156,7 @@ if __name__ == "__main__":
     Save plots
     '''
     # plot_name = f'PN2_len{len(dataset_train)}_bs{args.batch_size}_mb{args.max_batches}_l{args.num_layers}_v{args.variation}_s{args.shuffle}_g{args.lr_gamma}.png'
-    plot_name = f'PN2-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_lr{args.lr_idx}_pl{args.pointnet_layers}_pv{args.pointnet_variation}_t{args.pointnet_transform}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}.png'
+    plot_name = f'PN2-Shift-9-Perfect-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_lr{args.lr_idx}_pl{args.pointnet_layers}_pv{args.pointnet_variation}_t{args.pointnet_transform}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-acc': dict_acc,
