@@ -18,7 +18,8 @@ from dataloading.kitti360.poses import Kitti360PoseReferenceDataset, Kitti360Pos
 from dataloading.kitti360.synthetic import Kitti360PoseReferenceMockDatasetPoints
 
 from datapreparation.semantic3d.imports import COLORS as COLORS_S3D, COLOR_NAMES as COLOR_NAMES_S3D
-from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360, SCENE_NAMES as SCENE_NAMES_K360, SCENE_NAMES_TRAIN as SCENE_NAMES_TRAIN_K360, SCENE_NAMES_TEST as SCENE_NAMES_TEST_K360
+from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360
+from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_TEST
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -66,12 +67,12 @@ def train_epoch(model, dataloader, args):
 
         loss_matching = criterion_matching(output.P, batch['all_matches'])
         loss_offsets = criterion_offsets(output.offsets, torch.tensor(batch['offsets'], dtype=torch.float, device=DEVICE))
-        loss_classes = 0.5 * criterion_class(output.class_preds, torch.tensor(batch['object_class_indices'], dtype=torch.long, device=DEVICE).flatten())
-        loss_colors = 0.5 * criterion_color(output.color_preds, torch.tensor(batch['object_color_indices'], dtype=torch.long, device=DEVICE).flatten())
+        # loss_classes = 0.5 * criterion_class(output.class_preds, torch.tensor(batch['object_class_indices'], dtype=torch.long, device=DEVICE).flatten())
+        # loss_colors = 0.5 * criterion_color(output.color_preds, torch.tensor(batch['object_color_indices'], dtype=torch.long, device=DEVICE).flatten())
         
         loss = loss_matching + 5 * loss_offsets# + loss_classes + loss_colors # Currently fixed alpha seems enough, cell normed ∈ [0, 1]
         if not printed:
-            print(f'Losses: {loss_matching.item():0.3f} {loss_classes.item():0.3f} {loss_colors.item():0.3f}')
+            print(f'Losses: {loss_matching.item():0.3f} {loss_offsets.item():0.3f}')
             printed = True
 
         loss.backward()
@@ -139,13 +140,14 @@ if __name__ == "__main__":
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)
 
     if args.dataset == 'K360':
-        train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(180, axis=2), T.NormalizeScale()])
-        dataset_train = Kitti360PoseReferenceMockDatasetPoints('./data/kitti360', SCENE_NAMES_TRAIN_K360, train_transform, args, length=1024)
+        # train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(180, axis=2), T.NormalizeScale()])
+        train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])
+        dataset_train = Kitti360PoseReferenceMockDatasetPoints(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, length=1024)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceMockDatasetPoints.collate_fn)
 
         print('CARE: Re-set scenes')
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        dataset_val = Kitti360PoseReferenceDatasetMulti('./data/kitti360', SCENE_NAMES_TEST_K360, val_transform, args, split=None)
+        dataset_val = Kitti360PoseReferenceDatasetMulti(args.base_path, SCENE_NAMES_TEST, val_transform, args, split=None)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceDataset.collate_fn)  
         
     # print(sorted(dataset_train.get_known_classes()))
@@ -168,12 +170,11 @@ if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)    
 
     best_val_recallPrecision = -1 # Measured by mean of recall and precision
-    model_path = f"./checkpoints/matching_{args.dataset}.pth"    
 
     '''
     Start training
     '''
-    learning_rates = np.logspace(-3.0, -4.0 ,3)[args.lr_idx : args.lr_idx + 1] # Larger than -3 throws error (even with warm-up)
+    learning_rates = np.logspace(-3.0, -4.0 ,3) #[args.lr_idx : args.lr_idx + 1] # Larger than -3 throws error (even with warm-up)
 
     train_stats_loss = {lr: [] for lr in learning_rates}
     train_stats_loss_offsets = {lr: [] for lr in learning_rates}
@@ -235,18 +236,20 @@ if __name__ == "__main__":
                 ))
         print()
 
-        if np.mean((val_out.recall, val_out.precision)) > best_val_recallPrecision:
+        acc = np.mean((val_out.recall, val_out.precision))
+        if acc > best_val_recallPrecision:
+            model_path = f"./checkpoints/fine_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"
             print('Saving model to', model_path)
             try:
                 torch.save(model, model_path)
             except Exception as e:
                 print('Error saving model!', str(e))
-            best_val_recallPrecision = np.mean((val_out.recall, val_out.precision)) 
+            best_val_recallPrecision = acc
 
     '''
     Save plots
     '''
-    plot_name = f'SG-Off-{args.dataset}_bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
+    plot_name = f'Fine-Shift-9-Eval-{args.dataset}_bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': train_stats_loss,
         'train-loss_offsets': train_stats_loss_offsets,

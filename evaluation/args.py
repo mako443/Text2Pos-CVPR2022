@@ -8,10 +8,14 @@ def parse_arguments():
 
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--dataset', type=str, default='K360')
+    parser.add_argument('--base_path', type=str, default='./data/kitti360_shifted_9')
     parser.add_argument('--path_retrieval', type=str, help="The path to the Cell-Retrieval model")
     parser.add_argument('--path_matching', type=str, help="The path to the Hints-to-Objects matching model")
-    parser.add_argument('--top_k', type=int, nargs='+', default=[1, 3, 5])
+    parser.add_argument('--top_k', type=int, nargs='+', default=[1, 5])
     parser.add_argument('--pad_size', type=int, default=16)
+
+    # Object-encoder / PointNet
+    parser.add_argument('--pointnet_numpoints', type=int, default=256)
 
     args = parser.parse_args()
 

@@ -26,10 +26,11 @@ Augmentations:
 - flip cell
 '''
 class Kitti360CellDataset(Kitti360BaseDataset):
-    def __init__(self, base_path, scene_name, transform, split=None, shuffle_hints=False):
+    def __init__(self, base_path, scene_name, transform, split=None, shuffle_hints=False, flip_cells=False):
         super().__init__(base_path, scene_name, split)
         self.shuffle_hints = shuffle_hints
         self.transform = transform
+        self.flip_cells = flip_cells
 
     def __getitem__(self, idx):
         cell = self.cells[idx]
@@ -39,6 +40,13 @@ class Kitti360CellDataset(Kitti360BaseDataset):
             hints = np.random.choice(hints, size=len(hints), replace=False)
 
         text = ' '.join(hints)
+
+        # CARE: hints are currently not flipped!
+        if self.flip_cells:
+            if np.random.choice((True, False)): # Horizontal
+                cell, text = flip_cell(cell, text, 1)
+            if np.random.choice((True, False)): # Vertical
+                cell, text = flip_cell(cell, text, -1)                
 
         object_points = batch_object_points(cell.objects, self.transform)
 
@@ -95,13 +103,14 @@ def flip_cell(cell, text, direction):
     assert 'flipped' not in text
 
     return cell, text
-
+    
 class Kitti360CellDatasetMulti(Dataset):
-    def __init__(self, base_path, scene_names, transform, split=None, shuffle_hints=False):
+    def __init__(self, base_path, scene_names, transform, split=None, shuffle_hints=False, flip_cells=False):
         self.scene_names = scene_names
         self.transform = transform
         self.split = split
-        self.datasets = [Kitti360CellDataset(base_path, scene_name, transform, split, shuffle_hints) for scene_name in scene_names]
+        self.flip_cells = flip_cells
+        self.datasets = [Kitti360CellDataset(base_path, scene_name, transform, split, shuffle_hints, flip_cells) for scene_name in scene_names]
         self.cells = [cell for dataset in self.datasets for cell in dataset.cells] # Gathering cells for retrieval plotting
 
         print(str(self))
@@ -120,7 +129,7 @@ class Kitti360CellDatasetMulti(Dataset):
         return np.sum([len(ds) for ds in self.datasets])
 
     def __repr__(self):
-        return f'Kitti360CellDatasetMulti: {len(self.scene_names)} scenes, {len(self)} cells, split {self.split}'
+        return f'Kitti360CellDatasetMulti: {len(self.scene_names)} scenes, {len(self)} cells, split {self.split}, flip {self.flip_cells}'
 
     def get_known_words(self):
         known_words = []
@@ -135,10 +144,12 @@ class Kitti360CellDatasetMulti(Dataset):
         return list(np.unique(known_classes))
 
 if __name__ == '__main__':
-    base_path = './data/kitti360'
+    base_path = './data/kitti360_shifted_9'
     folder_name = '2013_05_28_drive_0000_sync'    
 
     transform = T.FixedPoints(10000, replace=False, allow_duplicates=False)
 
-    dataset = Kitti360CellDatasetMulti(base_path, [folder_name, ], transform)
+    dataset = Kitti360CellDatasetMulti(base_path, [], transform)
+    for ds in dataset.datasets:
+        print(f'{ds.scene_name}: {len(ds)}')
     data = dataset[0]
