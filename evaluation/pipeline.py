@@ -39,7 +39,7 @@ def run_matching(model, dataloader):
     offsets = []
     matches0 = []    
     for i_batch, batch in enumerate(dataloader):
-        output = model(batch['objects'], batch['hint_descriptions'])
+        output = model(batch['objects'], batch['hint_descriptions'], batch['object_points'])
         offsets.append(output.offsets.detach().cpu().numpy())
         matches0.append(output.matches0.detach().cpu().numpy())
     return np.vstack((offsets)), np.vstack((matches0))        
@@ -66,10 +66,18 @@ if __name__ == '__main__':
     retrievals = run_retrieval(model_retrieval, dataloader_retrieval)
     pos_in_cell = [np.array((0.5, 0.5)) for i in range(len(dataset_retrieval))] # Estimate middle of the cell for each retrieval
     accuracies = eval_pose_accuracies(dataset_retrieval, retrievals, pos_in_cell, top_k=args.top_k, threshs=threshs)
-    print_accupracies(accuracies)
+    print_accuracies(accuracies)
 
     # Run matching
     offsets, matches0 = run_matching(model_matching, dataloader_matching)
-    pos_in_cell = [get_pos_in_cell(dataset_matching[i]['objects'], matches0[i], offsets[i]) for i in range(len(dataset_matching))]
+
+    # Without offsets
+    pos_in_cell = [get_pos_in_cell(dataset_matching[i]['objects'], matches0[i], np.zeros_like(offsets[i])) for i in range(len(dataset_matching))] # Zero-offsets to just take mean of objects
     accuracies = eval_pose_accuracies(dataset_retrieval, retrievals, pos_in_cell, top_k=args.top_k, threshs=threshs)
     print_accuracies(accuracies)
+
+    # With offsets
+    pos_in_cell = [get_pos_in_cell(dataset_matching[i]['objects'], matches0[i], offsets[i]) for i in range(len(dataset_matching))] # Using actual offset-vectors
+    accuracies = eval_pose_accuracies(dataset_retrieval, retrievals, pos_in_cell, top_k=args.top_k, threshs=threshs)    
+    print_accuracies(accuracies)
+    
