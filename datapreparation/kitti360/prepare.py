@@ -17,7 +17,7 @@ from plyfile import PlyData, PlyElement
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell, plot_pose
 from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, COLORS, COLOR_NAMES, SCENE_NAMES
 from datapreparation.kitti360.utils import CLASS_TO_MINPOINTS, CLASS_TO_VOXELSIZE, STUFF_CLASSES
-from datapreparation.kitti360.imports import Object3d, Cell
+from datapreparation.kitti360.imports import Object3d, Cell, Pose
 from datapreparation.kitti360.descriptions import create_cell, describe_pose
 
 """
@@ -118,37 +118,37 @@ def gather_objects(path_input, folder_name):
     return objects_threshed
     # return list(scene_objects.values())
 
-def get_close_poses(poses: List[np.ndarray], scene_objects: List[Object3d], cell_size, pose_objects=None):
-    """Retains all poses that are at most cell_size / 2 distant from an instance-object.
+def get_close_locations(locations: List[np.ndarray], scene_objects: List[Object3d], cell_size, location_objects=None):
+    """Retains all locations that are at most cell_size / 2 distant from an instance-object.
 
     Args:
-        poses (List[np.ndarray]): [description]
+        locations (List[np.ndarray]): [description]
         scene_objects (List[Object3d]): [description]
         cell_size ([type]): [description]
-        pose_objects ([type], optional): [description]. Defaults to None.
+        location_objects ([type], optional): [description]. Defaults to None.
 
     Returns:
         [type]: [description]
     """
     instance_objects = [obj for obj in scene_objects if obj.label not in STUFF_CLASSES]
-    close_poses, close_pose_objects = [], []
-    for i_pose, pose in enumerate(poses):
+    close_locations, close_location_objects = [], []
+    for i_location, location in enumerate(locations):
         for obj in instance_objects:
-            closest_point = obj.get_closest_point(pose)
-            dist = np.linalg.norm(pose - closest_point)
+            closest_point = obj.get_closest_point(location)
+            dist = np.linalg.norm(location - closest_point)
             obj.closest_point = None
             if dist < cell_size / 2:
-                close_poses.append(pose)
-                close_pose_objects.append(pose_objects[i_pose])
+                close_locations.append(location)
+                close_location_objects.append(location_objects[i_location])
                 break
     
-    assert len(close_poses) > len(poses) * 2/5, f'Too few poses retained ({len(close_poses)} of {len(poses)}), are all objects loaded?'
-    print(f'closest poses: {len(close_poses)} of {len(poses)}')
+    assert len(close_locations) > len(locations) * 2/5, f'Too few locations retained ({len(close_locations)} of {len(locations)}), are all objects loaded?'
+    print(f'close locations: {len(close_locations)} of {len(locations)}')
 
-    if pose_objects:
-        return close_poses, close_pose_objects
+    if location_objects:
+        return close_locations, close_location_objects
     else:
-        return close_poses
+        return close_locations
 
 def create_locations(path_input, path_output, folder_name, pose_distance, return_pose_objects=False):
     path = osp.join(path_input, 'data_poses', folder_name, 'poses.txt')
@@ -272,7 +272,7 @@ if __name__ == '__main__':
             print(f'Loaded objects from {path_objects}')
             objects = pickle.load(open(path_objects, 'rb'))
 
-        # poses, pose_objects = get_close_poses(poses, objects, cell_size, pose_objects)
+        locations, location_objects = get_close_locations(locations, objects, cell_size, location_objects)
 
         # show_objects(objects + location_objects)
         # quit()
@@ -288,6 +288,9 @@ if __name__ == '__main__':
         res, poses = create_poses(objects, locations, cells, scene_name)
         assert res is True, "Too many pose nones, quitting."
         assert np.allclose(poses[0].pose_w, 1/2*(cells[0].bbox_w[0:3] + cells[0].bbox_w[3:6]))
+
+        pickle.dump(poses, open(path_poses, 'wb'))
+        print(f'Saved {len(poses)} poses to {path_poses}')           
 
         quit()
 

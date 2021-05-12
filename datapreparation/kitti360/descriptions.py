@@ -100,8 +100,8 @@ def describe_pose(pose_w, cell: Cell, num_mentioned=6):
 
     for hint_idx, obj_idx in enumerate(mentioned_indices):
         obj = cell.objects[obj_idx]
-
-        obj2pose = pose - obj.closest_point
+        closest_point = obj.get_closest_point(pose)
+        obj2pose = pose - closest_point
         if np.linalg.norm(obj2pose[0:2]) < 0.015:
             direction = 'on-top'
         else:
@@ -110,7 +110,7 @@ def describe_pose(pose_w, cell: Cell, num_mentioned=6):
             if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]>=0: direction='north'
             if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]<=0: direction='south' 
 
-        descriptions.append(Description(obj.id, obj.instance_id, direction, obj.label, obj.get_color_rgb()))
+        descriptions.append(Description(obj.id, obj.instance_id, direction, obj.label, obj.get_color_rgb(), closest_point))
 
     return Pose(pose, pose_w, cell.id, descriptions)    
     

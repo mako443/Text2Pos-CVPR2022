@@ -41,6 +41,8 @@ TODO:
 - Pad at (0.5,0.5) for less harmfull miss-matches?
 - Variable num_mentioned? (Care also at other places, potentially use lists there)
 
+- CARE: update cell_size in MockDataset when moving to other cell-sizes
+
 NOTES:
 - Random number of pads/distractors: acc. improved ✓
 - Keep PN frozen? -> Bad

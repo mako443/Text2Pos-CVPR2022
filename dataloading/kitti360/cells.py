@@ -14,8 +14,8 @@ import torch_geometric.transforms as T
 
 from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, SCENE_NAMES
 from datapreparation.kitti360.utils import CLASS_TO_INDEX, COLOR_NAMES
-from datapreparation.kitti360.imports import Object3d, Cell
-from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
+from datapreparation.kitti360.imports import Object3d, Cell, Pose
+from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell, plot_pose
 from dataloading.kitti360.base import Kitti360BaseDataset
 from dataloading.kitti360.poses import batch_object_points
 
@@ -25,15 +25,16 @@ Augmentations:
 - pads to random objects and vice-versa
 - flip cell
 '''
-class Kitti360CellDataset(Kitti360BaseDataset):
-    def __init__(self, base_path, scene_name, transform, split=None, shuffle_hints=False, flip_cells=False):
-        super().__init__(base_path, scene_name, split)
+class Kitti360CoarseDataset(Kitti360BaseDataset):
+    def __init__(self, base_path, scene_name, transform, shuffle_hints=False, flip_poses=False):
+        super().__init__(base_path, scene_name)
         self.shuffle_hints = shuffle_hints
         self.transform = transform
-        self.flip_cells = flip_cells
+        self.flip_poses = flip_poses
 
     def __getitem__(self, idx):
-        cell = self.cells[idx]
+        pose = self.poses[idx]
+        cell = self.cells_dict[pose.cell_id]
         hints = self.hint_descriptions[idx]
         
         if self.shuffle_hints:
@@ -41,12 +42,12 @@ class Kitti360CellDataset(Kitti360BaseDataset):
 
         text = ' '.join(hints)
 
-        # CARE: hints are currently not flipped!
-        if self.flip_cells:
+        # CARE: hints are currently not flipped! (Only the text.)
+        if self.flip_poses:
             if np.random.choice((True, False)): # Horizontal
-                cell, text = flip_cell(cell, text, 1)
+                pose, cell, text = flip_pose_in_cell(pose, cell, text, 1)
             if np.random.choice((True, False)): # Vertical
-                cell, text = flip_cell(cell, text, -1)                
+                pose, cell, text = flip_pose_in_cell(pose, cell, text, -1)                
 
         object_points = batch_object_points(cell.objects, self.transform)
 
@@ -54,64 +55,72 @@ class Kitti360CellDataset(Kitti360BaseDataset):
         object_color_indices = [COLOR_NAMES.index(obj.get_color_text()) for obj in cell.objects]           
 
         return {
+            'poses': pose,
             'cells': cell,
             'objects': cell.objects,
             'object_points': object_points,
             'texts': text,
-            # 'cell_indices': idx,
+            'cell_ids': pose.cell_id,
             'scene_names': self.scene_name,
             'object_class_indices': object_class_indices,
             'object_color_indices': object_color_indices            
         } 
 
     def __len__(self):
-        return len(self.cells)
+        return len(self.poses)
 
 # TODO: for free orientations, possibly flip cell only, create descriptions and hints again
 # OR: numeric vectors in descriptions, flip cell objects and description.direction, then create hints again
 # Flip pose, too?
-def flip_cell(cell, text, direction):
+def flip_pose_in_cell(pose: Pose, cell: Cell, text, direction):
     """Flips the cell horizontally or vertically
     CARE: Needs adjustment for non-compass directions
+    CARE: Description.object_closest_point is flipped but direction in description is not flipped.
 
     Args:
+        pose (Pose): The pose to flip, is copied before modification    
         cell (Cell): The cell to flip, is copied before modification
         text (str): The text description to flip
         direction (int): Horizontally (+1) or vertically (-1)
 
     Returns:
+        Pose: flipped pose
         Cell: flipped cell
         str: flipped text
     """
     assert direction in (-1, 1)
 
+    pose = deepcopy(pose)
     cell = deepcopy(cell)
 
     if direction == 1: #Horizontally
+        pose.pose[0] = 1.0 - pose.pose[0]
         for obj in cell.objects:
             obj.xyz[:, 0] = 1 - obj.xyz[:, 0]
-            obj.closest_point[0] = 1 - obj.closest_point[0]
+        for descr in pose.descriptions:
+            descr.object_closest_point[0] = 1.0 - descr.object_closest_point[0]
 
         text = text.replace('east','east-flipped').replace('west','east').replace('east-flipped', 'west')
     elif direction == -1: #Vertically
+        pose.pose[1] = 1.0 - pose.pose[1]
         for obj in cell.objects:
             obj.xyz[:, 1] = 1 - obj.xyz[:, 1]
-            obj.closest_point[1] = 1 - obj.closest_point[1]  
+        for descr in pose.descriptions:
+            descr.object_closest_point[1] = 1.0 - descr.object_closest_point[1]            
               
         text = text.replace('north', 'north-flipped'). replace('south', 'north').replace('north-flipped', 'south')
 
     assert 'flipped' not in text
 
-    return cell, text
+    return pose, cell, text
     
-class Kitti360CellDatasetMulti(Dataset):
-    def __init__(self, base_path, scene_names, transform, split=None, shuffle_hints=False, flip_cells=False):
+class Kitti360CoarseDatasetMulti(Dataset):
+    def __init__(self, base_path, scene_names, transform, shuffle_hints=False, flip_poses=False):
         self.scene_names = scene_names
         self.transform = transform
-        self.split = split
-        self.flip_cells = flip_cells
-        self.datasets = [Kitti360CellDataset(base_path, scene_name, transform, split, shuffle_hints, flip_cells) for scene_name in scene_names]
-        self.cells = [cell for dataset in self.datasets for cell in dataset.cells] # Gathering cells for retrieval plotting
+        self.flip_poses = flip_poses
+        self.datasets = [Kitti360CoarseDataset(base_path, scene_name, transform, shuffle_hints, flip_poses) for scene_name in scene_names]
+        self.all_cells = [cell for dataset in self.datasets for cell in dataset.cells] # Gathering cells for retrieval plotting
 
         print(str(self))
 
@@ -129,7 +138,7 @@ class Kitti360CellDatasetMulti(Dataset):
         return np.sum([len(ds) for ds in self.datasets])
 
     def __repr__(self):
-        return f'Kitti360CellDatasetMulti: {len(self.scene_names)} scenes, {len(self)} cells, split {self.split}, flip {self.flip_cells}'
+        return f'Kitti360CellDatasetMulti: {len(self.scene_names)} scenes, {len(self)} poses, {len(self.all_cells)} cells, flip {self.flip_poses}'
 
     def get_known_words(self):
         known_words = []
@@ -144,12 +153,12 @@ class Kitti360CellDatasetMulti(Dataset):
         return list(np.unique(known_classes))
 
 if __name__ == '__main__':
-    base_path = './data/kitti360_shifted_9'
-    folder_name = '2013_05_28_drive_0000_sync'    
+    base_path = './data/k360_decouple'
+    folder_name = '2013_05_28_drive_0003_sync'    
 
-    transform = T.FixedPoints(10000, replace=False, allow_duplicates=False)
+    transform = T.FixedPoints(256)
 
-    dataset = Kitti360CellDatasetMulti(base_path, [], transform)
-    for ds in dataset.datasets:
-        print(f'{ds.scene_name}: {len(ds)}')
+    dataset = Kitti360CoarseDatasetMulti(base_path, [folder_name, ], transform, shuffle_hints=True, flip_poses=True)
     data = dataset[0]
+    pose, cell, text = data['poses'], data['cells'], data['texts']
+    pose_f, cell_f, text_f = flip_pose_in_cell(pose, cell, text, 1)

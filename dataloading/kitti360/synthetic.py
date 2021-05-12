@@ -21,23 +21,16 @@ from datapreparation.kitti360.imports import Object3d, Cell
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
 from dataloading.kitti360.objects import Kitti360ObjectsDatasetMulti
-from dataloading.kitti360.poses import load_cell_data
+from dataloading.kitti360.poses import load_pose_and_cell
 
 
 '''
 TODO:
-- Add transforms for copied objects?
 - Sample class first or not?
 - Explicitly move an object to on-top first or not?
-
-- use combined describe_cell method from descriptions
-- make create_hint_descriptions() in Base static and use here
-- (cell normed right away would be ok)
-- try to use for cells and poses, refactor later if necessary
-
 '''
 
-class Kitti360PoseReferenceMockDatasetPoints(Dataset):
+class Kitti360FineMockDataset(Dataset):
     def __init__(self, base_path, scene_names, transform, args, length=1024, fixed_seed=False):
         self.cell_size = 30 # CARE: Match to K360 prepare
         
@@ -56,9 +49,7 @@ class Kitti360PoseReferenceMockDatasetPoints(Dataset):
         self.colors = COLORS
         self.color_names = COLOR_NAMES 
 
-        # print('CARE: Not padding!')   
-
-        print(f'Kitti360PoseReferenceMockDatasetPoints, fixed: {fixed_seed}, length: {length}')    
+        print(f'Kitti360FineMockDataset, fixed: {fixed_seed}, length: {length}')    
 
     def create_synthetic_cell(self, idx):
         pose = np.random.rand(3)

@@ -12,7 +12,7 @@ class Object3d:
         self.xyz = xyz
         self.rgb = rgb
         self.label = label
-        self.closest_point = None # Set in get_closest_point() for cell-object. CARE: may now be "incorrect" since multiple poses can use this object/cells
+        # self.closest_point = None # Set in get_closest_point() for cell-object. CARE: may now be "incorrect" since multiple poses can use this object/cells
         # self.center = None # TODO, for SG-Matching: ok to just input center instead of closest-point? or better to directly input xyz (care that PN++ knowns about coords)
 
     def get_color_rgb(self):
@@ -49,8 +49,8 @@ class Object3d:
 
     def get_closest_point(self, anchor):
         dists = np.linalg.norm(self.xyz - anchor, axis=1)
-        self.closest_point = self.xyz[np.argmin(dists)]
-        return self.closest_point
+        # self.closest_point = self.xyz[np.argmin(dists)]
+        return self.xyz[np.argmin(dists)]
 
     @classmethod
     def merge(cls, obj1, obj2):
@@ -70,17 +70,19 @@ class Object3d:
 
     @classmethod
     def create_padding(cls):
-        obj = Object3d(np.random.rand(8,3) * 0.001, np.zeros((8,3)), 'pad', -1) # Creating too few points or zero positios throws nans in PyG
+        # obj = Object3d(np.random.rand(8,3) * 0.001, np.zeros((8,3)), 'pad', -1) # Creating too few points or zero positios throws nans in PyG
+        obj = Object3d(-1, -1, np.random.rand(8,3) * 0.001, np.zeros((8,3)), 'pad')
         obj.get_closest_point([-1, -1, -1])
         return obj
 
 class Description:
-    def __init__(self, object_id, object_instance_id, direction, object_label, object_color):
+    def __init__(self, object_id, object_instance_id, direction, object_label, object_color, object_closest_point):
         self.object_id = object_id
         self.object_instance_id = object_instance_id
         self.direction = direction
         self.object_label = object_label
         self.object_color = object_color
+        self.object_closest_point = object_closest_point
         assert (object_color is not None)
 
     def __repr__(self):
@@ -88,7 +90,7 @@ class Description:
 
 class Pose:
     def __init__(self, pose_in_cell, pose_w, cell_id, descriptions: List[Description]):
-        self.pose = pose_in_cell
+        self.pose = pose_in_cell # The pose in the best cell (specified by cell_id), normed to ∈ [0, 1]
         self.pose_w = pose_w
         self.cell_id = cell_id
         self.descriptions = descriptions
@@ -123,7 +125,7 @@ class Cell:
         self.bbox_w = bbox_w # Original pose in world-coordinates
 
     def __repr__(self):
-        return f'Cell: {len(self.objects)} objects at {np.int0(self.bbox_w)} in {self.scene_name}'
+        return f'Cell {self.id}: {len(self.objects)} objects at {np.int0(self.bbox_w)}'
 
     # def get_text(self):
     #     text = ""
