@@ -123,6 +123,17 @@ def eval_epoch(model, dataloader, args):
     """
     assert args.ranking_loss != 'triplet' # Else also update evaluation.pipeline
 
+    '''
+    TODO: Dataset returns cell-pose pairs. Encode all texts. Encode cell-objects if index not yet encoded. Remember indices, sort by them.
+    cell_encodings = ...
+    text_encodings = ...
+    cell_indices = ... # Will contain duplicates
+    unique, indices = np.unique(cell_indices, return_index=True)
+    cell_encodings_ordered = np.zeros(np.max(unique), dim)
+    cell_encodings_ordered[unique, :] = cell_encodings[indices, :]
+    '''
+
+
     model.eval() # Now eval() seems to increase results
     accuracies = {k: [] for k in args.top_k}
     stats = EasyDict(
@@ -151,7 +162,7 @@ def eval_epoch(model, dataloader, args):
         text_encodings[index_offset : index_offset + batch_size, :] = text_enc.cpu().detach().numpy()
         index_offset += batch_size
 
-    
+    # TODO: top_retrievals now as cell_indices! Should be accomplished by the ordering before
     top_retrievals = {} # Top retrievals as {query_idx: sorted_indices}
     for query_idx in range(len(text_encodings)):
         if args.ranking_loss == 'triplet':

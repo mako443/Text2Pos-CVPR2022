@@ -1,7 +1,7 @@
 from typing import List
 import numpy as np
 import cv2
-from datapreparation.kitti360.imports import Object3d, Cell, Description
+from datapreparation.kitti360.imports import Object3d, Cell, Description, Pose
 from datapreparation.kitti360.utils import CLASS_TO_COLOR
 
 try:
@@ -55,12 +55,15 @@ def plot_cell(cell: Cell, scale=1024, use_rbg=False):
                 c = tuple(np.uint8(obj.rgb[i_point] * 255))
             point = np.int0(point[0:2])
             cv2.circle(img, tuple(point), 1, (int(c[2]),int(c[1]),int(c[0])))
-    # Draw pose
-    point = np.int0(cell.pose[0:2]*scale)
-    cv2.circle(img, tuple(point), 10, (0,0,255), thickness=3)
-    # Draw lines
-    objects_dict = {obj.id: obj for obj in cell.objects}
-    for descr in cell.descriptions:
-        target = np.int0(objects_dict[descr.object_id].closest_point[0:2]*scale)
-        cv2.arrowedLine(img, tuple(point), tuple(target), (0,0,255), thickness=2)
+    # # Draw pose
+    # point = np.int0(cell.pose[0:2]*scale)
+    # cv2.circle(img, tuple(point), 10, (0,0,255), thickness=3)
+    # # Draw lines
+    # objects_dict = {obj.id: obj for obj in cell.objects}
+    # for descr in cell.descriptions:
+    #     target = np.int0(objects_dict[descr.object_id].closest_point[0:2]*scale)
+    #     cv2.arrowedLine(img, tuple(point), tuple(target), (0,0,255), thickness=2)
     return cv2.flip(img, 0) # Flip for correct north/south
+
+def plot_pose(cell: Cell, pose: Pose, scale=1024, use_rgb=False):
+    pass

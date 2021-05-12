@@ -12,6 +12,8 @@ def plot_retrievals(top_retrievals, dataset, count=5):
         dataset (Dataset): Training or validation dataset
         count (int, optional): How many plots to create. Defaults to 5.
     """
+    raise Exception('Not updated to query_idx != target_idx!')
+    
     query_indices = list(top_retrievals.keys())
     query_indices = np.random.choice(query_indices, size=len(query_indices), replace=False)
 

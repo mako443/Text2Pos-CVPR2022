@@ -58,7 +58,7 @@ class Kitti360PoseReferenceMockDataset(Dataset):
                 xyz = np.random.rand(1, 3) # Center is inferred from this
                 rgb = np.random.rand(1, 3)
                 label = np.random.choice(self.classes)
-            objects.append(Object3d(xyz, rgb, label, None))
+            objects.append(Object3d(xyz, rgb, label, None)) # TODO: Update this
 
         # create the pose somewhere in the cell
         pose = np.random.rand(3)

@@ -5,14 +5,15 @@ import cv2
 from datapreparation.kitti360.utils import COLORS, COLOR_NAMES
 
 class Object3d:
-    def __init__(self, xyz, rgb, label, id):
+    # NOTE: use cell-id and scene-names to unique identify objects if needed
+    def __init__(self, id, instance_id, xyz, rgb, label):
+        self.id = id # Object ID, unique only inside a single cell. Multiple ids can belong to the same instance ID.
+        self.instance_id = instance_id # Original instance ID, can repeat across cells and in the same cell due to clustering of stuff objects.
         self.xyz = xyz
         self.rgb = rgb
         self.label = label
-        self.id = id
-        self.closest_point = None # Set in get_closest_point() for cell-object
-        self.center = None # TODO, for SG-Matching: ok to just input center instead of closest-point? or better to directly input xyz (care that PN++ knowns about coords)
-        self.instance_id = None
+        self.closest_point = None # Set in get_closest_point() for cell-object. CARE: may now be "incorrect" since multiple poses can use this object/cells
+        # self.center = None # TODO, for SG-Matching: ok to just input center instead of closest-point? or better to directly input xyz (care that PN++ knowns about coords)
 
     def get_color_rgb(self):
         color = np.mean(self.rgb, axis=0)
@@ -40,7 +41,8 @@ class Object3d:
         """Mask xyz and rgb, the id is retained
         """
         assert len(mask)>6 # To prevent bbox input
-        return Object3d(self.xyz[mask], self.rgb[mask], self.label, self.id)      
+        # return Object3d(self.xyz[mask], self.rgb[mask], self.label, self.id)    
+        return Object3d(self.id, self.instance_id, self.xyz[mask], self.rgb[mask], self.label)  
 
     # def center(self):
     #     return 1/2 * (np.min(self.xyz, axis=0) + np.max(self.xyz, axis=0)) 
@@ -52,13 +54,19 @@ class Object3d:
 
     @classmethod
     def merge(cls, obj1, obj2):
-        assert obj1.label==obj2.label and obj1.id==obj2.id
+        assert obj1.label==obj2.label and obj1.id==obj2.id, f'{obj1.label}, {obj2.label}, {obj1.id}, {obj2.id}'
         return Object3d(
+            obj1.id, obj1.instance_id,
             np.vstack((obj1.xyz, obj2.xyz)),
             np.vstack((obj1.rgb, obj2.rgb)),
-            obj1.label,
-            obj1.id
+            obj1.label
         )
+        # return Object3d(
+        #     np.vstack((obj1.xyz, obj2.xyz)),
+        #     np.vstack((obj1.rgb, obj2.rgb)),
+        #     obj1.label,
+        #     obj1.id
+        # )
 
     @classmethod
     def create_padding(cls):
@@ -67,8 +75,9 @@ class Object3d:
         return obj
 
 class Description:
-    def __init__(self, object_id, direction, object_label, object_color):
+    def __init__(self, object_id, object_instance_id, direction, object_label, object_color):
         self.object_id = object_id
+        self.object_instance_id = object_instance_id
         self.direction = direction
         self.object_label = object_label
         self.object_color = object_color
@@ -77,8 +86,24 @@ class Description:
     def __repr__(self):
         return f'Pose is {self.direction} of a {self.object_color} {self.object_label}'
 
+class Pose:
+    def __init__(self, pose_in_cell, pose_w, cell_id, descriptions: List[Description]):
+        self.pose = pose_in_cell
+        self.pose_w = pose_w
+        self.cell_id = cell_id
+        self.descriptions = descriptions
+
+    def __repr__(self) -> str:
+        return f'Pose at {self.pose_w} in {self.cell_id}'
+
+    def get_text(self):
+        text = ""
+        for d in self.descriptions:
+            text += str(d) + '. '
+        return text    
+
 class Cell:
-    def __init__(self, scene_name, objects: List[Object3d], descriptions: List[Description], pose, cell_size, pose_w, bbox_w):
+    def __init__(self, idx, scene_name, objects: List[Object3d], cell_size, bbox_w):
         """
         Args:
             IDs should be unique across entire dataset
@@ -87,20 +112,21 @@ class Cell:
             cell-size: longest edge in world-coordinates
             Pose_w as (x,y,z) in original world-coordinates
         """
-        self.scene_name = scene_name
+        self.id = f'{scene_name}_{idx:04.0f}' # Incrementing alpha-numeric id in format 00XX_XXXX
+        assert len(self.id) == 9, self.id
         self.objects = objects
-        self.descriptions = descriptions
-        self.pose = pose    
+        # self.descriptions = descriptions
+        # self.pose = pose    
         
         self.cell_size = cell_size # Original cell-size (longest edge)
-        self.pose_w = pose_w # Original pose in world-coordinates
+        # self.pose_w = pose_w # Original pose in world-coordinates
         self.bbox_w = bbox_w # Original pose in world-coordinates
 
     def __repr__(self):
-        return f'Cell: {len(self.objects)} objects, {len(self.descriptions)} descriptions'
+        return f'Cell: {len(self.objects)} objects at {np.int0(self.bbox_w)} in {self.scene_name}'
 
-    def get_text(self):
-        text = ""
-        for d in self.descriptions:
-            text += str(d) + '. '
-        return text
+    # def get_text(self):
+    #     text = ""
+    #     for d in self.descriptions:
+    #         text += str(d) + '. '
+    #     return text

@@ -50,6 +50,7 @@ if __name__ == '__main__':
     threshs = [15, 30] # Later: List of tuples, therefore not in arguments
 
     # Load datasets
+    # TODO: use only Cell-Dataset. It needs to optionally also return load_cell_data()
     transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
     dataset_retrieval = Kitti360CellDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, split=None)
     dataset_matching = Kitti360PoseReferenceDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, args, split=None)
