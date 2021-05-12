@@ -200,7 +200,7 @@ def create_cells(objects, poses, scene_name, cell_size):
     # print()
     
     print(f'Nones: {len(none_indices)} / {len(poses)}')
-    if len(none_indices) > len(poses)/4:
+    if len(none_indices) > len(poses)/3:
         print(f'Too many nones, are all objects gathered?')
         return False, none_indices
     else:
@@ -211,7 +211,7 @@ def create_cells(objects, poses, scene_name, cell_size):
 if __name__ == '__main__':
     np.random.seed(4096) # Set seed to re-produce results
     path_input = './data/kitti360'
-    path_output = './data/kitti360_overlap_2_3'
+    path_output = './data/kitti360_overlap_1_2'
     scene_name = sys.argv[-1]
     print('Scene:', scene_name)
     scene_names = SCENE_NAMES if scene_name=='all' else [scene_name, ]
@@ -225,7 +225,7 @@ if __name__ == '__main__':
         print(f'Folder: {folder_name}')
 
         # poses, pose_objects = create_poses(path_input, path_output, folder_name, cell_size, return_pose_objects=True)        
-        poses, pose_objects = create_poses(path_input, path_output, folder_name, pose_distance=cell_size * 2 / 3, return_pose_objects=True)        
+        poses, pose_objects = create_poses(path_input, path_output, folder_name, pose_distance=cell_size * 1 / 2, return_pose_objects=True)        
 
         path_objects = osp.join(path_output, 'objects', f'{folder_name}.pkl')
         path_cells = osp.join(path_output, 'cells', f'{folder_name}.pkl')
@@ -239,10 +239,10 @@ if __name__ == '__main__':
             print(f'Loaded objects from {path_objects}')
             objects = pickle.load(open(path_objects, 'rb'))
 
-        # poses, pose_objects = get_close_poses(poses, objects, cell_size, pose_objects)
+        poses, pose_objects = get_close_poses(poses, objects, cell_size, pose_objects)
 
-        show_objects(objects + pose_objects)
-        quit()
+        # show_objects(objects + pose_objects)
+        # quit()
 
         # Create cells
         res, cells = create_cells(objects, poses, folder_name, cell_size)

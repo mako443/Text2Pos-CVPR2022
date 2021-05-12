@@ -9,6 +9,7 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 from easydict import EasyDict
+import os.path as osp
 
 from models.superglue_matcher import SuperGlueMatch
 from models.tf_matcher import TransformerMatch
@@ -128,6 +129,9 @@ if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
 
+    dataset_name = osp.dirname(args.base_path).split('/')[-1]
+    print(f'Directory: {dataset_name}')    
+
     '''
     Create data loaders
     '''    
@@ -238,7 +242,7 @@ if __name__ == "__main__":
 
         acc = np.mean((val_out.recall, val_out.precision))
         if acc > best_val_recallPrecision:
-            model_path = f"./checkpoints/fine_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"
+            model_path = f"./checkpoints/fine_{dataset_name}_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"
             print('Saving model to', model_path)
             try:
                 torch.save(model, model_path)
@@ -249,7 +253,7 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'Fine-Shift-9-Eval-{args.dataset}_bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
+    plot_name = f'Fine-{dataset_name}_bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': train_stats_loss,
         'train-loss_offsets': train_stats_loss_offsets,

@@ -97,7 +97,7 @@ if __name__ == "__main__":
         # train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
         train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
 
-        dataset_train = Kitti360ObjectsDatasetMulti(args.base_path, SCENE_NAMES, split=None, transform=train_transform)
+        dataset_train = Kitti360ObjectsDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, split=None, transform=train_transform)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle)
         
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
@@ -145,7 +145,7 @@ if __name__ == "__main__":
             print(f'\t lr {lr:0.6f} epoch {epoch} loss {loss:0.3f} acc-train {acc_train:0.2f} acc-val {acc_val:0.2f}')
 
         if acc_val > best_val_accuracy:
-            model_path = f"./checkpoints/pointnet_perfect_acc{acc_val:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"    
+            model_path = f"./checkpoints/pointnet_acc{acc_val:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"    
             print(f'Saving model to {model_path}')
             torch.save(model.state_dict(), model_path)
             best_val_accuracy = acc_val
@@ -156,7 +156,7 @@ if __name__ == "__main__":
     Save plots
     '''
     # plot_name = f'PN2_len{len(dataset_train)}_bs{args.batch_size}_mb{args.max_batches}_l{args.num_layers}_v{args.variation}_s{args.shuffle}_g{args.lr_gamma}.png'
-    plot_name = f'PN2-Shift-9-Perfect-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_lr{args.lr_idx}_pl{args.pointnet_layers}_pv{args.pointnet_variation}_t{args.pointnet_transform}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}.png'
+    plot_name = f'PN2-Shift-9-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_lr{args.lr_idx}_pl{args.pointnet_layers}_pv{args.pointnet_variation}_t{args.pointnet_transform}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-acc': dict_acc,

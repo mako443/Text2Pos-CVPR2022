@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 from easydict import EasyDict
+import os.path as osp
 
 from models.cell_retrieval import CellRetrievalNetwork
 
@@ -175,24 +176,13 @@ if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
 
+    dataset_name = osp.dirname(args.base_path).split('/')[-1]
+    print(f'Directory: {dataset_name}')
+
     '''
     Create data loaders
     '''
-    if args.dataset == 'S3D':
-        dataset_train = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.cell_size, args.cell_stride, split='train')
-        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=args.shuffle)
-        dataset_val = Semantic3dPosesDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.cell_size, args.cell_stride, split='test')
-        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
-        print('Scene names:', scene_names)
-
-        dataset_val = Semantic3dPosesDataset('./data/numpy_merged/', './data/semantic3d', "sg27_station2_intensity_rgb", args.cell_size, args.cell_stride, split='test')
-        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPosesDataset.collate_fn, shuffle=False)
-        
-        print("\t\t Stats: ", args.cell_size, args.cell_stride, dataset_train.gather_stats())
-
     if args.dataset == 'K360':
-        assert args.pointnet_transform == 0
-
         train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
         dataset_train = Kitti360CellDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, split=None, shuffle_hints=True, flip_cells=True)
         # dataset_train = Kitti360PoseReferenceMockDatasetPoints(args.base_path, scenes_train, train_transform, args, length=2048, fixed_seed=True)
@@ -278,7 +268,7 @@ if __name__ == "__main__":
         # Saving best model (w/o early stopping)
         acc = val_acc[max(args.top_k)]
         if acc > best_val_accuracy:
-            model_path = f"./checkpoints/coarse_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"
+            model_path = f"./checkpoints/coarse_{dataset_name}_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"
             print(f'Saving model at {acc:0.2f} to {model_path}')
             torch.save(model, model_path)
             best_val_accuracy = acc
@@ -289,7 +279,7 @@ if __name__ == "__main__":
     Save plots
     '''
     # plot_name = f'Cells-{args.dataset}_s{scene_name.split('_')[-2]}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_f{"-".join(args.use_features)}.png'
-    plot_name = f'Coarse-Shift-9-{args.dataset}_e{args.epochs}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_em{args.pointnet_embed}_feat{args.pointnet_features}_p{args.pointnet_numpoints}_freeze{args.pointnet_freeze}_t{args.pointnet_transform}_m{args.margin:0.2f}_s{args.shuffle}_g{args.lr_gamma}.png'
+    plot_name = f'Coarse-{dataset_name}_e{args.epochs}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_em{args.pointnet_embed}_feat{args.pointnet_features}_p{args.pointnet_numpoints}_freeze{args.pointnet_freeze}_m{args.margin:0.2f}_s{args.shuffle}_g{args.lr_gamma}.png'
 
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
     val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}
