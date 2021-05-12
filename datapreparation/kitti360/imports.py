@@ -12,6 +12,7 @@ class Object3d:
         self.id = id
         self.closest_point = None # Set in get_closest_point() for cell-object
         self.center = None # TODO, for SG-Matching: ok to just input center instead of closest-point? or better to directly input xyz (care that PN++ knowns about coords)
+        self.instance_id = None
 
     def get_color_rgb(self):
         color = np.mean(self.rgb, axis=0)
