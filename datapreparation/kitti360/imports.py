@@ -89,10 +89,10 @@ class Description:
         return f'Pose is {self.direction} of a {self.object_color} {self.object_label}'
 
 class Pose:
-    def __init__(self, pose_in_cell, pose_w, cell_id, descriptions: List[Description]):
-        self.pose = pose_in_cell # The pose in the best cell (specified by cell_id), normed to ∈ [0, 1]
+    def __init__(self, pose_in_cell, pose_w, best_cell_id, descriptions: List[Description]):
+        self.pose = pose_in_cell # The pose in the best cell (specified by best_cell_id), normed to ∈ [0, 1]
         self.pose_w = pose_w
-        self.cell_id = cell_id
+        self.best_cell_id = best_cell_id
         self.descriptions = descriptions
 
     def __repr__(self) -> str:

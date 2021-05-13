@@ -26,6 +26,8 @@ from training.utils import plot_retrievals
 '''
 TODO:
 - Re-train PN++ on decouple ;)
+- Remove identical negative?
+- Train w/ best-cell enough?
 
 - synthetic cells -> Ok (0.25), gap smaller
 - flip the training cells (pose, objects, direction words) -> Good, 0.42 now
@@ -42,7 +44,6 @@ TODO:
 
 - Remove separate color encoding
 - max-dist for descriptions?
-- remove "identical negative" (currently does not occur in Kitti)
 
 NOTE:
 - margin 0.35 better? -> Taken for now

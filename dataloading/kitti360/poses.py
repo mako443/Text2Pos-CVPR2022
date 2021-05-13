@@ -40,6 +40,13 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform):
     cell_objects_dict = {obj.id: obj for obj in cell.objects}
     mentioned_ids = [descr.object_id for descr in descriptions]
 
+    '''
+    TODO
+    - match w/ instance-id. Ok so naively?
+    - offsets: just take from description
+    - what about synthetic?
+    '''
+
     # Gather mentioned objects, matches and offsets
     objects, matches, offsets = [], [], []
     for i_descr, descr in enumerate(descriptions):
@@ -64,7 +71,7 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform):
         objects.append(obj)
 
     # Build matches and all_matches
-    # The mentioned objects are always put in first, however, our geometric models have no knowledge of these indices
+    # The mentioned objects are always put in first, however, our geometric models have no knowledge of these indices as they are permutation invariant.
     matches = [(i, i) for i in range(len(descriptions))]
     all_matches = matches.copy()
     for i in range(len(objects)):

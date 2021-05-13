@@ -216,6 +216,18 @@ def create_cells(objects, locations, scene_name, cell_size):
         return True, cells
 
 def create_poses(objects: List[Object3d], locations, cells: List[Cell], scene_name):
+    """[summary]
+    Create cells -> sample pose location -> describe with pose-cell -> convert description to best-cell for training
+
+    Args:
+        objects (List[Object3d]): [description]
+        locations ([type]): [description]
+        cells (List[Cell]): [description]
+        scene_name ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """
     print('Creating poses...')
     poses = []
     none_indices = []
@@ -230,6 +242,13 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], scene_na
         if np.min(dists) > cells[0].cell_size / 2:
             none_indices.append(i_location)
             continue
+
+        '''
+        TODO
+        - create pose_cell directly on top of the pose
+        - obtain the description-list from pose_cell
+        - convert description-list to best_cell, possibly matching to bins
+        '''
 
         cell = cells[np.argmin(dists)]
         poses.append(describe_pose(location, cell))
