@@ -25,6 +25,8 @@ from training.utils import plot_retrievals
 
 '''
 TODO:
+- Re-train PN++ on decouple ;)
+
 - synthetic cells -> Ok (0.25), gap smaller
 - flip the training cells (pose, objects, direction words) -> Good, 0.42 now
 - failure cases
@@ -183,11 +185,11 @@ if __name__ == "__main__":
     '''
     if args.dataset == 'K360':
         train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
-        dataset_train = Kitti360CoarseDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], train_transform, shuffle_hints=True, flip_poses=True)
+        dataset_train = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, shuffle_hints=True, flip_poses=True)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=args.shuffle)
 
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        dataset_val = Kitti360CoarseDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], val_transform)
+        dataset_val = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TEST, val_transform)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=False)    
 
     # train_words = dataset_train.get_known_words()

@@ -14,7 +14,7 @@ def eval_pose_accuracies(dataset, retrievals, pos_in_cell, top_k=[1,3,5], thresh
     assert len(dataset) == len(retrievals) # A retrieval for each query
     assert len(dataset) == len(pos_in_cell) # An offset prediction for each cell
 
-    WEITER: Send in poses as List of objects, re-project accordingly
+    WEITER: Send in poses as List of objects, re-project accordingly. 
     
     # For each cell, get the actual pose-prediciton in world-coordinates
     pose_preds = []

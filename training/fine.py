@@ -29,14 +29,14 @@ from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
 TODO:
-- CARE: offsets now also based on mid! ok? Otherwise pass through to calc_pose_error by sorting closest-points before
-
 - Aux. train color + class helpful?
 - Which augmentation: RandomFlips, RandomRotate, Nothing? -> Not much difference?
 - 512 points ok? -> 1024 maye slightly better but seems ok. Possibly re-check w/ aux-loss
 - Merge differently / variations?
 - Pre-train helpful?
 - Re-formulate forward() as in CellRetrieval regarding features/embedding
+
+- compare mean/offset accuracies with closest/center in offset-pred and pos_in_cell
 
 - Refactoring: train (on-top, classes, center/closest point, color rgb/text, )
 - feature ablation
@@ -143,12 +143,12 @@ if __name__ == "__main__":
     '''    
     if args.dataset == 'K360':
         train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])
-        dataset_train = Kitti360FineSyntheticDataset(args.base_path, ['2013_05_28_drive_0003_sync', ], train_transform, args, length=1024, fixed_seed=False)
+        dataset_train = Kitti360FineSyntheticDataset(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, length=1024, fixed_seed=False)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360FineSyntheticDataset.collate_fn)
 
         print('CARE: Re-set scenes')
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        dataset_val = Kitti360FineDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], val_transform, args)
+        dataset_val = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TEST, val_transform, args)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360FineSyntheticDataset.collate_fn)  
         
     # print(sorted(dataset_train.get_known_classes()))

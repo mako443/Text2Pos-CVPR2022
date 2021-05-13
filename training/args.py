@@ -3,7 +3,7 @@ from argparse import ArgumentParser
 import os.path as osp
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='PoseRefer models and ablations')
+    parser = argparse.ArgumentParser(description='Text2Pos models and ablations')
 
     # General
     parser.add_argument('--batch_size', type=int, default=8)
