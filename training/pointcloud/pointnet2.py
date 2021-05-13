@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from models.pointcloud.pointnet2 import PointNet2
 from dataloading.semantic3d.semantic3d_pointcloud import Semantic3dObjectDataset, Semantic3dObjectDatasetMulti
 from dataloading.kitti360.objects import Kitti360ObjectsDataset, Kitti360ObjectsDatasetMulti
-from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_TEST
+from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TEST, SCENE_NAMES_TRAIN
 from datapreparation.kitti360.utils import COLOR_NAMES as COLOR_NAMES_K360
 
 from training.args import parse_arguments
@@ -81,27 +81,17 @@ if __name__ == "__main__":
     '''
     Create data loaders
     '''    
-    transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale(), T.RandomFlip(0), T.RandomFlip(1), T.RandomFlip(2), T.NormalizeScale()])
-
-    if args.dataset == 'S3D':
-        scene_names = ['bildstein_station1_xyz_intensity_rgb','domfountain_station1_xyz_intensity_rgb','neugasse_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb','untermaederbrunnen_station1_xyz_intensity_rgb']
-        # dataset_train = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='train')
-        dataset_train = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='train', transform=transform)
-        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)
-        # dataset_val = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='test')
-        dataset_val = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='test')
-        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)    
 
     if args.dataset == 'K360':     
-        # train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(180, axis=2), T.NormalizeScale()]) # This proved best
-        # train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
-        train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
+        # train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(180, axis=2), T.NormalizeScale()])
+        train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
+        # train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
 
-        dataset_train = Kitti360ObjectsDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, split=None, transform=train_transform)
+        dataset_train = Kitti360ObjectsDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, transform=train_transform)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle)
         
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        dataset_val = Kitti360ObjectsDatasetMulti(args.base_path, SCENE_NAMES_TEST, split=None, transform=val_transform)
+        dataset_val = Kitti360ObjectsDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform=val_transform)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False)
 
     assert sorted(dataset_train.get_known_classes()) == sorted(dataset_val.get_known_classes())

@@ -210,7 +210,8 @@ def get_pos_in_cell(objects: List[Object3d_K360], matches0, offsets):
     for obj_idx, hint_idx in enumerate(matches0):
         if obj_idx == -1 or hint_idx == -1:
             continue
-        pose_preds.append(objects[obj_idx].closest_point[0:2] + offsets[hint_idx]) # Object location plus offset of corresponding hint
+        # pose_preds.append(objects[obj_idx].closest_point[0:2] + offsets[hint_idx]) # Object location plus offset of corresponding hint
+        pose_preds.append(objects[obj_idx].get_center()[0:2] + offsets[hint_idx]) # Object location plus offset of corresponding hint
     return np.mean(pose_preds, axis=0) if len(pose_preds) > 0 else np.array((0.5,0.5)) # Guess the middle if no matches
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ def parse_arguments():
     parser.add_argument('--num_distractors', default='all')
     parser.add_argument('--max_batches', type=int, default=None)
     parser.add_argument('--dataset', type=str, default='K360')
-    parser.add_argument('--base_path', type=str, default='./data/k360_shift_9')
+    parser.add_argument('--base_path', type=str, default='./data/k360_decouple')
     # parser.add_argument('--data_split', type=int, default=0)
 
     # Model

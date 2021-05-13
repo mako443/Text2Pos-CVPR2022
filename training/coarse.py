@@ -14,14 +14,9 @@ import os.path as osp
 
 from models.cell_retrieval import CellRetrievalNetwork
 
-# from dataloading.semantic3d.semantic3d_poses import Semantic3dPosesDataset, Semantic3dPosesDatasetMulti
-# from datapreparation.semantic3d.imports import COMBINED_SCENE_NAMES as SCENE_NAMES_S3D
-# from datapreparation.semantic3d.drawing import draw_retrieval
-
 from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_TEST
 from datapreparation.kitti360.utils import COLOR_NAMES as COLOR_NAMES_K360
-from dataloading.kitti360.cells import Kitti360CellDataset, Kitti360CellDatasetMulti
-from dataloading.kitti360.synthetic import Kitti360PoseReferenceMockDatasetPoints
+from dataloading.kitti360.cells import Kitti360CoarseDatasetMulti, Kitti360CoarseDataset
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -62,6 +57,7 @@ NOTE:
 - (Performances can fluctuate from run to run)
 - stronger language model? (More layers) -> Doesn't change much 
 '''
+
 def train_epoch(model, dataloader, args):
     model.train()
     epoch_losses = []   
@@ -85,15 +81,7 @@ def train_epoch(model, dataloader, args):
         else:
             loss = criterion(anchor, positive)
 
-        # gt_class_indices = [idx for sample in batch['object_class_indices'] for idx in sample]
-        # gt_color_indices = [idx for sample in batch['object_color_indices'] for idx in sample]
-        # loss_classes = 5 * criterion_class(class_preds, torch.tensor(gt_class_indices, dtype=torch.long, device=device))
-        # loss_colors = 5 * criterion_color(color_preds, torch.tensor(gt_color_indices, dtype=torch.long, device=device))            
-        # if not printed:
-        #     print(f'loss {loss.item():0.3f} class {loss_classes.item():0.3f} color {loss_colors.item():0.3f}')
-        #     printed = False
-
-        loss = loss #+ loss_classes + loss_colors
+        loss = loss
 
         loss.backward()
         optimizer.step()
@@ -105,10 +93,11 @@ def train_epoch(model, dataloader, args):
 
 printed = False
 
-# TODO: possibly update this to also handle S3D
 @torch.no_grad()
 def eval_epoch(model, dataloader, args):
     """Top-k retrieval for each pose against all cells in the dataset.
+    NOTE: The way the cells are read from the Cells-Only-Dataset, they may have been augmented differently during the actual training. Cells-Only does not flip and shuffle!
+    TODO: Is this ok? Otherwise, just sent in as batches, ignore that non-pose cells are missing.
 
     Args:
         model ([type]): The model
@@ -123,71 +112,70 @@ def eval_epoch(model, dataloader, args):
     """
     assert args.ranking_loss != 'triplet' # Else also update evaluation.pipeline
 
-    '''
-    TODO: Dataset returns cell-pose pairs. Encode all texts. Encode cell-objects if index not yet encoded. Remember indices, sort by them.
-    cell_encodings = ...
-    text_encodings = ...
-    cell_indices = ... # Will contain duplicates
-    unique, indices = np.unique(cell_indices, return_index=True)
-    cell_encodings_ordered = np.zeros(np.max(unique), dim)
-    cell_encodings_ordered[unique, :] = cell_encodings[indices, :]
-    '''
-
-
     model.eval() # Now eval() seems to increase results
     accuracies = {k: [] for k in args.top_k}
-    stats = EasyDict(
-        class_accuracies = [],
-        color_accuracies = []
-    )
 
-    num_samples = len(dataloader.dataset) if isinstance(dataloader, DataLoader) else np.sum([len(batch['texts']) for batch in dataloader])
-    cell_encodings = np.zeros((num_samples, model.embed_dim))
-    text_encodings = np.zeros((num_samples, model.embed_dim))
+    # TODO: Use this again if batches!
+    # num_samples = len(dataloader.dataset) if isinstance(dataloader, DataLoader) else np.sum([len(batch['texts']) for batch in dataloader]) 
+
+    cells_dataset = dataloader.dataset.get_cell_dataset()
+    cells_dataloader = DataLoader(cells_dataset, batch_size=args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=False)
+
+    cell_encodings = np.zeros((len(cells_dataset), model.embed_dim))
+    db_cell_ids = np.zeros(len(cells_dataset), dtype='<U32')
+
+    text_encodings = np.zeros((len(dataloader.dataset), model.embed_dim))
+    query_cell_ids = np.zeros(len(dataloader.dataset), dtype='<U32')
+
+    # Encode the queries
     index_offset = 0
     for batch in dataloader:
-        # cell_enc = model.encode_objects(batch['objects'], batch['object_points'])
-        cell_enc = model.encode_objects(batch['objects'], batch['object_points'])
         text_enc = model.encode_text(batch['texts'])
+        batch_size = len(text_enc)
 
-        # gt_class_indices = [idx for sample in batch['object_class_indices'] for idx in sample]
-        # gt_color_indices = [idx for sample in batch['object_color_indices'] for idx in sample]
-        # stats.class_accuracies.append(np.mean(class_preds.cpu().detach().numpy().argmax(axis=-1) == gt_class_indices))
-        # stats.color_accuracies.append(np.mean(color_preds.cpu().detach().numpy().argmax(axis=-1) == gt_color_indices))
-        stats.class_accuracies.append(0)
-        stats.color_accuracies.append(0)
-
-        batch_size = len(cell_enc)
-        cell_encodings[index_offset : index_offset + batch_size, :] = cell_enc.cpu().detach().numpy()
         text_encodings[index_offset : index_offset + batch_size, :] = text_enc.cpu().detach().numpy()
+        query_cell_ids[index_offset : index_offset + batch_size] = np.array(batch['cell_ids'])
         index_offset += batch_size
 
-    # TODO: top_retrievals now as cell_indices! Should be accomplished by the ordering before
-    top_retrievals = {} # Top retrievals as {query_idx: sorted_indices}
+    # Encode the database side
+    index_offset = 0
+    for batch in cells_dataloader:
+        cell_enc = model.encode_objects(batch['objects'], batch['object_points'])
+        batch_size = len(cell_enc)
+
+        cell_encodings[index_offset : index_offset + batch_size, :] = cell_enc.cpu().detach().numpy()
+        db_cell_ids[index_offset : index_offset + batch_size] = np.array(batch['cell_ids'])
+        index_offset += batch_size
+
+    top_retrievals = {} # {query_idx: top_cell_ids}
     for query_idx in range(len(text_encodings)):
-        if args.ranking_loss == 'triplet':
-            dists = np.linalg.norm(cell_encodings[:] - text_encodings[query_idx], axis=1)
-            sorted_indices = np.argsort(dists) # Low->high
-        else:
+        if args.ranking_loss != 'triplet': # Asserted above
             scores = cell_encodings[:] @ text_encodings[query_idx]
-            sorted_indices = np.argsort(-1.0 * scores) # Sort high->low
+            assert len(scores) == len(dataloader.dataset.all_cells) # TODO: remove
+            sorted_indices = np.argsort(-1.0 * scores) # High -> low
+
+        sorted_indices = sorted_indices[0 : np.max(args.top_k)]
         
+        retrieved_cell_ids = db_cell_ids[sorted_indices]
+        target_cell_id = query_cell_ids[query_idx]
+
         for k in args.top_k:
-            accuracies[k].append(query_idx in sorted_indices[0:k])
-        top_retrievals[query_idx] = sorted_indices
+            accuracies[k].append(target_cell_id in retrieved_cell_ids[0 : k])
+        top_retrievals[query_idx] = retrieved_cell_ids
 
     for k in args.top_k:
         accuracies[k] = np.mean(accuracies[k])
-    stats.class_accuracies = np.mean(stats.class_accuracies)
-    stats.color_accuracies = np.mean(stats.color_accuracies)
-    
-    return accuracies, stats, top_retrievals
+
+    return accuracies, top_retrievals
 
 if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
 
-    dataset_name = osp.dirname(args.base_path).split('/')[-1]
+    print('CARE: Set scene names correctly!!')
+
+    dataset_name = args.base_path[:-1] if args.base_path.endswith('/') else args.base_path
+    dataset_name = dataset_name.split('/')[-1]
     print(f'Directory: {dataset_name}')
 
     '''
@@ -195,13 +183,12 @@ if __name__ == "__main__":
     '''
     if args.dataset == 'K360':
         train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
-        dataset_train = Kitti360CellDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, split=None, shuffle_hints=True, flip_cells=True)
-        # dataset_train = Kitti360PoseReferenceMockDatasetPoints(args.base_path, scenes_train, train_transform, args, length=2048, fixed_seed=True)
-        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceMockDatasetPoints.collate_fn, shuffle=args.shuffle)
+        dataset_train = Kitti360CoarseDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], train_transform, shuffle_hints=True, flip_poses=True)
+        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=args.shuffle)
 
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        dataset_val = Kitti360CellDatasetMulti(args.base_path, SCENE_NAMES_TEST, val_transform, split=None)
-        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn, shuffle=False)    
+        dataset_val = Kitti360CoarseDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], val_transform)
+        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=False)    
 
     # train_words = dataset_train.get_known_words()
     # for word in dataset_val.get_known_words():
@@ -223,19 +210,11 @@ if __name__ == "__main__":
     dict_acc = {k: {lr: [] for lr in learning_rates} for k in args.top_k}
     dict_acc_val = {k: {lr: [] for lr in learning_rates} for k in args.top_k}    
     
-    val_stats_class = {lr: [] for lr in learning_rates}
-    val_stats_color = {lr: [] for lr in learning_rates}
-
     best_val_accuracy = -1
 
-    # ACC_TARGET = 'all'
     for lr in learning_rates:
         model = CellRetrievalNetwork(dataset_train.get_known_classes(), COLOR_NAMES_K360, dataset_train.get_known_words(), args)
         model.to(device) 
-
-        # print('Saving model to', model_path)
-        # torch.save(model, model_path)  
-        # quit()
 
         optimizer = optim.Adam(model.parameters(), lr=lr)
         if args.ranking_loss == 'pairwise':
@@ -254,9 +233,9 @@ if __name__ == "__main__":
             # dataset_train.reset_seed() #OPTION: re-setting seed leads to equal data at every epoch
 
             loss, train_batches = train_epoch(model, dataloader_train, args)
-            # train_acc, train_retrievals = eval_epoch(model, dataloader_train, args)
-            train_acc, train_stats, train_retrievals = eval_epoch(model, train_batches, args)
-            val_acc, val_stats, val_retrievals = eval_epoch(model, dataloader_val, args)
+            # train_acc, train_retrievals = eval_epoch(model, train_batches, args)
+            train_acc, train_retrievals = eval_epoch(model, dataloader_train, args) # TODO/CARE: Is this ok? Send in batches again?
+            val_acc, val_retrievals = eval_epoch(model, dataloader_val, args)
 
             key = lr
             dict_loss[key].append(loss)
@@ -264,8 +243,6 @@ if __name__ == "__main__":
                 dict_acc[k][key].append(train_acc[k])
                 dict_acc_val[k][key].append(val_acc[k])
 
-            val_stats_class[lr].append(val_stats.class_accuracies)
-            val_stats_color[lr].append(val_stats.color_accuracies)
 
             scheduler.step()
             print(f'\t lr {lr:0.4} loss {loss:0.2f} epoch {epoch} train-acc: ', end="")
@@ -298,8 +275,6 @@ if __name__ == "__main__":
         'train-loss': dict_loss,
         **train_accs,
         **val_accs,
-        'val-class-acc': val_stats_class,
-        'val-color-acc': val_stats_color
     }
     plot_metrics(metrics, './plots/'+plot_name)    
 

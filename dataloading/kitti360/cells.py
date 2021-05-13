@@ -97,16 +97,16 @@ def flip_pose_in_cell(pose: Pose, cell: Cell, text, direction):
         pose.pose[0] = 1.0 - pose.pose[0]
         for obj in cell.objects:
             obj.xyz[:, 0] = 1 - obj.xyz[:, 0]
-        for descr in pose.descriptions:
-            descr.object_closest_point[0] = 1.0 - descr.object_closest_point[0]
+        # for descr in pose.descriptions:
+            # descr.object_closest_point[0] = 1.0 - descr.object_closest_point[0]
 
         text = text.replace('east','east-flipped').replace('west','east').replace('east-flipped', 'west')
     elif direction == -1: #Vertically
         pose.pose[1] = 1.0 - pose.pose[1]
         for obj in cell.objects:
             obj.xyz[:, 1] = 1 - obj.xyz[:, 1]
-        for descr in pose.descriptions:
-            descr.object_closest_point[1] = 1.0 - descr.object_closest_point[1]            
+        # for descr in pose.descriptions:
+            # descr.object_closest_point[1] = 1.0 - descr.object_closest_point[1]            
               
         text = text.replace('north', 'north-flipped'). replace('south', 'north').replace('north-flipped', 'south')
 
@@ -121,6 +121,9 @@ class Kitti360CoarseDatasetMulti(Dataset):
         self.flip_poses = flip_poses
         self.datasets = [Kitti360CoarseDataset(base_path, scene_name, transform, shuffle_hints, flip_poses) for scene_name in scene_names]
         self.all_cells = [cell for dataset in self.datasets for cell in dataset.cells] # Gathering cells for retrieval plotting
+
+        cell_ids = [cell.id for cell in self.all_cells]
+        assert len(np.unique(cell_ids)) == len(self.all_cells) # IDs should not repeat
 
         print(str(self))
 
@@ -151,6 +154,35 @@ class Kitti360CoarseDatasetMulti(Dataset):
         for ds in self.datasets:
             known_classes.extend(ds.get_known_classes())
         return list(np.unique(known_classes))
+
+    def get_cell_dataset(self):
+        return Kitti360CoarseCellOnlyDataset(self.all_cells, self.transform)
+
+class Kitti360CoarseCellOnlyDataset(Dataset):
+    """Dataset to return only the cells for encoding during evaluation
+    NOTE: The way the cells are read from the Cells-Only-Dataset, they may have been augmented differently during the actual training. Cells-Only does not flip and shuffle!
+    TODO: This ok?
+    """
+
+    def __init__(self, cells: List[Cell], transform):
+        super().__init__()
+
+        self.cells = cells
+        self.transform = transform
+
+    def __getitem__(self, idx):
+        cell = self.cells[idx]
+        object_points = batch_object_points(cell.objects, self.transform)
+
+        return {
+            'cells': cell,
+            'cell_ids': cell.id,
+            'objects': cell.objects,
+            'object_points': object_points
+        }
+
+    def __len__(self):
+        return len(self.cells)        
 
 if __name__ == '__main__':
     base_path = './data/k360_decouple'

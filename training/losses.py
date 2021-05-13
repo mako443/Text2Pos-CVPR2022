@@ -1,7 +1,11 @@
+from typing import List
+
 import numpy as np
 import torch
 import torch.nn as nn
 from easydict import EasyDict
+
+from datapreparation.kitti360.imports import Object3d, Pose, Cell
 
 from models.superglue_matcher import get_pos_in_cell
 
@@ -49,7 +53,7 @@ def calc_recall_precision(batch_gt_matches, batch_matches0, batch_matches1):
     return np.mean(all_recalls), np.mean(all_precisions)
 
 # Verified against old function ✓
-def calc_pose_error(objects, matches0, poses, offsets=None, use_mid_pred=False):
+def calc_pose_error(objects, matches0, poses: List[Pose], offsets=None, use_mid_pred=False):
     """Calculates the mean error of a batch by averaging the positions of all matches objects plus corresp. offsets.
     All calculations are in x-y-plane.
 
@@ -64,8 +68,10 @@ def calc_pose_error(objects, matches0, poses, offsets=None, use_mid_pred=False):
         [float]: Mean error.
     """
     assert len(objects) == len(matches0) == len(poses)
+    assert isinstance(poses[0], Pose)
+
     batch_size, pad_size = matches0.shape
-    poses = np.array(poses)[:, 0:2]
+    poses = np.array([pose.pose for pose in poses])[:, 0:2]
 
     if offsets is not None:
         assert len(objects) == len(offsets)     

@@ -46,7 +46,8 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform):
         hint_obj = cell_objects_dict[descr.object_id]
         objects.append(hint_obj)
         matches.append((i_descr, i_descr))
-        offsets.append(pose.pose - descr.object_closest_point)
+        # offsets.append(pose.pose - descr.object_closest_point)
+        offsets.append(pose.pose - hint_obj.get_center())
     offsets = np.array(offsets)[:, 0:2]
 
     # Gather distractors

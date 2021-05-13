@@ -14,9 +14,10 @@ import os.path as osp
 from models.superglue_matcher import SuperGlueMatch
 from models.tf_matcher import TransformerMatch
 
-from dataloading.semantic3d.semantic3d import Semantic3dPoseReferenceMockDataset, Semantic3dPoseReferenceDataset, Semantic3dPoseReferenceDatasetMulti
-from dataloading.kitti360.poses import Kitti360PoseReferenceDataset, Kitti360PoseReferenceDatasetMulti, Kitti360PoseReferenceMockDataset
-from dataloading.kitti360.synthetic import Kitti360PoseReferenceMockDatasetPoints
+# from dataloading.semantic3d.semantic3d import Semantic3dPoseReferenceMockDataset, Semantic3dPoseReferenceDataset, Semantic3dPoseReferenceDatasetMulti
+# from dataloading.kitti360.poses import Kitti360PoseReferenceDataset, Kitti360PoseReferenceDatasetMulti, Kitti360PoseReferenceMockDataset
+from dataloading.kitti360.poses import Kitti360FineDataset, Kitti360FineDatasetMulti
+from dataloading.kitti360.synthetic import Kitti360FineSyntheticDataset
 
 from datapreparation.semantic3d.imports import COLORS as COLORS_S3D, COLOR_NAMES as COLOR_NAMES_S3D
 from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360
@@ -28,6 +29,8 @@ from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
 TODO:
+- CARE: offsets now also based on mid! ok? Otherwise pass through to calc_pose_error by sorting closest-points before
+
 - Aux. train color + class helpful?
 - Which augmentation: RandomFlips, RandomRotate, Nothing? -> Not much difference?
 - 512 points ok? -> 1024 maye slightly better but seems ok. Possibly re-check w/ aux-loss
@@ -40,8 +43,6 @@ TODO:
 - regress offsets: is error more in direction or magnitude? optimize?
 - Pad at (0.5,0.5) for less harmfull miss-matches?
 - Variable num_mentioned? (Care also at other places, potentially use lists there)
-
-- CARE: update cell_size in MockDataset when moving to other cell-sizes
 
 NOTES:
 - Random number of pads/distractors: acc. improved ✓
@@ -131,30 +132,24 @@ if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
 
-    dataset_name = osp.dirname(args.base_path).split('/')[-1]
-    print(f'Directory: {dataset_name}')    
+    print('CARE: Set scene names correctly!!')
+
+    dataset_name = args.base_path[:-1] if args.base_path.endswith('/') else args.base_path
+    dataset_name = dataset_name.split('/')[-1]
+    print(f'Directory: {dataset_name}')
 
     '''
     Create data loaders
     '''    
-    if args.dataset == 'S3D':
-        scene_names = ('bildstein_station1_xyz_intensity_rgb','domfountain_station1_xyz_intensity_rgb','neugasse_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb','untermaederbrunnen_station1_xyz_intensity_rgb')
-        dataset_val = Semantic3dPoseReferenceDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.pad_size, split=None)
-        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceDataset.collate_fn)  
-        
-        dataset_train = Semantic3dPoseReferenceMockDataset(args, dataset_val.get_known_classes(), COLORS_S3D, COLOR_NAMES_S3D)
-        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)
-
     if args.dataset == 'K360':
-        # train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(180, axis=2), T.NormalizeScale()])
         train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])
-        dataset_train = Kitti360PoseReferenceMockDatasetPoints(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, length=1024)
-        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceMockDatasetPoints.collate_fn)
+        dataset_train = Kitti360FineSyntheticDataset(args.base_path, ['2013_05_28_drive_0003_sync', ], train_transform, args, length=1024, fixed_seed=False)
+        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360FineSyntheticDataset.collate_fn)
 
         print('CARE: Re-set scenes')
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        dataset_val = Kitti360PoseReferenceDatasetMulti(args.base_path, SCENE_NAMES_TEST, val_transform, args, split=None)
-        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceDataset.collate_fn)  
+        dataset_val = Kitti360FineDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], val_transform, args)
+        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360FineSyntheticDataset.collate_fn)  
         
     # print(sorted(dataset_train.get_known_classes()))
     # print(sorted(dataset_val.get_known_classes()))
