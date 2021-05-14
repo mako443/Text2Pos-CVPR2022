@@ -15,7 +15,7 @@ import torch_geometric.transforms as T
 from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, SCENE_NAMES
 from datapreparation.kitti360.utils import CLASS_TO_INDEX, COLOR_NAMES
 from datapreparation.kitti360.imports import Object3d, Cell, Pose
-from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell, plot_pose
+from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell, plot_pose_in_best_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
 from dataloading.kitti360.poses import batch_object_points
 
@@ -97,16 +97,16 @@ def flip_pose_in_cell(pose: Pose, cell: Cell, text, direction):
         pose.pose[0] = 1.0 - pose.pose[0]
         for obj in cell.objects:
             obj.xyz[:, 0] = 1 - obj.xyz[:, 0]
-        # for descr in pose.descriptions:
-            # descr.object_closest_point[0] = 1.0 - descr.object_closest_point[0]
+        for descr in pose.descriptions:
+            descr.closest_point[0] = 1.0 - descr.closest_point[0]
 
         text = text.replace('east','east-flipped').replace('west','east').replace('east-flipped', 'west')
     elif direction == -1: #Vertically
         pose.pose[1] = 1.0 - pose.pose[1]
         for obj in cell.objects:
             obj.xyz[:, 1] = 1 - obj.xyz[:, 1]
-        # for descr in pose.descriptions:
-            # descr.object_closest_point[1] = 1.0 - descr.object_closest_point[1]            
+        for descr in pose.descriptions:
+            descr.closest_point[1] = 1.0 - descr.closest_point[1]            
               
         text = text.replace('north', 'north-flipped'). replace('south', 'north').replace('north-flipped', 'south')
 
@@ -190,7 +190,7 @@ if __name__ == '__main__':
 
     transform = T.FixedPoints(256)
 
-    dataset = Kitti360CoarseDatasetMulti(base_path, [folder_name, ], transform, shuffle_hints=True, flip_poses=True)
+    dataset = Kitti360CoarseDatasetMulti(base_path, [folder_name, ], transform, shuffle_hints=False, flip_poses=False)
     data = dataset[0]
     pose, cell, text = data['poses'], data['cells'], data['texts']
     pose_f, cell_f, text_f = flip_pose_in_cell(pose, cell, text, 1)

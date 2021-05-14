@@ -1,7 +1,7 @@
 from typing import List
 import numpy as np
 import cv2
-from datapreparation.kitti360.imports import Object3d, Cell, Description, Pose
+from datapreparation.kitti360.imports import Object3d, Cell, Pose, DescriptionPoseCell, DescriptionBestCell
 from datapreparation.kitti360.utils import CLASS_TO_COLOR
 
 try:
@@ -43,6 +43,19 @@ def show_objects(objects: List[Object3d], scale=1.0):
         offset += len(obj.xyz)
     return show_pptk(xyz*scale, [rgb1 / 255.0, rgb2 / 255.0, rgb3 / 255.0])
 
+def plot_objects(objects, pose=None, scale=1024):
+    img = np.zeros((scale, scale, 3), dtype=np.uint8)
+    for obj in objects:
+        c = CLASS_TO_COLOR[obj.label]
+        for point in obj.xyz:
+            point = np.int0( (point[0:2] + 0.5) * scale / 2)
+            cv2.circle(img, tuple(point), 1, (int(c[2]),int(c[1]),int(c[0])))
+    if pose is not None:
+        point = np.int0( (pose[0:2] + 0.5) * scale / 2)
+        cv2.circle(img, tuple(point), scale//50, (255,0,255))
+
+    return cv2.flip(img, 0) # Flip for correct north/south
+
 def plot_cell(cell: Cell, scale=1024, use_rgb=False):
     img = np.zeros((scale, scale, 3), dtype=np.uint8)
     # Draw points of each object
@@ -57,7 +70,7 @@ def plot_cell(cell: Cell, scale=1024, use_rgb=False):
             cv2.circle(img, tuple(point), 1, (int(c[2]),int(c[1]),int(c[0])))
     return cv2.flip(img, 0) # Flip for correct north/south
 
-def plot_pose(cell: Cell, pose: Pose, scale=1024, use_rgb=False):
+def plot_pose_in_best_cell(cell: Cell, pose: Pose, scale=1024, use_rgb=False, show_unmatched=False):
     img = np.zeros((scale, scale, 3), dtype=np.uint8)
     # Draw points of each object
     for obj in cell.objects:
@@ -72,9 +85,16 @@ def plot_pose(cell: Cell, pose: Pose, scale=1024, use_rgb=False):
     # Draw pose
     point = np.int0(pose.pose[0:2]*scale)
     cv2.circle(img, tuple(point), 10, (0,0,255), thickness=3)
-    # Draw lines
-    objects_dict = {obj.id: obj for obj in cell.objects}
+    # Draw lines to closest points
     for descr in pose.descriptions:
-        target = np.int0(descr.object_closest_point[0:2]*scale)
+        if not descr.is_matched and not show_unmatched:
+            continue
+
+        target = np.int0(descr.closest_point[0:2]*scale)
         cv2.arrowedLine(img, tuple(point), tuple(target), (0,0,255), thickness=2)
-    return cv2.flip(img, 0) # Flip for correct north/south
+
+    img = cv2.flip(img, 0)
+    if not show_unmatched:
+        num_unmatched = len([d for d in pose.descriptions if not d.is_matched])
+        cv2.putText(img, f'Unmatched: {num_unmatched}', (10,25), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255,255,255))
+    return img

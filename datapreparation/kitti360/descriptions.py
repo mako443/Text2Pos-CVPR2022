@@ -2,8 +2,10 @@ from typing import List
 import numpy as np
 from sklearn.cluster import DBSCAN
 
-from datapreparation.kitti360.imports import Object3d, Cell, Description, Pose
+from datapreparation.kitti360.imports import Object3d, Cell, Pose, DescriptionPoseCell, DescriptionBestCell
 from datapreparation.kitti360.utils import STUFF_CLASSES
+
+from copy import deepcopy
 
 def get_mask(points, cell_bbox):
     mask = np.bitwise_and.reduce((
@@ -33,33 +35,57 @@ def cluster_stuff_object(obj, stuff_min, eps=0.75):
 
     return clustered_objects    
 
-def create_cell(cell_idx, scene_name, bbox_w, scene_objects: List[Object3d], is_synthetic=False, min_objects=6, inside_fraction=1/3, stuff_min=500):
-    if is_synthetic is False:
-        cell_objects = []
-        for obj in scene_objects:
-            assert obj.id < 1e7
+def create_synthetic_cell(bbox_w, area_objects: List[Object3d], min_objects=6, inside_fraction=1/3):  
+    """Creates a synthetic cell for use in synthetic fine-localization training.
+    Only threshes the objects inside/outside.
+    Performs no normalization and does not re-set IDs.
 
-            mask = get_mask(obj.xyz, bbox_w)
-            if obj.label in STUFF_CLASSES:
-                if np.sum(mask) < stuff_min:
-                    continue
+    Args:
+        bbox_w ([type]): [description]
+        area_objects (List[Object3d]): [description]
+        min_objects ([type], optional): [description]. Defaults to 6.
+        inside_fraction ([type], optional): [description]. Defaults to 1/3.
+    """
+    cell_objects = []
+    for obj in area_objects:
+        mask = get_mask(obj.xyz, bbox_w)
+        if np.sum(mask) / len(mask) < inside_fraction:
+            continue
+        cell_objects.append(obj)
 
-                cell_obj = obj.mask_points(mask)
-                clustered_objects = cluster_stuff_object(cell_obj, stuff_min)
-                cell_objects.extend(clustered_objects)
-            else:
-                if np.sum(mask) / len(mask) < inside_fraction:
-                    continue
-                cell_objects.append(obj)  
+    cell_size = np.max(bbox_w[3:6] - bbox_w[0:3])
 
-        # Normalize objects based on the largest cell-edge to be ∈ [0, 1] (instance-objects can reach over edge)
-        cell_size = np.max(bbox_w[3:6] - bbox_w[0:3])
-        for obj in cell_objects:
-            obj.xyz = (obj.xyz - bbox_w[0:3]) / cell_size
+    if len(cell_objects) < min_objects:
+        return None
 
-    else: # If cell is synthetic, only copy objects and set cell-size
-        cell_objects = scene_objects
-        cell_size = np.max(bbox_w[3:6] - bbox_w[0:3])
+    return Cell(-1, "mock", cell_objects, cell_size, bbox_w)
+
+def create_cell(cell_idx, scene_name, bbox_w, scene_objects: List[Object3d], min_objects=6, inside_fraction=1/3, stuff_min=500):
+    cell_objects = []
+    for obj in scene_objects:
+        assert obj.id < 1e7
+
+        mask = get_mask(obj.xyz, bbox_w)
+        if obj.label in STUFF_CLASSES:
+            if np.sum(mask) < stuff_min:
+                continue
+
+            cell_obj = obj.mask_points(mask)
+            clustered_objects = cluster_stuff_object(cell_obj, stuff_min)
+            cell_objects.extend(clustered_objects)
+        else:
+            if np.sum(mask) / len(mask) < inside_fraction:
+                continue
+            cell_objects.append(deepcopy(obj)) # Deep-copy to avoid changing scene-objects multiple times
+
+    # Normalize objects based on the largest cell-edge to be ∈ [0, 1] (instance-objects can reach over edge)
+    cell_size = np.max(bbox_w[3:6] - bbox_w[0:3])
+    for obj in cell_objects:
+        obj.xyz = (obj.xyz - bbox_w[0:3]) / cell_size
+
+    # else: # If cell is synthetic, only copy objects and set cell-size
+    #     cell_objects = scene_objects
+    #     cell_size = np.max(bbox_w[3:6] - bbox_w[0:3])
 
     if len(cell_objects) < min_objects:
         return None        
@@ -70,20 +96,9 @@ def create_cell(cell_idx, scene_name, bbox_w, scene_objects: List[Object3d], is_
 
     return Cell(cell_idx, scene_name, cell_objects, cell_size, bbox_w)
 
-def describe_pose(pose_w, cell: Cell, num_mentioned=6):
-    """Describe a pose based on its best cell.
-    The best cell is by its alpha-numeric index.
-
-    Args:
-        pose_w (np.ndarray): Pose in world coordinates
-        cell (Cell): Cell object
-        num_mentioned (int, optional): Number of objects to mention. Defaults to 6.
-
-    Returns:
-        Pose: The created pose
-    """
-    # Assert pose is in cell
-    assert np.all(pose_w >= cell.bbox_w[0:3]) and np.all(pose_w <= cell.bbox_w[3:6]), f'{pose_w}, {cell.bbox_w}'
+def describe_pose_in_pose_cell(pose_w, cell: Cell, num_mentioned=6) -> List[DescriptionPoseCell]:
+    # Assert pose is close to cell_center
+    # assert np.allclose(pose_w, cell.get_center())
     assert len(cell.objects) >= num_mentioned, f'Only {len(cell.objects)} objects'
 
     # Norm pose
@@ -95,7 +110,7 @@ def describe_pose(pose_w, cell: Cell, num_mentioned=6):
     distances = np.linalg.norm([obj.get_closest_point(pose) - pose for obj in cell.objects], axis=1)
     closest_indices = np.argsort(distances)
 
-    # Create the descriptions and the Pose
+    # Create the descriptions
     mentioned_indices = closest_indices[0 : num_mentioned]
 
     for hint_idx, obj_idx in enumerate(mentioned_indices):
@@ -110,9 +125,44 @@ def describe_pose(pose_w, cell: Cell, num_mentioned=6):
             if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]>=0: direction='north'
             if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]<=0: direction='south' 
 
-        descriptions.append(Description(obj.id, obj.instance_id, direction, obj.label, obj.get_color_rgb(), closest_point))
+        offset_center = pose - obj.get_center()
+        offset_closest = pose - closest_point
+        descriptions.append(DescriptionPoseCell(obj.id, obj.instance_id, obj.label, obj.get_color_rgb(), obj.get_color_text(), direction, offset_center, offset_closest, closest_point))
 
-    return Pose(pose, pose_w, cell.id, descriptions)    
+    return descriptions
+
+def describe_pose_in_best_cell(pose_w: np.ndarray, pose_cell_descriptions: List[DescriptionPoseCell], cell: Cell) -> List[DescriptionBestCell]:
+    # Assert cell is valid for this pose
+    assert np.all(pose_w >= cell.bbox_w[0:3]) and np.all(pose_w <= cell.bbox_w[3:6]), f'{pose_w}, {cell.bbox_w}'
+    assert len(cell.objects) >= len(pose_cell_descriptions), f'Only {len(cell.objects)} objects'    
+
+    # Norm pose
+    pose = (pose_w - cell.bbox_w[0:3]) / cell.cell_size
+    assert np.all(pose >= 0) and np.all(pose <= 1.0), f'{pose} {pose_w} {cell.bbox_w}'
+
+    best_cell_descriptions = []
+
+    num_unmatched = 0
+    # Match the descriptions to the objects in the given cell
+    for descr in pose_cell_descriptions:
+        candidates = [obj for obj in cell.objects if obj.instance_id == descr.object_instance_id] # Objects that have the correct instance_id
+        if len(candidates) == 0: # The description is not matched anymore in the best cell
+            best_cell_descriptions.append(DescriptionBestCell.from_unmatched(descr))
+            num_unmatched += 1            
+        else: # The description is matched, convert it to best-matching candidate
+            # Select the candidate with the best-matching closest_offset because that is less likely to have changed
+            closest_offsets = np.array([pose - cand.get_closest_point(pose) for cand in candidates])[:, 0:2]
+            best_idx = np.argmin(np.linalg.norm(closest_offsets - descr.offset_closest, axis=1))
+            obj = candidates[best_idx]
+            
+            closest_point = obj.get_closest_point(pose)
+            offset_center = pose - obj.get_center()
+            offset_closest = pose - closest_point            
+
+            # best_cell_descriptions.append(DescriptionBestCell.from_matched(descr, obj.id, offset_center, offset_closest, closest_point))
+            best_cell_descriptions.append(DescriptionBestCell.from_matched(descr, obj.id, closest_point))
+
+    return best_cell_descriptions, pose, num_unmatched
     
 
 # TODO: shifted cells. 1) randomly shift cell around pose, 2) randomly shift, take objects from 2 threshs for missing hints (even necessary?)

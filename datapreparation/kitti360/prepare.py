@@ -14,11 +14,11 @@ except:
     print('pptk not found')
 from plyfile import PlyData, PlyElement
 
-from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell, plot_pose
+from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell, plot_pose_in_best_cell
 from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, COLORS, COLOR_NAMES, SCENE_NAMES
 from datapreparation.kitti360.utils import CLASS_TO_MINPOINTS, CLASS_TO_VOXELSIZE, STUFF_CLASSES
 from datapreparation.kitti360.imports import Object3d, Cell, Pose
-from datapreparation.kitti360.descriptions import create_cell, describe_pose
+from datapreparation.kitti360.descriptions import create_cell, describe_pose_in_pose_cell, describe_pose_in_best_cell
 
 """
 DONE:
@@ -150,7 +150,7 @@ def get_close_locations(locations: List[np.ndarray], scene_objects: List[Object3
     else:
         return close_locations
 
-def create_locations(path_input, path_output, folder_name, pose_distance, return_pose_objects=False):
+def create_locations(path_input, path_output, folder_name, pose_distance, return_location_objects=False):
     path = osp.join(path_input, 'data_poses', folder_name, 'poses.txt')
     poses = np.loadtxt(path)
     poses = poses[:, 1:].reshape((-1, 3,4)) # Convert to 3x4 matrices
@@ -166,15 +166,9 @@ def create_locations(path_input, path_output, folder_name, pose_distance, return
         if np.min(dists) >= pose_distance:
             sampled_poses.append(pose)
 
-    if return_pose_objects:
+    if return_location_objects:
         pose_objects = []
         for pose in sampled_poses:
-            # pose_objects.append(Object3d(
-            #     np.random.rand(50, 3)*3 + pose,
-            #     np.ones((50, 3)),
-            #     '_pose',
-            #     99
-            # ))
             pose_objects.append(Object3d(-1, -1, 
                 np.random.rand(50, 3)*3 + pose,
                 np.ones((50, 3)),
@@ -185,7 +179,7 @@ def create_locations(path_input, path_output, folder_name, pose_distance, return
     else:
         return sampled_poses
 
-def create_cells(objects, locations, scene_name, cell_size):
+def create_cells(objects, locations, scene_name, cell_size) -> List[Cell]:
     print('Creating cells...')
     print('CARE: Not shifting cells!')
     cells = []
@@ -215,7 +209,8 @@ def create_cells(objects, locations, scene_name, cell_size):
     else:
         return True, cells
 
-def create_poses(objects: List[Object3d], locations, cells: List[Cell], scene_name):
+# TODO: Simpler formulation with deleting objects? How would I gather the objects for describing?
+def create_poses(objects: List[Object3d], locations, cells: List[Cell], scene_name) -> List[Pose]:
     """[summary]
     Create cells -> sample pose location -> describe with pose-cell -> convert description to best-cell for training
 
@@ -234,26 +229,34 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], scene_na
 
     cell_centers = np.array([cell.bbox_w for cell in cells])
     cell_centers = 1/2 * (cell_centers[:, 0:3] + cell_centers[:, 3:6])
+    cell_size = cells[0].cell_size
 
+    unmatched_counts = []
     for i_location, location in enumerate(locations):
         # Find closest cell
         dists = np.linalg.norm(location - cell_centers, axis=1)
-        
-        if np.min(dists) > cells[0].cell_size / 2:
+        best_cell = cells[np.argmin(dists)]
+
+        if np.min(dists) > cell_size / 2:
             none_indices.append(i_location)
             continue
 
-        '''
-        TODO
-        - create pose_cell directly on top of the pose
-        - obtain the description-list from pose_cell
-        - convert description-list to best_cell, possibly matching to bins
-        '''
+        # Create an extra cell on top of the pose to create the query-side description decoupled from the database-side cells.
+        pose_cell_bbox = np.hstack((location - cell_size/2, location + cell_size/2)) # [x0, y0, z0, x1, y1, z1]
+        pose_cell = create_cell(-1, "pose", pose_cell_bbox, objects)
+        assert pose_cell is not None, f'{pose_cell_bbox}, {location}' #TODO: Can be None after shifting, then discard this shifted pose
 
-        cell = cells[np.argmin(dists)]
-        poses.append(describe_pose(location, cell))
+        # Obtain the descriptions based on the pose-cell
+        descriptions = describe_pose_in_pose_cell(location, pose_cell)
 
-    print(f'None poses: {len(none_indices)} / {len(locations)}')
+        # Convert the descriptions to the best-matching database cell for training. Some descriptions might not be matched anymore.
+        descriptions, pose_in_cell, num_unmatched = describe_pose_in_best_cell(location, descriptions, best_cell)
+        unmatched_counts.append(num_unmatched)
+
+        pose = Pose(pose_in_cell, location, best_cell.id, descriptions)
+        poses.append(pose)
+
+    print(f'None poses: {len(none_indices)} / {len(locations)}, avg. unmatched: {np.mean(unmatched_counts):0.1f}')
     if len(none_indices) > len(locations)/3:
         return False, none_indices
     else:
@@ -270,13 +273,10 @@ if __name__ == '__main__':
     cell_size = 30
     print(f'Preparing {scene_names} {path_input} -> {path_output}, cell_size {cell_size}')
 
-    # Incomplete folders: 3 corrupted...
-    # for folder_name in SCENE_NAMES:
     for folder_name in scene_names: # 2013_05_28_drive_0000_sync
         print(f'Folder: {folder_name}')
 
-        # poses, pose_objects = create_poses(path_input, path_output, folder_name, cell_size, return_pose_objects=True)        
-        locations, location_objects = create_locations(path_input, path_output, folder_name, pose_distance=cell_size, return_pose_objects=True)        
+        locations, location_objects = create_locations(path_input, path_output, folder_name, pose_distance=cell_size, return_location_objects=True)        
 
         path_objects = osp.join(path_output, 'objects', f'{folder_name}.pkl')
         path_cells = osp.join(path_output, 'cells', f'{folder_name}.pkl')
@@ -293,46 +293,28 @@ if __name__ == '__main__':
 
         locations, location_objects = get_close_locations(locations, objects, cell_size, location_objects)
 
-        # show_objects(objects + location_objects)
-        # quit()
-
-        # Create cells
+        location = locations[0]
         res, cells = create_cells(objects, locations, folder_name, cell_size)
         assert res is True, "Too many cell nones, quitting."
+
+        res, poses = create_poses(objects, locations, cells, folder_name)
+        assert res is True, "Too many pose nones, quitting."
+
 
         pickle.dump(cells, open(path_cells, 'wb'))
         print(f'Saved {len(cells)} cells to {path_cells}')   
 
-        # Create poses
-        res, poses = create_poses(objects, locations, cells, scene_name)
-        assert res is True, "Too many pose nones, quitting."
-        assert np.allclose(poses[0].pose_w, 1/2*(cells[0].bbox_w[0:3] + cells[0].bbox_w[3:6]))
-
         pickle.dump(poses, open(path_poses, 'wb'))
         print(f'Saved {len(poses)} poses to {path_poses}')           
 
-        quit()
 
         # Debugging 
-        idx = np.random.randint(len(cells))
-        idx = np.random.randint(len(cells))
-        cell = cells[idx]
-        print('idx', idx)
-        print(cell.get_text())
-        print(cell.bbox_w)
+        idx = np.random.randint(len(poses))
+        pose = poses[idx]
+        cells_dict = {cell.id: cell for cell in cells}
+        cell = cells_dict[pose.cell_id]
+        print('IDX:', idx)
+        print(pose.get_text())
 
-        img = plot_cell(cell)
+        img = plot_pose_in_best_cell(cell, pose)
         cv2.imwrite(f'cell_demo_idx{idx}.png', img)
-
-        # except:
-        #     print(f'Scene {folder_name} failed, removing objects again')
-        #     os.remove(path_objects)
-        
-        print('--- \n')
-
-
-    # show_objects(cell.objects, scale=100)
-
-    # viewer = show_objects(objects + pose_objects)
-    # lens = [len(o.xyz) for o in objects]
-    # print(f'{len(objects)} objects from {folder_name} w/ {np.mean(lens):0.0f} avg. points')

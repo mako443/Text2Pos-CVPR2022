@@ -11,14 +11,16 @@ from torch.utils.data import Dataset, DataLoader
 
 from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, SCENE_NAMES, CLASS_TO_INDEX
 from datapreparation.kitti360.imports import Object3d, Cell, Pose
-from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell, plot_pose
+from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell, plot_pose_in_best_cell
 
 class Kitti360BaseDataset(Dataset):
     def __init__(self, base_path, scene_name):
         self.scene_name = scene_name
-        # self.scene_objects = pickle.load(open(osp.join(base_path, 'objects', f'{scene_name}.pkl'), 'rb')) # CARE: created before segmentation - do not use for object classification
         self.cells = pickle.load(open(osp.join(base_path, 'cells', f'{scene_name}.pkl'), 'rb')) # Also use objects from here for classification
         self.cells_dict = {cell.id: cell for cell in self.cells}
+        
+        cell_ids = [cell.id for cell in self.cells]
+        assert len(np.unique(cell_ids)) == len(cell_ids)
 
         self.poses = pickle.load(open(osp.join(base_path, 'poses', f'{scene_name}.pkl'), 'rb'))
 
@@ -31,10 +33,11 @@ class Kitti360BaseDataset(Dataset):
 
     def create_hint_description(pose: Pose, cell: Cell):
         hints = []
-        cell_objects_dict = {obj.id: obj for obj in cell.objects}
+        # cell_objects_dict = {obj.id: obj for obj in cell.objects}
         for descr in pose.descriptions:
-            obj = cell_objects_dict[descr.object_id]
-            hints.append(f'The pose is {descr.direction} of a {obj.get_color_text()} {obj.label}.')
+            # obj = cell_objects_dict[descr.object_id]
+            # hints.append(f'The pose is {descr.direction} of a {obj.get_color_text()} {obj.label}.')
+            hints.append(f'The pose is {descr.direction} of a {descr.object_color_text} {descr.object_label}.')
         return hints
 
     def get_known_classes(self):

@@ -38,29 +38,49 @@ def batch_object_points(objects: List[Object3d], transform):
 def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform):
     descriptions = pose.descriptions
     cell_objects_dict = {obj.id: obj for obj in cell.objects}
-    mentioned_ids = [descr.object_id for descr in descriptions]
+    matched_ids = [descr.object_id for descr in descriptions if descr.is_matched]
 
-    '''
-    TODO
-    - match w/ instance-id. Ok so naively?
-    - offsets: just take from description
-    - what about synthetic?
-    '''
+    # Hints and descriptions have to be in same order
+    for descr, hint in zip(descriptions, hints):
+        assert descr.object_label in hint
 
-    # Gather mentioned objects, matches and offsets
-    objects, matches, offsets = [], [], []
+    # Gather offsets
+    offsets = np.array([descr.offset_center for descr in descriptions])[:, 0:2]        
+
+    # Gather matched objects
+    objects, matches = [], [] # Matches as [(obj_idx, hint_idx)]
     for i_descr, descr in enumerate(descriptions):
-        hint_obj = cell_objects_dict[descr.object_id]
-        objects.append(hint_obj)
-        matches.append((i_descr, i_descr))
-        # offsets.append(pose.pose - descr.object_closest_point)
-        offsets.append(pose.pose - hint_obj.get_center())
-    offsets = np.array(offsets)[:, 0:2]
+        if descr.is_matched:
+            hint_obj = cell_objects_dict[descr.object_id]
+            assert hint_obj.instance_id == descr.object_instance_id
+            objects.append(hint_obj)
+            
+            obj_idx = len(objects) - 1
+            hint_idx = i_descr
+            matches.append((obj_idx, hint_idx))
+            
+    # TODO: add unmatched hints in all_matches!
 
     # Gather distractors
     for obj in cell.objects:
-        if obj.id not in mentioned_ids:
+        if obj.id not in matched_ids:
             objects.append(obj)
+    assert len(objects) == len(cell.objects), "Not all cell-objects have been gathered!"
+
+    # # Gather mentioned objects, matches and offsets
+    # objects, matches, offsets = [], [], []
+    # for i_descr, descr in enumerate(descriptions):
+    #     hint_obj = cell_objects_dict[descr.object_id]
+    #     objects.append(hint_obj)
+    #     matches.append((i_descr, i_descr))
+    #     # offsets.append(pose.pose - descr.object_closest_point)
+    #     offsets.append(pose.pose - hint_obj.get_center())
+    # offsets = np.array(offsets)[:, 0:2]
+
+    # # Gather distractors
+    # for obj in cell.objects:
+    #     if obj.id not in mentioned_ids:
+    #         objects.append(obj)
 
     # Pad or cut-off distractors (CARE: the latter would use ground-truth data!)
     if len(objects) > pad_size:
@@ -71,14 +91,33 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform):
         objects.append(obj)
 
     # Build matches and all_matches
-    # The mentioned objects are always put in first, however, our geometric models have no knowledge of these indices as they are permutation invariant.
-    matches = [(i, i) for i in range(len(descriptions))]
+    # The matched objects are always put in first, however, our geometric models have no knowledge of these indices as they are permutation invariant.
     all_matches = matches.copy()
-    for i in range(len(objects)):
-        if objects[i].id not in mentioned_ids:
-            all_matches.append((i, len(descriptions))) # Match all distractors or pads to hints-side-bin
+
+    # Add unmatched hints
+    for i_descr, descr in enumerate(descriptions):
+        if not descr.is_matched:
+            obj_idx = len(objects) # Match to objects-side bin
+            hint_idx = i_descr
+            all_matches.append((obj_idx, hint_idx))
+
+    # Add unmatched objects
+    for obj_idx, obj in enumerate(objects):
+        if obj.id not in matched_ids:
+            hint_idx = len(descriptions) # Match to hints-side bin
+            all_matches.append((obj_idx, hint_idx))
+
     matches, all_matches = np.array(matches), np.array(all_matches)
-    assert np.sum(all_matches[:, 1] == len(descriptions)) == len(objects) - len(descriptions)
+    assert len(matches) == len(matched_ids)
+    assert len(all_matches) == len(objects) + len(descriptions) - len(matches)
+    assert np.sum(all_matches[:, 1] == len(descriptions)) == len(objects) - len(matched_ids) # Binned objects
+    assert np.sum(all_matches[:, 0] == len(objects)) == len(descriptions) - len(matched_ids) # Binned hints
+
+    # for i in range(len(objects)):
+    #     if objects[i].id not in mentioned_ids:
+    #         all_matches.append((i, len(descriptions))) # Match all distractors or pads to hints-side-bin
+    # matches, all_matches = np.array(matches), np.array(all_matches)
+    # assert np.sum(all_matches[:, 1] == len(descriptions)) == len(objects) - len(descriptions)
 
     object_points = batch_object_points(objects, transform)
 

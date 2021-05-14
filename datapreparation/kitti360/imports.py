@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 import numpy as np
 import cv2
 
@@ -61,12 +61,6 @@ class Object3d:
             np.vstack((obj1.rgb, obj2.rgb)),
             obj1.label
         )
-        # return Object3d(
-        #     np.vstack((obj1.xyz, obj2.xyz)),
-        #     np.vstack((obj1.rgb, obj2.rgb)),
-        #     obj1.label,
-        #     obj1.id
-        # )
 
     @classmethod
     def create_padding(cls):
@@ -75,24 +69,72 @@ class Object3d:
         obj.get_closest_point([-1, -1, -1])
         return obj
 
-class Description:
-    def __init__(self, object_id, object_instance_id, direction, object_label, object_color, object_closest_point):
+class DescriptionPoseCell:
+    def __init__(self, object_id, object_instance_id, object_label, object_color_rgb, object_color_text, direction, offset_center, offset_closest, closest_point):
         self.object_id = object_id
         self.object_instance_id = object_instance_id
-        self.direction = direction
         self.object_label = object_label
-        self.object_color = object_color
-        self.object_closest_point = object_closest_point
-        assert (object_color is not None)
+        self.object_color_rgb = object_color_rgb
+        self.object_color_text = object_color_text
+        self.direction = direction # Text might not match offset later in best-cell!
+        self.offset_center = offset_center[0:2] # Offset to center of object
+        self.offset_closest = offset_closest[0:2] # Offset to closest-point of object
+        self.closest_point = closest_point[0:2] # Only in pose-cell!
 
     def __repr__(self):
-        return f'Pose is {self.direction} of a {self.object_color} {self.object_label}'
+        return f'Pose is {self.direction} of a {self.object_color_text} {self.object_label}'
+
+# TODO/CARE: Match on offset_closest (less likely to change) but train on offset_center (relevant in evaluation)
+class DescriptionBestCell:
+    '''
+    Current offset policy: all taken from pose_cell and passed through. Training on center_offsets
+    '''
+    @classmethod
+    def from_matched(cls, descr: DescriptionPoseCell, object_id, closest_point):
+        d = DescriptionBestCell()
+        # Original attributes
+        d.object_instance_id = descr.object_instance_id
+        d.object_label = descr.object_label
+        d.object_color_rgb = descr.object_color_rgb
+        d.object_color_text = descr.object_color_text
+        d.direction = descr.direction
+        d.offset_center = descr.offset_center
+        d.offset_closest = descr.offset_closest
+
+        # Updated attributes matched in best-cell
+        d.object_id = object_id
+        # d.offset_center = offset_center[0:2]
+        # d.offset_closest = offset_closest[0:2]
+        d.closest_point = closest_point[0:2]
+        d.is_matched = True
+        return d
+
+    @classmethod
+    def from_unmatched(cls, descr: DescriptionPoseCell):
+        d = DescriptionBestCell()
+        # Original attributes
+        d.object_instance_id = descr.object_instance_id
+        d.object_label = descr.object_label
+        d.object_color_rgb = descr.object_color_rgb
+        d.object_color_text = descr.object_color_text
+        d.direction = descr.direction
+        d.offset_center = descr.offset_center
+        d.offset_closest = descr.offset_closest        
+        
+        d.closest_point = descr.closest_point # Only for debug!
+
+        d.is_matched = False
+        return d
+
+    def __repr__(self):
+        return f'Pose is {self.direction} of a {self.object_color_text} {self.object_label}' + (' (✓)' if self.is_matched else ' (☓)')
 
 class Pose:
-    def __init__(self, pose_in_cell, pose_w, best_cell_id, descriptions: List[Description]):
-        self.pose = pose_in_cell # The pose in the best cell (specified by best_cell_id), normed to ∈ [0, 1]
+    def __init__(self, pose_in_cell, pose_w, cell_id, descriptions: List[DescriptionBestCell]):
+        assert isinstance(descriptions[0], DescriptionBestCell)
+        self.pose = pose_in_cell # The pose in the best cell (specified by cell_id), normed to ∈ [0, 1]
         self.pose_w = pose_w
-        self.best_cell_id = best_cell_id
+        self.cell_id = cell_id # ID of the best cell in the database
         self.descriptions = descriptions
 
     def __repr__(self) -> str:
@@ -127,8 +169,35 @@ class Cell:
     def __repr__(self):
         return f'Cell {self.id}: {len(self.objects)} objects at {np.int0(self.bbox_w)}'
 
-    # def get_text(self):
-    #     text = ""
-    #     for d in self.descriptions:
-    #         text += str(d) + '. '
-    #     return text
+    def get_center(self):
+        return 1/2 * (self.bbox_w[0:3] + self.bbox_w[3:6])
+
+class DeprDescription:
+    def __init__(self, object_id, object_instance_id, direction, offset, object_label, object_color_text, object_color_rgb, object_closest_point):
+        assert (object_id is None) == (object_instance_id is None) == (object_closest_point is None) == (offset is None) 
+        self.object_id = object_id # None if unmatched
+        self.object_instance_id = object_instance_id # None if unmatched
+        self.direction = direction # Direction from pose_cell
+        self.offset = offset # Offset from pose_cell or best_cell
+        self.object_label = object_label
+        self.object_color_rgb = object_color_rgb # Color from pose_cell
+        self.object_color_text = object_color_text # Color from pose_cell
+        self.object_closest_point = object_closest_point # Closest point from pose_cell or best_cell, none if unmatched
+        assert object_color_text is not None and object_color_rgb is not None
+
+        self.is_matched = None # Set when described in best-cell
+
+    def match_to_object(self):
+        pass
+
+    def set_unmatched(self):
+        pass
+
+    def __repr__(self):
+        return f'Pose is {self.direction} of a {self.object_color_text} {self.object_label}'
+
+    def is_unmatched(self):
+        """Returns whether the description is unmatched in the best-cell
+        """
+        assert (self.object_id is None) == (self.object_instance_id is None)
+        return self.object_id is None        
