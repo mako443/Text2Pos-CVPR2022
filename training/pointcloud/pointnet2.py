@@ -76,12 +76,13 @@ if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
 
-    print('CARE: TRAINING ORACLE MODEL!')
+    dataset_name = args.base_path[:-1] if args.base_path.endswith('/') else args.base_path
+    dataset_name = dataset_name.split('/')[-1]
+    print(f'Directory: {dataset_name}')    
 
     '''
     Create data loaders
     '''    
-
     if args.dataset == 'K360':     
         # train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(180, axis=2), T.NormalizeScale()])
         train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
@@ -146,7 +147,7 @@ if __name__ == "__main__":
     Save plots
     '''
     # plot_name = f'PN2_len{len(dataset_train)}_bs{args.batch_size}_mb{args.max_batches}_l{args.num_layers}_v{args.variation}_s{args.shuffle}_g{args.lr_gamma}.png'
-    plot_name = f'PN2-Shift-9-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_lr{args.lr_idx}_pl{args.pointnet_layers}_pv{args.pointnet_variation}_t{args.pointnet_transform}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}.png'
+    plot_name = f'PN2-{dataset_name}_bs{args.batch_size}_mb{args.max_batches}_lr{args.lr_idx}_pl{args.pointnet_layers}_pv{args.pointnet_variation}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-acc': dict_acc,

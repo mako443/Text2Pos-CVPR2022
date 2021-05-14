@@ -46,12 +46,12 @@ def create_synthetic_cell(bbox_w, area_objects: List[Object3d], min_objects=6, i
         min_objects ([type], optional): [description]. Defaults to 6.
         inside_fraction ([type], optional): [description]. Defaults to 1/3.
     """
-    cell_objects = []
-    for obj in area_objects:
-        mask = get_mask(obj.xyz, bbox_w)
-        if np.sum(mask) / len(mask) < inside_fraction:
-            continue
-        cell_objects.append(obj)
+    cell_objects = [obj for obj in area_objects]
+    # for obj in area_objects:
+    #     mask = get_mask(obj.xyz, bbox_w)
+    #     if np.sum(mask) / len(mask) < inside_fraction:
+    #         continue
+    #     cell_objects.append(obj)
 
     cell_size = np.max(bbox_w[3:6] - bbox_w[0:3])
 
@@ -156,8 +156,9 @@ def describe_pose_in_best_cell(pose_w: np.ndarray, pose_cell_descriptions: List[
             obj = candidates[best_idx]
             
             closest_point = obj.get_closest_point(pose)
-            offset_center = pose - obj.get_center()
-            offset_closest = pose - closest_point            
+            # Currently only set in pose_cell and passed this way through
+            # offset_center = pose - obj.get_center() 
+            # offset_closest = pose - closest_point            
 
             # best_cell_descriptions.append(DescriptionBestCell.from_matched(descr, obj.id, offset_center, offset_closest, closest_point))
             best_cell_descriptions.append(DescriptionBestCell.from_matched(descr, obj.id, closest_point))

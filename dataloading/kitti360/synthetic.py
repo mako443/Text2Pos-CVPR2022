@@ -59,7 +59,7 @@ class Kitti360FineSyntheticDataset(Dataset):
         Returns:
             [type]: [description]
         """
-        pose = np.random.rand(3)
+        pose_w = np.random.rand(3)
 
         # Copy over random objects from the real dataset to random positions
         # Note that the objects are already clustered and normed: taken from cells (not scene) in Kitti360ObjectsDataset
@@ -110,12 +110,12 @@ class Kitti360FineSyntheticDataset(Dataset):
         #     obj.xyz[:, 0:2] += np.array(pose[0:2] + np.random.randn(2)*0.075).reshape((1,2))
 
         # Create the pose-cell with all objects
-        pose_cell = create_synthetic_cell(np.array([0,0,0,1,1,1]), cell_objects)
+        pose_cell = create_synthetic_cell(np.array([0,0,0,1,1,1]), cell_objects)        
         assert pose_cell is not None
-        assert np.allclose(pose_cell.cell_size, 1.0)  
+        assert np.allclose(pose_cell.cell_size, 1.0)            
 
         # Describe in pose-cell with all objects
-        descriptions = describe_pose_in_pose_cell(pose, pose_cell)
+        descriptions = describe_pose_in_pose_cell(pose_w, pose_cell)
 
         # Randomly delete up to num_mentiond / 2 of the matched objects for objects-side bins.
         num_delete = np.random.randint(self.num_mentioned / 2 + 1)
@@ -123,24 +123,33 @@ class Kitti360FineSyntheticDataset(Dataset):
         matched_ids = [d.object_id for d in descriptions]
         delete_ids = np.random.choice(matched_ids, size=num_delete, replace=False)
         cell_objects = [obj for obj in cell_objects if obj.id not in delete_ids]
-        print('Num del:', num_delete)
 
         # Describe in best-cell with potentially deleted objects
-        best_cell = create_synthetic_cell(np.array([0,0,0,1,1,1]), cell_objects)      
-        assert best_cell is not None # Might happen
+        best_cell = create_synthetic_cell(np.array([0,0,0,1,1,1]), cell_objects)    
+        assert best_cell is not None
         assert np.allclose(best_cell.cell_size, 1.0)  
 
-        descriptions, pose_in_cell, _ = describe_pose_in_best_cell(pose, descriptions, best_cell)
-        pose = Pose(pose_in_cell, pose, None, descriptions)
+        descriptions, pose_in_cell, _ = describe_pose_in_best_cell(pose_w, descriptions, best_cell)
+        assert np.allclose(pose_in_cell, pose_w)
 
-        for d in descriptions:
-            print(d)
+        pose = Pose(pose_in_cell, pose_w, None, descriptions)
 
-        img0 = plot_pose_in_best_cell(pose_cell, pose, show_unmatched=True)
-        img1 = plot_pose_in_best_cell(best_cell, pose)
-        cv2.imshow("pose", img0)
-        cv2.imshow("best", img1)
-        cv2.waitKey()
+        # Debuggings
+        if False:
+            img = plot_pose_in_best_cell(pose_cell, pose, show_unmatched=True)
+            cv2.imshow("pose", img)
+            cv2.waitKey()          
+
+        if False:
+            print('Num del:', num_delete)
+            for d in descriptions:
+                print(d)
+
+            img0 = plot_pose_in_best_cell(pose_cell, pose, show_unmatched=True)
+            img1 = plot_pose_in_best_cell(best_cell, pose)
+            cv2.imshow("pose", img0)
+            cv2.imshow("best", img1)
+            cv2.waitKey()
 
         # # Create the cell
         # cell = create_cell(-1, "MOCK", np.array([0,0,0,1,1,1]), cell_objects, is_synthetic=True)

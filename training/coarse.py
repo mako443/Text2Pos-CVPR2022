@@ -175,8 +175,6 @@ if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
 
-    print('CARE: Set scene names correctly!!')
-
     dataset_name = args.base_path[:-1] if args.base_path.endswith('/') else args.base_path
     dataset_name = dataset_name.split('/')[-1]
     print(f'Directory: {dataset_name}')
@@ -261,7 +259,10 @@ if __name__ == "__main__":
         if acc > best_val_accuracy:
             model_path = f"./checkpoints/coarse_{dataset_name}_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"
             print(f'Saving model at {acc:0.2f} to {model_path}')
-            torch.save(model, model_path)
+            try:
+                torch.save(model, model_path)
+            except Exception as e:
+                print(f'Error saving model!', str(e))
             best_val_accuracy = acc
 
         # plot_retrievals(val_retrievals, dataset_val)
