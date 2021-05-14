@@ -6,6 +6,7 @@ import os.path as osp
 import numpy as np
 import pickle
 import sys
+import time
 
 import open3d
 try:
@@ -282,6 +283,8 @@ if __name__ == '__main__':
         path_cells = osp.join(path_output, 'cells', f'{folder_name}.pkl')
         path_poses = osp.join(path_output, 'poses', f'{folder_name}.pkl')
 
+        t_start = time.time()        
+
         # Load or gather objects
         if not osp.isfile(path_objects): # Build if not cached
             objects = gather_objects(path_input, folder_name)
@@ -291,15 +294,27 @@ if __name__ == '__main__':
             print(f'Loaded objects from {path_objects}')
             objects = pickle.load(open(path_objects, 'rb'))
 
+        t_object_loaded = time.time()
+
         locations, location_objects = get_close_locations(locations, objects, cell_size, location_objects)
+
+        t_close_locations = time.time()
 
         location = locations[0]
         res, cells = create_cells(objects, locations, folder_name, cell_size)
         assert res is True, "Too many cell nones, quitting."
 
+        t_cells_created = time.time()
+
         res, poses = create_poses(objects, locations, cells, folder_name)
         assert res is True, "Too many pose nones, quitting."
 
+        t_poses_created = time.time()
+
+        print('Ela objects', t_object_loaded - t_start)
+        print('Ela close', t_close_locations - t_object_loaded)
+        print('Ela cells', t_cells_created - t_close_locations)
+        print('Ela poses', t_poses_created - t_cells_created)
 
         pickle.dump(cells, open(path_cells, 'wb'))
         print(f'Saved {len(cells)} cells to {path_cells}')   
