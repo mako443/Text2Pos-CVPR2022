@@ -146,6 +146,9 @@ class Pose:
             text += str(d) + '. '
         return text    
 
+    def get_number_unmatched(self):
+        return len([d for d in self.descriptions if not d.is_matched])
+
 class Cell:
     def __init__(self, idx, scene_name, objects: List[Object3d], cell_size, bbox_w):
         """
