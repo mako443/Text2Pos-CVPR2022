@@ -262,6 +262,7 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], scene_na
     else:
         return True, poses          
 
+# TODO: create args: path_in, path_out, cell_size, cell_stride
 if __name__ == '__main__':
     np.random.seed(4096) # Set seed to re-produce results
     path_input = './data/kitti360'
