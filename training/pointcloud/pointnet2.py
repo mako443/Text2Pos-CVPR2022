@@ -136,7 +136,7 @@ if __name__ == "__main__":
             print(f'\t lr {lr:0.6f} epoch {epoch} loss {loss:0.3f} acc-train {acc_train:0.2f} acc-val {acc_val:0.2f}')
 
         if acc_val > best_val_accuracy:
-            model_path = f"./checkpoints/pointnet_acc{acc_val:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"    
+            model_path = f"./checkpoints/pointnet_{dataset_name}_acc{acc_val:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"    
             print(f'Saving model to {model_path}')
             torch.save(model.state_dict(), model_path)
             best_val_accuracy = acc_val

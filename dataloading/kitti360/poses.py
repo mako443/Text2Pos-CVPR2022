@@ -36,9 +36,12 @@ def batch_object_points(objects: List[Object3d], transform):
     return batch
 
 def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform):
+    assert pose.cell_id == cell.id
+
     descriptions = pose.descriptions
     cell_objects_dict = {obj.id: obj for obj in cell.objects}
     matched_ids = [descr.object_id for descr in descriptions if descr.is_matched]
+    matched_objects = [cell_objects_dict[matched_id] for matched_id in matched_ids]
 
     # Hints and descriptions have to be in same order
     for descr, hint in zip(descriptions, hints):
@@ -61,11 +64,15 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform):
             
     # TODO: add unmatched hints in all_matches!
 
-    # Gather distractors
+    # Gather distractors, i.e. remaining objects
     for obj in cell.objects:
         if obj.id not in matched_ids:
             objects.append(obj)
-    assert len(objects) == len(cell.objects), "Not all cell-objects have been gathered!"
+    if len(objects) != len(cell.objects):
+        print([obj.id for obj in objects])
+        print([obj.id for obj in cell.objects])
+        print(matched_ids)
+    assert len(objects) == len(cell.objects), f"Not all cell-objects have been gathered! {len(objects)}, {len(cell.objects)}, {cell.id}"
 
     # # Gather mentioned objects, matches and offsets
     # objects, matches, offsets = [], [], []
@@ -192,7 +199,7 @@ class Kitti360FineDatasetMulti(Dataset):
         return list(np.unique(known_classes))          
         
 if __name__ == '__main__':
-    base_path = './data/k360_decouple'
+    base_path = './data/k360_cs30_cd30_pd30_shTrue'
     folder_name = '2013_05_28_drive_0003_sync'    
     
     args = EasyDict(pad_size=8, num_mentioned=6)    

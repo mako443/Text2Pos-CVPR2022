@@ -25,9 +25,10 @@ from training.utils import plot_retrievals
 
 '''
 TODO:
-- Re-train PN++ on decouple ;)
-- Remove identical negative?
-- Train w/ best-cell enough?
+- Remove identical negative? (If necessary, just remove one of the samples -.-)
+- Train w/ best-cell enough? Or train w/ all possible cells (0.5+ matched, near enough)?
+- Variate cell-sizes
+- Variate closest / mid / pose-cell / best-cell
 
 - synthetic cells -> Ok (0.25), gap smaller
 - flip the training cells (pose, objects, direction words) -> Good, 0.42 now
@@ -37,7 +38,6 @@ TODO:
 - mlp_merge variations?
 - Vary LR and margin
 
-- Embed still much stronger: try perfect PN++ (trained on val)
 - Augmentations -> w/o hint-shuffle very bad, cell-fip: helped
 - Syn-Fixed: Train 1.0, Val 0.25
 - Syn-Rand:  Train 0.2 Val 0.25, more capacity?
@@ -46,6 +46,8 @@ TODO:
 - max-dist for descriptions?
 
 NOTE:
+- Embed still much stronger: try perfect PN++ (trained on val) -> Still a gap
+- Re-train PN++ on decouple -> Done, might have helped
 - margin 0.35 better? -> Taken for now
 - Use PN fully -> performance lower but ok (0.8 -> 0.6), generalization gap!
 - Use lower features -> ok but not helping
@@ -173,11 +175,16 @@ def eval_epoch(model, dataloader, args):
 
 if __name__ == "__main__":
     args = parse_arguments()
-    print(args, "\n")
+    print(str(args).replace(',','\n'), '\n')
 
     dataset_name = args.base_path[:-1] if args.base_path.endswith('/') else args.base_path
     dataset_name = dataset_name.split('/')[-1]
     print(f'Directory: {dataset_name}')
+
+    plot_name = f'Coarse-{dataset_name}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_em{args.pointnet_embed}_p{args.pointnet_numpoints}_freeze{args.pointnet_freeze}_m{args.margin:0.2f}_s{args.shuffle}_g{args.lr_gamma}.png'    
+    print('Plot:', plot_name, '\n')
+
+    # WEITER: care time / epochs, args.describe_best_cell
 
     '''
     Create data loaders
@@ -252,7 +259,7 @@ if __name__ == "__main__":
             print('val-acc: ', end="")
             for k, v in val_acc.items():
                 print(f'{k}-{v:0.2f} ', end="")            
-            print()    
+            print("", flush=True)
 
         # Saving best model (w/o early stopping)
         acc = val_acc[max(args.top_k)]
@@ -271,7 +278,6 @@ if __name__ == "__main__":
     Save plots
     '''
     # plot_name = f'Cells-{args.dataset}_s{scene_name.split('_')[-2]}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_f{"-".join(args.use_features)}.png'
-    plot_name = f'Coarse-{dataset_name}_e{args.epochs}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_em{args.pointnet_embed}_feat{args.pointnet_features}_p{args.pointnet_numpoints}_freeze{args.pointnet_freeze}_m{args.margin:0.2f}_s{args.shuffle}_g{args.lr_gamma}.png'
 
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
     val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}

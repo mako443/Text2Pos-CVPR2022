@@ -10,7 +10,7 @@ def parse_arguments():
     parser.add_argument('--num_distractors', default='all')
     parser.add_argument('--max_batches', type=int, default=None)
     parser.add_argument('--dataset', type=str, default='K360')
-    parser.add_argument('--base_path', type=str, default='./data/k360_decouple')
+    parser.add_argument('--base_path', type=str) # default='./data/k360_decouple'
     # parser.add_argument('--data_split', type=int, default=0)
 
     # Model
@@ -38,7 +38,7 @@ def parse_arguments():
     parser.add_argument('--pointnet_variation', type=int, default=0)
     parser.add_argument('--pointnet_numpoints', type=int, default=256)
     # parser.add_argument('--pointnet_transform', type=int, default=0)
-    parser.add_argument('--pointnet_path', type=str, default='./checkpoints/pointnet_acc0.82_lr1_p256.pth')
+    parser.add_argument('--pointnet_path', type=str, default='./checkpoints/pointnet_acc0.86_lr1_p256.pth')
     parser.add_argument('--pointnet_freeze', action='store_true')
     parser.add_argument('--pointnet_embed', action='store_true')    
     parser.add_argument('--pointnet_features', type=int, default=2)

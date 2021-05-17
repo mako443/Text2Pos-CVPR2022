@@ -143,9 +143,12 @@ def describe_pose_in_best_cell(pose_w: np.ndarray, pose_cell_descriptions: List[
     best_cell_descriptions = []
 
     num_unmatched = 0
+    matched_object_ids = []
     # Match the descriptions to the objects in the given cell
     for descr in pose_cell_descriptions:
-        candidates = [obj for obj in cell.objects if obj.instance_id == descr.object_instance_id] # Objects that have the correct instance_id
+        # Gather objects that have the correct instance_id and have not been matched yet.
+        candidates = [obj for obj in cell.objects if (obj.instance_id == descr.object_instance_id and obj.id not in matched_object_ids)] 
+
         if len(candidates) == 0: # The description is not matched anymore in the best cell
             best_cell_descriptions.append(DescriptionBestCell.from_unmatched(descr))
             num_unmatched += 1            
@@ -154,6 +157,7 @@ def describe_pose_in_best_cell(pose_w: np.ndarray, pose_cell_descriptions: List[
             closest_offsets = np.array([pose - cand.get_closest_point(pose) for cand in candidates])[:, 0:2]
             best_idx = np.argmin(np.linalg.norm(closest_offsets - descr.offset_closest, axis=1))
             obj = candidates[best_idx]
+            matched_object_ids.append(obj.id) # Prevent the object from being matched again
             
             closest_point = obj.get_closest_point(pose)
             # Currently only set in pose_cell and passed this way through

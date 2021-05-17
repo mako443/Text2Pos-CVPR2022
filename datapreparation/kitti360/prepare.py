@@ -229,6 +229,10 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
     cell_centers = 1/2 * (cell_centers[:, 0:3] + cell_centers[:, 3:6])
     # cell_size = cells[0].cell_size
 
+    if args.pose_count > 0:
+        locations = np.repeat(locations, args.pose_count, axis=0) # Repeat the locations to increase the number of poses. (Poses are randomly shifted below.)
+        assert args.shift_poses == True
+
     unmatched_counts = []
     for i_location, location in enumerate(locations):
         # Shift the poses randomly to de-correlate database-side cells and query-side poses.
@@ -252,18 +256,24 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
 
         # assert pose_cell is not None, f'{pose_cell_bbox}, {location}' #TODO: Can be None after shifting, then discard this shifted pose
 
-        # Obtain the descriptions based on the pose-cell
-        descriptions = describe_pose_in_pose_cell(location, pose_cell)
+        if args.describe_best_cell: # Ablation: use ground-truth best cell to describe the pose
+            descriptions = describe_pose_in_pose_cell(location, best_cell)
+        else: # Obtain the descriptions based on the pose-cell
+            descriptions = describe_pose_in_pose_cell(location, pose_cell)
+            
 
         # Convert the descriptions to the best-matching database cell for training. Some descriptions might not be matched anymore.
         descriptions, pose_in_cell, num_unmatched = describe_pose_in_best_cell(location, descriptions, best_cell)
         unmatched_counts.append(num_unmatched)
 
+        if args.describe_best_cell:
+            assert num_unmatched == 0, "Unmatched descriptors for best cell!"
+
         pose = Pose(pose_in_cell, location, best_cell.id, descriptions)
         poses.append(pose)
 
     print(f'None poses: {len(none_indices)} / {len(locations)}, avg. unmatched: {np.mean(unmatched_counts):0.1f}')
-    if len(none_indices) > len(locations)/3:
+    if len(none_indices) > len(locations)/2:
         return False, none_indices
     else:
         return True, poses          
@@ -327,7 +337,7 @@ if __name__ == '__main__':
 
     t_poses_created = time.time()
 
-    print(f'Ela: objects {t_object_loaded - t_start} close {t_close_locations - t_object_loaded} cells {t_cells_created - t_close_locations} poses {t_poses_created - t_cells_created}')
+    print(f'Ela: objects {t_object_loaded - t_start:0.2f} close {t_close_locations - t_object_loaded:0.2f} cells {t_cells_created - t_close_locations:0.2f} poses {t_poses_created - t_cells_created:0.2f}')
     print()
 
     pickle.dump(cells, open(path_cells, 'wb'))

@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name="PN++ train"
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=2
 #SBATCH --gres=gpu:1,VRAM:12G
 #SBATCH --mem=32G
 #SBATCH --time=2:59:00

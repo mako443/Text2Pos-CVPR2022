@@ -29,12 +29,12 @@ from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
 TODO:
+- Train on real train-data again
 - Aux. train color + class helpful?
 - Which augmentation: RandomFlips, RandomRotate, Nothing? -> Not much difference?
 - 512 points ok? -> 1024 maye slightly better but seems ok. Possibly re-check w/ aux-loss
 - Merge differently / variations?
 - Pre-train helpful?
-- Re-formulate forward() as in CellRetrieval regarding features/embedding
 
 - compare mean/offset accuracies with closest/center in offset-pred and pos_in_cell
 
@@ -130,11 +130,14 @@ def eval_epoch(model, dataloader, args):
 
 if __name__ == "__main__":
     args = parse_arguments()
-    print(args, "\n")
+    print(str(args).replace(',','\n'), '\n')
 
     dataset_name = args.base_path[:-1] if args.base_path.endswith('/') else args.base_path
     dataset_name = dataset_name.split('/')[-1]
     print(f'Directory: {dataset_name}')
+
+    plot_name = f'Fine-{dataset_name}_bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
+    print('Plot:', plot_name, '\n')
 
     '''
     Create data loaders
@@ -231,7 +234,7 @@ if __name__ == "__main__":
                 f'\t lr {lr:0.6} epoch {epoch} loss {train_out.loss:0.3f} '
                 f't-recall {train_out.recall:0.2f} t-precision {train_out.precision:0.2f} t-mean {train_out.pose_mean:0.2f} t-offset {train_out.pose_offsets:0.2f} '
                 f'v-recall {val_out.recall:0.2f} v-precision {val_out.precision:0.2f} v-mean {val_out.pose_mean:0.2f} v-offset {val_out.pose_offsets:0.2f} '
-                ))
+                ), flush=True)
         print()
 
         acc = np.mean((val_out.recall, val_out.precision))
@@ -247,7 +250,6 @@ if __name__ == "__main__":
     '''
     Save plots
     '''
-    plot_name = f'Fine-{dataset_name}_bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': train_stats_loss,
         'train-loss_offsets': train_stats_loss_offsets,
