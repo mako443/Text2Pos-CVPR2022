@@ -281,7 +281,7 @@ if __name__ == '__main__':
     
     # 2013_05_28_drive_0003_sync
     args = parse_arguments()
-    print(args)
+    print(str(args).replace(',','\n'))
     print()
 
     cell_locations, cell_location_objects = create_locations(args.path_in, args.scene_name, location_distance=args.cell_dist, return_location_objects=True)        
@@ -326,7 +326,7 @@ if __name__ == '__main__':
 
     t_poses_created = time.time()
 
-    print(f'Ela: objects {t_object_loaded - t_start} close {t_close_locations - t_object_loaded} cells {t_cells_created - t_close_locations} poses {t_poses_created - t_cells_created}')
+    print(f'Ela: objects {t_object_loaded - t_start:0.2f} close {t_close_locations - t_object_loaded:0.2f} cells {t_cells_created - t_close_locations:0.2f} poses {t_poses_created - t_cells_created:0.2f}')
     print()
 
     pickle.dump(cells, open(path_cells, 'wb'))

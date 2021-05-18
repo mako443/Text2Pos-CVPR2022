@@ -39,6 +39,7 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform):
     descriptions = pose.descriptions
     cell_objects_dict = {obj.id: obj for obj in cell.objects}
     matched_ids = [descr.object_id for descr in descriptions if descr.is_matched]
+    matched_objects = [cell_objects_dict[matched_id] for matched_id in matched_ids]
 
     # Hints and descriptions have to be in same order
     for descr, hint in zip(descriptions, hints):
@@ -192,7 +193,7 @@ class Kitti360FineDatasetMulti(Dataset):
         return list(np.unique(known_classes))          
         
 if __name__ == '__main__':
-    base_path = './data/k360_decouple'
+    base_path = './data/k360_cs30_cd30_pd30_shTrue'
     folder_name = '2013_05_28_drive_0003_sync'    
     
     args = EasyDict(pad_size=8, num_mentioned=6)    
