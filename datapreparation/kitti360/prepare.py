@@ -15,7 +15,7 @@ except:
     print('pptk not found')
 from plyfile import PlyData, PlyElement
 
-from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell, plot_pose_in_best_cell
+from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell, plot_pose_in_best_cell, plot_cells_and_poses
 from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, COLORS, COLOR_NAMES, SCENE_NAMES
 from datapreparation.kitti360.utils import CLASS_TO_MINPOINTS, CLASS_TO_VOXELSIZE, STUFF_CLASSES
 from datapreparation.kitti360.imports import Object3d, Cell, Pose
@@ -177,16 +177,36 @@ def create_locations(path_input, folder_name, location_distance, return_location
     else:
         return sampled_poses
 
-def create_cells(objects, locations, scene_name, cell_size) -> List[Cell]:
+def create_cells(objects, locations, scene_name, cell_size, args) -> List[Cell]:
     print('Creating cells...')
-    print('CARE: Not shifting cells!')
     cells = []
     none_indices = []
     
     assert len(scene_name.split('_')) == 6
     scene_name_short = scene_name.split('_')[-2]
 
+    # Additionally shift each cell-location up, down, left and right by cell_dist / 2
+    if args.shift_cells:
+        shifts = np.array([
+            [0, 0],
+            [-args.cell_dist * 1.05, 0],
+            [args.cell_dist * 1.05, 0],
+            [0, -args.cell_dist * 1.05],
+            [0, args.cell_dist * 1.05]
+        ])
+        shifts = np.tile(shifts.T, len(locations)).T # Tile along direction "trick"
+        locations = np.repeat(locations, 5, axis=0)
+        locations[:, 0:2] += shifts
+
+        cell_locations = np.ones_like(locations) * np.inf
+
     for i_location, location in enumerate(locations):
+        # Skip cell if it is too close
+        if args.shift_cells: 
+            dists = np.linalg.norm(cell_locations - location, axis=1)
+            if np.min(dists) < args.cell_dist:
+                continue
+
         # print(f'\r \t locations {i_location} / {len(locations)}', end='')
         bbox = np.hstack((location - cell_size/2, location + cell_size/2)) # [x0, y0, z0, x1, y1, z1]
 
@@ -200,6 +220,10 @@ def create_cells(objects, locations, scene_name, cell_size) -> List[Cell]:
             cells.append(cell)
         else:
             none_indices.append(i_location)
+            continue
+
+        if args.shift_cells:
+            cell_locations[i_location] = location
     
     print(f'None cells: {len(none_indices)} / {len(locations)}')
     if len(none_indices) > len(locations)/3:
@@ -229,6 +253,10 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
     cell_centers = 1/2 * (cell_centers[:, 0:3] + cell_centers[:, 3:6])
     # cell_size = cells[0].cell_size
 
+    if args.pose_count > 0:
+        locations = np.repeat(locations, args.pose_count, axis=0) # Repeat the locations to increase the number of poses. (Poses are randomly shifted below.)
+        assert args.shift_poses == True, "Pose-count greater than 1 but pose shifting is deactivated!"
+
     unmatched_counts = []
     for i_location, location in enumerate(locations):
         # Shift the poses randomly to de-correlate database-side cells and query-side poses.
@@ -243,6 +271,10 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
             none_indices.append(i_location)
             continue
 
+        '''
+        TODO: Description strategy hier auswählen, später hier alle 4-5x hintereinander die Pose duplizieren
+        '''
+
         # Create an extra cell on top of the pose to create the query-side description decoupled from the database-side cells.
         pose_cell_bbox = np.hstack((location - args.cell_size/2, location + args.cell_size/2)) # [x0, y0, z0, x1, y1, z1]
         pose_cell = create_cell(-1, "pose", pose_cell_bbox, objects)
@@ -252,32 +284,31 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
 
         # assert pose_cell is not None, f'{pose_cell_bbox}, {location}' #TODO: Can be None after shifting, then discard this shifted pose
 
-        # Obtain the descriptions based on the pose-cell
-        descriptions = describe_pose_in_pose_cell(location, pose_cell)
+        if args.describe_best_cell: # Ablation: use ground-truth best cell to describe the pose
+            descriptions = describe_pose_in_pose_cell(location, best_cell)
+        else: # Obtain the descriptions based on the pose-cell
+            descriptions = describe_pose_in_pose_cell(location, pose_cell)
+            
 
         # Convert the descriptions to the best-matching database cell for training. Some descriptions might not be matched anymore.
         descriptions, pose_in_cell, num_unmatched = describe_pose_in_best_cell(location, descriptions, best_cell)
         unmatched_counts.append(num_unmatched)
 
+        if args.describe_best_cell:
+            assert num_unmatched == 0, "Unmatched descriptors for best cell!"
+
         pose = Pose(pose_in_cell, location, best_cell.id, descriptions)
         poses.append(pose)
 
     print(f'None poses: {len(none_indices)} / {len(locations)}, avg. unmatched: {np.mean(unmatched_counts):0.1f}')
-    if len(none_indices) > len(locations)/3:
+    if len(none_indices) > len(locations)/2:
         return False, none_indices
     else:
         return True, poses          
 
+# TODO: create args: path_in, path_out, cell_size, cell_stride
 if __name__ == '__main__':
     np.random.seed(4096) # Set seed to re-produce results
-    # path_input = './data/kitti360'
-    # path_output = './data/k360_decouple'
-    # scene_name = sys.argv[-1]
-    # print('Scene:', scene_name)
-    # scene_names = SCENE_NAMES if scene_name=='all' else [scene_name, ]
-
-    # cell_size = 30
-    # print(f'Preparing {scene_names} {path_input} -> {path_output}, cell_size {cell_size}')
     
     # 2013_05_28_drive_0003_sync
     args = parse_arguments()
@@ -309,7 +340,7 @@ if __name__ == '__main__':
 
     t_close_locations = time.time()
 
-    res, cells = create_cells(objects, cell_locations, args.scene_name, args.cell_size)
+    res, cells = create_cells(objects, cell_locations, args.scene_name, args.cell_size, args)
     assert res is True, "Too many cell nones, quitting."
 
     t_cells_created = time.time()
@@ -320,9 +351,11 @@ if __name__ == '__main__':
     # Debug
     # cells_dict = {cell.id: cell for cell in cells}
     # pose = poses[5]
-    # cell = cells_dict[pose.cell_id]
-    # img = plot_pose_in_best_cell(cell, pose)
+    # best_cell = cells_dict[pose.cell_id]
+    # img = plot_pose_in_best_cell(best_cell, pose)
     # cv2.imshow("", img); cv2.waitKey()
+    # pose_cell_bbox = np.hstack((pose.pose_w - args.cell_size/2, pose.pose_w + args.cell_size/2))
+    # pose_cell = create_cell(-1, "pose", pose_cell_bbox, objects)    
 
     t_poses_created = time.time()
 

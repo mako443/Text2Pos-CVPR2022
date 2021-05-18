@@ -36,6 +36,8 @@ def batch_object_points(objects: List[Object3d], transform):
     return batch
 
 def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform):
+    assert pose.cell_id == cell.id
+
     descriptions = pose.descriptions
     cell_objects_dict = {obj.id: obj for obj in cell.objects}
     matched_ids = [descr.object_id for descr in descriptions if descr.is_matched]
@@ -62,11 +64,15 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform):
             
     # TODO: add unmatched hints in all_matches!
 
-    # Gather distractors
+    # Gather distractors, i.e. remaining objects
     for obj in cell.objects:
         if obj.id not in matched_ids:
             objects.append(obj)
-    assert len(objects) == len(cell.objects), "Not all cell-objects have been gathered!"
+    if len(objects) != len(cell.objects):
+        print([obj.id for obj in objects])
+        print([obj.id for obj in cell.objects])
+        print(matched_ids)
+    assert len(objects) == len(cell.objects), f"Not all cell-objects have been gathered! {len(objects)}, {len(cell.objects)}, {cell.id}"
 
     # # Gather mentioned objects, matches and offsets
     # objects, matches, offsets = [], [], []

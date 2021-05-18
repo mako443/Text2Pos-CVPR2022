@@ -98,3 +98,21 @@ def plot_pose_in_best_cell(cell: Cell, pose: Pose, scale=1024, use_rgb=False, sh
         num_unmatched = len([d for d in pose.descriptions if not d.is_matched])
         cv2.putText(img, f'Unmatched: {num_unmatched}', (10,25), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255,255,255))
     return img
+
+def plot_cells_and_poses(cells: List[Cell], poses: List[Pose], size=1024):
+    best_cell_ids = [pose.cell_id for pose in poses]
+    pose_locations = np.array([pose.pose_w for pose in poses])
+    min_x, max_x, min_y, max_y = np.min(pose_locations[:, 0]), np.max(pose_locations[:, 0]), np.min(pose_locations[:, 1]), np.max(pose_locations[:, 1])
+    scale = max(max_x - min_x, max_y - min_y)
+    img = np.zeros((size, size, 3), dtype=np.uint8)
+    for cell in cells:
+        bbox = cell.bbox_w - np.array((min_x, min_y, 0, min_x, min_y, 0))
+        bbox = np.int0(bbox / scale * size)
+        color = (255, 255, 255) if cell.id in best_cell_ids else (128, 128, 128)
+        cv2.rectangle(img, (bbox[0], bbox[1]), (bbox[3], bbox[4]), color, thickness=2)
+    for pose in poses:
+        p = pose.pose_w - np.array((min_x, min_y, 0))
+        p = np.int0(p / scale * size)
+        cv2.circle(img, (p[0], p[1]), 6, (0,0,255), thickness=4)
+    img = cv2.flip(img, 0)        
+    return img

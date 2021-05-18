@@ -60,7 +60,7 @@ def create_synthetic_cell(bbox_w, area_objects: List[Object3d], min_objects=6, i
 
     return Cell(-1, "mock", cell_objects, cell_size, bbox_w)
 
-def create_cell(cell_idx, scene_name, bbox_w, scene_objects: List[Object3d], min_objects=6, inside_fraction=1/3, stuff_min=500):
+def create_cell(cell_idx, scene_name, bbox_w, scene_objects: List[Object3d], min_objects=6, inside_fraction=1/3, stuff_min=250): # Before: 500
     cell_objects = []
     for obj in scene_objects:
         assert obj.id < 1e7
