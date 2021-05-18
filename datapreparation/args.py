@@ -12,6 +12,7 @@ def parse_arguments():
 
     parser.add_argument('--cell_size', type=int, default=30)
     parser.add_argument('--cell_dist', type=int, default=30, help="The minimum distance between two cells")
+    parser.add_argument('--shift_cells', action='store_true')
 
     parser.add_argument('--pose_dist', type=int, default=30)
     parser.add_argument('--pose_count', type=int, default=1)
@@ -23,7 +24,7 @@ def parse_arguments():
     
     assert osp.isdir(args.path_in)
     assert osp.isdir(osp.join(args.path_in, 'data_3d_semantics', args.scene_name)), f'Input folder not found {osp.join(args.path_in, "data_3d_semantics", args.scene_name)}'
-    args.path_out = f'{args.path_out}_cs{args.cell_size}_cd{args.cell_dist}_pd{args.pose_dist}_pc{args.pose_count}_sh{args.shift_poses}'
+    args.path_out = f'{args.path_out}_cs{args.cell_size}_cd{args.cell_dist}_sc{args.shift_cells}_pd{args.pose_dist}_pc{args.pose_count}_sp{args.shift_poses}'
     if args.describe_best_cell:
         args.path_out += '_bestCell'
 

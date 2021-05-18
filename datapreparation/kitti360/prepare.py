@@ -177,16 +177,35 @@ def create_locations(path_input, folder_name, location_distance, return_location
     else:
         return sampled_poses
 
-def create_cells(objects, locations, scene_name, cell_size) -> List[Cell]:
+def create_cells(objects, locations, scene_name, cell_size, args) -> List[Cell]:
     print('Creating cells...')
-    print('CARE: Not shifting cells!')
     cells = []
     none_indices = []
     
     assert len(scene_name.split('_')) == 6
     scene_name_short = scene_name.split('_')[-2]
 
+    # Additionally shift each cell-location up, down, left and right by cell_dist / 2
+    if args.shift_cells:
+        shifts = np.array([
+            [0, 0],
+            [-args.cell_dist / 2, 0],
+            [args.cell_dist / 2, 0],
+            [0, -args.cell_dist / 2],
+            [0, args.cell_dist / 2]
+        ])
+        shifts = np.repeat(shifts, len(locations), axis=0)
+        locations = np.repeat(locations, 5, axis=0)
+        locations[:, 0:2] += shifts
+
+        cell_locations = np.ones_like(locations) * np.inf
+
     for i_location, location in enumerate(locations):
+        if args.shift_cells: # Skip cell if it is too close
+            dists = np.linalg.norm(cell_locations - location, axis=1)
+            if np.min(dists) < args.cell_dist:
+                continue
+
         # print(f'\r \t locations {i_location} / {len(locations)}', end='')
         bbox = np.hstack((location - cell_size/2, location + cell_size/2)) # [x0, y0, z0, x1, y1, z1]
 
@@ -200,6 +219,10 @@ def create_cells(objects, locations, scene_name, cell_size) -> List[Cell]:
             cells.append(cell)
         else:
             none_indices.append(i_location)
+            continue
+
+        if args.shift_cells:
+            cell_locations[i_location] = location
     
     print(f'None cells: {len(none_indices)} / {len(locations)}')
     if len(none_indices) > len(locations)/3:
@@ -231,7 +254,7 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
 
     if args.pose_count > 0:
         locations = np.repeat(locations, args.pose_count, axis=0) # Repeat the locations to increase the number of poses. (Poses are randomly shifted below.)
-        assert args.shift_poses == True
+        assert args.shift_poses == True, "Pose-count greater than 1 but pose shifting is deactivated!"
 
     unmatched_counts = []
     for i_location, location in enumerate(locations):
@@ -246,6 +269,10 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
         if np.min(dists) > args.cell_size / 2:
             none_indices.append(i_location)
             continue
+
+        '''
+        TODO: Description strategy hier auswählen, später hier alle 4-5x hintereinander die Pose duplizieren
+        '''
 
         # Create an extra cell on top of the pose to create the query-side description decoupled from the database-side cells.
         pose_cell_bbox = np.hstack((location - args.cell_size/2, location + args.cell_size/2)) # [x0, y0, z0, x1, y1, z1]
@@ -281,14 +308,6 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
 # TODO: create args: path_in, path_out, cell_size, cell_stride
 if __name__ == '__main__':
     np.random.seed(4096) # Set seed to re-produce results
-    # path_input = './data/kitti360'
-    # path_output = './data/k360_decouple'
-    # scene_name = sys.argv[-1]
-    # print('Scene:', scene_name)
-    # scene_names = SCENE_NAMES if scene_name=='all' else [scene_name, ]
-
-    # cell_size = 30
-    # print(f'Preparing {scene_names} {path_input} -> {path_output}, cell_size {cell_size}')
     
     # 2013_05_28_drive_0003_sync
     args = parse_arguments()
@@ -320,7 +339,7 @@ if __name__ == '__main__':
 
     t_close_locations = time.time()
 
-    res, cells = create_cells(objects, cell_locations, args.scene_name, args.cell_size)
+    res, cells = create_cells(objects, cell_locations, args.scene_name, args.cell_size, args)
     assert res is True, "Too many cell nones, quitting."
 
     t_cells_created = time.time()
