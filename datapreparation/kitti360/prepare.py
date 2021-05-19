@@ -120,6 +120,7 @@ def gather_objects(path_input, folder_name):
     return objects_threshed
     # return list(scene_objects.values())
 
+# TODO: just sample on a grid ;)
 def get_close_locations(locations: List[np.ndarray], scene_objects: List[Object3d], cell_size, location_objects=None):
     """Retains all locations that are at most cell_size / 2 distant from an instance-object.
 

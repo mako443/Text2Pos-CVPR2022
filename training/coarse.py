@@ -27,8 +27,8 @@ from training.utils import plot_retrievals
 TODO:
 - Remove identical negative? (If necessary, just remove one of the samples -.-)
 - Train w/ best-cell enough? Or train w/ all possible cells (0.5+ matched, near enough)?
-- Variate cell-sizes
-- Variate closest / mid / pose-cell / best-cell
+- Variate cell-sizes (again)
+- Variate closest / mid / pose-cell / best-cell offsets
 
 - synthetic cells -> Ok (0.25), gap smaller
 - flip the training cells (pose, objects, direction words) -> Good, 0.42 now
