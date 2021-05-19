@@ -4,6 +4,7 @@ from sklearn.cluster import DBSCAN
 
 from datapreparation.kitti360.imports import Object3d, Cell, Pose, DescriptionPoseCell, DescriptionBestCell
 from datapreparation.kitti360.utils import STUFF_CLASSES
+from datapreparation.kitti360.select import get_direction, select_objects_closest, select_objects_direction, select_objects_class, select_objects_random
 
 from copy import deepcopy
 
@@ -96,7 +97,7 @@ def create_cell(cell_idx, scene_name, bbox_w, scene_objects: List[Object3d], min
 
     return Cell(cell_idx, scene_name, cell_objects, cell_size, bbox_w)
 
-def describe_pose_in_pose_cell(pose_w, cell: Cell, num_mentioned=6) -> List[DescriptionPoseCell]:
+def describe_pose_in_pose_cell(pose_w, cell: Cell, select_by, num_mentioned, max_dist=0.5) -> List[DescriptionPoseCell]:
     # Assert pose is close to cell_center
     # assert np.allclose(pose_w, cell.get_center())
     assert len(cell.objects) >= num_mentioned, f'Only {len(cell.objects)} objects'
@@ -105,33 +106,34 @@ def describe_pose_in_pose_cell(pose_w, cell: Cell, num_mentioned=6) -> List[Desc
     pose = (pose_w - cell.bbox_w[0:3]) / cell.cell_size
     assert np.all(pose >= 0) and np.all(pose <= 1.0), f'{pose} {pose_w} {cell.bbox_w}'
 
-    # Find the objects to describe
+    # Select candidates based on the distance
+    dists = np.linalg.norm([obj.get_closest_point(pose) - pose for obj in cell.objects], axis=1)
+    candidates = [cell.objects[i] for i in range(len(dists)) if dists[i] <= max_dist]
+    if len(candidates) < num_mentioned:
+        return None
+
+    if select_by == 'closest':
+        selected_objects = select_objects_closest(candidates, pose, num_mentioned)
+    elif select_by == 'direction':
+        selected_objects = select_objects_direction(candidates, pose, num_mentioned)  
+    elif select_by == 'class':
+        selected_objects = select_objects_class(candidates, pose, num_mentioned)            
+    elif select_by == 'random':
+        selected_objects = select_objects_random(candidates, pose, num_mentioned)                    
+
     descriptions = []
-    distances = np.linalg.norm([obj.get_closest_point(pose) - pose for obj in cell.objects], axis=1)
-    closest_indices = np.argsort(distances)
-
-    # Create the descriptions
-    mentioned_indices = closest_indices[0 : num_mentioned]
-
-    for hint_idx, obj_idx in enumerate(mentioned_indices):
-        obj = cell.objects[obj_idx]
+    for obj in selected_objects:
+        direction = get_direction(obj, pose)
         closest_point = obj.get_closest_point(pose)
-        obj2pose = pose - closest_point
-        if np.linalg.norm(obj2pose[0:2]) < 0.015:
-            direction = 'on-top'
-        else:
-            if abs(obj2pose[0])>=abs(obj2pose[1]) and obj2pose[0]>=0: direction='east'
-            if abs(obj2pose[0])>=abs(obj2pose[1]) and obj2pose[0]<=0: direction='west'
-            if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]>=0: direction='north'
-            if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]<=0: direction='south' 
 
         offset_center = pose - obj.get_center()
         offset_closest = pose - closest_point
-        descriptions.append(DescriptionPoseCell(obj.id, obj.instance_id, obj.label, obj.get_color_rgb(), obj.get_color_text(), direction, offset_center, offset_closest, closest_point))
+        # descriptions.append(DescriptionPoseCell(obj.id, obj.instance_id, obj.label, obj.get_color_rgb(), obj.get_color_text(), direction, offset_center, offset_closest, closest_point))
+        descriptions.append(DescriptionPoseCell(obj, direction, offset_center, offset_closest, closest_point))
 
     return descriptions
 
-def describe_pose_in_best_cell(pose_w: np.ndarray, pose_cell_descriptions: List[DescriptionPoseCell], cell: Cell) -> List[DescriptionBestCell]:
+def ground_pose_to_best_cell(pose_w: np.ndarray, pose_cell_descriptions: List[DescriptionPoseCell], cell: Cell) -> List[DescriptionBestCell]:
     # Assert cell is valid for this pose
     assert np.all(pose_w >= cell.bbox_w[0:3]) and np.all(pose_w <= cell.bbox_w[3:6]), f'{pose_w}, {cell.bbox_w}'
     assert len(cell.objects) >= len(pose_cell_descriptions), f'Only {len(cell.objects)} objects'    
@@ -152,98 +154,35 @@ def describe_pose_in_best_cell(pose_w: np.ndarray, pose_cell_descriptions: List[
         if len(candidates) == 0: # The description is not matched anymore in the best cell
             best_cell_descriptions.append(DescriptionBestCell.from_unmatched(descr))
             num_unmatched += 1            
-        else: # The description is matched, convert it to best-matching candidate
-            # Select the candidate with the best-matching closest_offset because that is less likely to have changed
+        else: 
+            # The description is matched, try to project it to best-matching candidate
+            # Select the candidate with the best-matching closest_offset
+            # Closest_offset is least likely to have changed
             closest_offsets = np.array([pose - cand.get_closest_point(pose) for cand in candidates])[:, 0:2]
             best_idx = np.argmin(np.linalg.norm(closest_offsets - descr.offset_closest, axis=1))
-            obj = candidates[best_idx]
-            matched_object_ids.append(obj.id) # Prevent the object from being matched again
+            best_obj = candidates[best_idx]
+            best_closest_offset = closest_offsets[best_idx]
             
-            closest_point = obj.get_closest_point(pose)
-            # Currently only set in pose_cell and passed this way through
-            # offset_center = pose - obj.get_center() 
-            # offset_closest = pose - closest_point            
+            if np.linalg.norm(descr.offset_closest - best_closest_offset) > np.sqrt(2)/2: # Offsets are too different -> not a match. Allow some tolerance here for equally true matches.
+                best_cell_descriptions.append(DescriptionBestCell.from_unmatched(descr))
+                num_unmatched += 1
+            else: # Offset is close -> object is matched               
+                matched_object_ids.append(best_obj.id) # Prevent the object from being matched again
+                
+                closest_point = best_obj.get_closest_point(pose)
+                # Currently only set in pose_cell and passed this way through
+                # offset_center = pose - obj.get_center() 
+                # offset_closest = pose - closest_point 
 
-            # best_cell_descriptions.append(DescriptionBestCell.from_matched(descr, obj.id, offset_center, offset_closest, closest_point))
-            best_cell_descriptions.append(DescriptionBestCell.from_matched(descr, obj.id, closest_point))
+                # color_dist = np.linalg.norm(descr.object_color_rgb - best_obj.get_color_rgb())
+                # if color_dist > 0.25:
+                #     print(descr.object_color_text, best_obj.get_color_text(), f'{np.linalg.norm(descr.offset_closest - best_closest_offset):0.2f}')
+
+                # best_cell_descriptions.append(DescriptionBestCell.from_matched(descr, obj.id, offset_center, offset_closest, closest_point))
+                best_cell_descriptions.append(DescriptionBestCell.from_matched(descr, best_obj.id, closest_point))
 
     return best_cell_descriptions, pose, num_unmatched
     
-
-# TODO: shifted cells. 1) randomly shift cell around pose, 2) randomly shift, take objects from 2 threshs for missing hints (even necessary?)
-def depr_describe_cell(bbox, scene_objects: List[Object3d], pose_w, scene_name, is_synthetic=False, inside_fraction=1/3, stuff_min=500, num_mentioned=6):
-    """Create the cell using all the objects in the scene.
-    Instance-objects are threshed in/outside the scene (all points are retained)
-    Stuff-objects' points are threshed inside the cell, clustered and then saved with new IDs
-    CARE: object-ids are completely re-set after gathering and can repeat across cells!
-
-    Args:
-        bbox: Cell bbox in world-coordinates
-        scene_objects: Objects in scene
-        pose_w: Pose in world-coordinates
-        is_synthetic: Used for synthetic cell: skipping clustering and masking
-    """
-    if is_synthetic is False: # Mask, cluster and norm the scene objects
-        cell_objects = []
-        for obj in scene_objects:
-            assert obj.id < 1e7
-
-            mask = get_mask(obj.xyz, bbox)
-            if obj.label in STUFF_CLASSES:
-                if np.sum(mask) < stuff_min:
-                    continue
-
-                cell_obj = obj.mask_points(mask)
-                clustered_objects = cluster_stuff_object(cell_obj, stuff_min)
-                cell_objects.extend(clustered_objects)
-            else:
-                if np.sum(mask) / len(mask) < inside_fraction:
-                    continue
-                cell_objects.append(obj) # DEBUG: comment out
-
-        # Normalize objects and pose based on the largest cell-edge to be ∈ [0, 1] (instance-objects can reach over edge)
-        cell_size = np.max(bbox[3:6] - bbox[0:3])
-        for obj in cell_objects:
-            obj.xyz = (obj.xyz - bbox[0:3]) / cell_size
-        pose = (pose_w - bbox[0:3]) / cell_size
-        assert np.all(pose > 0) and np.all(pose < 1), f'{pose} {pose_w} {bbox}'
-    else: # If cell is synthetic, only copy objects, cell-size and pose
-        cell_objects = scene_objects
-        cell_size = np.max(bbox[3:6] - bbox[0:3])
-        pose = pose_w
-
-    if len(cell_objects) < num_mentioned:
-        return None
-
-    # Reset all ids
-    for id, obj in enumerate(cell_objects):
-        obj.id = id + 1
-
-    # Describe the post based on the clostest objects
-    # Alternatives: describe in each direction, try to get many classes
-    descriptions = []
-    distances = np.linalg.norm([obj.get_closest_point(pose) - pose for obj in cell_objects], axis=1)
-    closest_indices = np.argsort(distances)
-
-    # mentioned_objects = [cell_objects[idx] for idx in closest_indices[0:num_mentioned]]
-    mentioned_indices = [idx for idx in closest_indices[0 : num_mentioned]]
-    # for obj in mentioned_objects:
-    for hint_idx, obj_idx in enumerate(mentioned_indices):
-        obj = cell_objects[obj_idx]
-
-        obj2pose = pose - obj.closest_point # e.g. "The pose is south of a car."
-        # if np.linalg.norm(obj2pose[0:2]) < 0.5 / cell_size: # Say 'on-top' if the object is very close (e.g. road), only calculated in x-y-plane!
-        if np.linalg.norm(obj2pose[0:2]) < 0.015: # Say 'on-top' if the object is very close (e.g. road), only calculated in x-y-plane!
-            direction = 'on-top'
-        else:
-            if abs(obj2pose[0])>=abs(obj2pose[1]) and obj2pose[0]>=0: direction='east'
-            if abs(obj2pose[0])>=abs(obj2pose[1]) and obj2pose[0]<=0: direction='west'
-            if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]>=0: direction='north'
-            if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]<=0: direction='south' 
-
-        descriptions.append(Description(obj.id, direction, obj.label, obj.get_color_rgb()))
-
-    return Cell(scene_name, cell_objects, descriptions, pose, cell_size, pose_w, bbox)
 
 
     

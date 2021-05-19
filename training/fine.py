@@ -29,6 +29,7 @@ from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
 TODO:
+- Prevent opposite-direction matches!
 - Train on real train-data again
 - Aux. train color + class helpful?
 - Which augmentation: RandomFlips, RandomRotate, Nothing? -> Not much difference?

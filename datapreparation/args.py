@@ -9,6 +9,8 @@ def parse_arguments():
     parser.add_argument('--path_in', type=str, default='./data/kitti360')
     parser.add_argument('--path_out', type=str, default='./data/k360')
     parser.add_argument('--scene_name', type=str)
+    parser.add_argument('--num_mentioned', type=int, default=6)
+    parser.add_argument('--describe_by', type=str, default='closest')
 
     parser.add_argument('--cell_size', type=int, default=30)
     parser.add_argument('--cell_dist', type=int, default=30, help="The minimum distance between two cells")
@@ -24,12 +26,15 @@ def parse_arguments():
     
     assert osp.isdir(args.path_in)
     assert osp.isdir(osp.join(args.path_in, 'data_3d_semantics', args.scene_name)), f'Input folder not found {osp.join(args.path_in, "data_3d_semantics", args.scene_name)}'
-    args.path_out = f'{args.path_out}_cs{args.cell_size}_cd{args.cell_dist}_sc{"Y" if args.shift_cells else "N"}_pd{args.pose_dist}_pc{args.pose_count}_sp{"Y" if args.shift_poses else "N"}'
+    args.path_out = f'{args.path_out}_cs{args.cell_size}_cd{args.cell_dist}_sc{"Y" if args.shift_cells else "N"}_pd{args.pose_dist}_pc{args.pose_count}_sp{"Y" if args.shift_poses else "N"}_{args.describe_by}'
     if args.describe_best_cell:
         args.path_out += '_bestCell'
 
     print(f'Folders: {args.path_in} -> {args.path_out}')
 
+    assert args.describe_by in ('closest', 'class', 'direction', 'random')
+
+    # Create dirs
     try:
         os.mkdir(args.path_out)
     except:
@@ -38,16 +43,10 @@ def parse_arguments():
         os.mkdir(osp.join(args.path_out, 'cells'))
     except:
         pass
-
     try:
         os.mkdir(osp.join(args.path_out, 'poses'))
     except:
         pass
 
-    # if not osp.isdir(args.path_out):
-    #     print(f'Creating folders for {args.path_out}')
-    #     os.mkdir(args.path_out)
-    #     os.mkdir(osp.join(args.path_out, 'cells'))
-    #     os.mkdir(osp.join(args.path_out, 'poses'))
 
     return args
