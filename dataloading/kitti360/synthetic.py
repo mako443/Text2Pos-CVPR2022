@@ -17,7 +17,7 @@ import torch_geometric.transforms as T
 
 from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, CLASS_TO_INDEX
 from datapreparation.kitti360.utils import COLORS, COLOR_NAMES, SCENE_NAMES_TRAIN
-from datapreparation.kitti360.descriptions import create_synthetic_cell, describe_pose_in_pose_cell, describe_pose_in_best_cell
+from datapreparation.kitti360.descriptions import create_synthetic_cell, describe_pose_in_pose_cell, ground_pose_to_best_cell
 from datapreparation.kitti360.imports import Object3d, Cell, Pose
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_objects, plot_cell, plot_pose_in_best_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
@@ -47,6 +47,8 @@ class Kitti360FineSyntheticDataset(Dataset):
         self.fixed_seed = fixed_seed
         self.colors = COLORS
         self.color_names = COLOR_NAMES 
+
+        print('\n CARE WHICH SYNTHETIC DESCRIBE STRATEGY! \n')
 
         print(f'Kitti360FineSyntheticDataset, fixed seed: {fixed_seed}, length: {length}, sampling from {len(objects_dataset)} objects')    
 
@@ -115,9 +117,9 @@ class Kitti360FineSyntheticDataset(Dataset):
         assert np.allclose(pose_cell.cell_size, 1.0)            
 
         # Describe in pose-cell with all objects
-        descriptions = describe_pose_in_pose_cell(pose_w, pose_cell)
+        descriptions = describe_pose_in_pose_cell(pose_w, pose_cell, 'closest', self.num_mentioned, max_dist=np.inf) # Use max-dist here since cells have same bbox anyhow (objects explicitly deleted)
 
-        # Randomly delete up to num_mentiond / 2 of the matched objects for objects-side bins.
+        # Randomly delete up to num_mentiond / 2 of the matched objects to create objects-side bins.
         num_delete = np.random.randint(self.num_mentioned / 2 + 1)
         num_delete = min(num_delete, len(cell_objects) - self.num_mentioned) # Don't delete more objects than are needed for valid cell
         matched_ids = [d.object_id for d in descriptions]
@@ -129,7 +131,7 @@ class Kitti360FineSyntheticDataset(Dataset):
         assert best_cell is not None
         assert np.allclose(best_cell.cell_size, 1.0)  
 
-        descriptions, pose_in_cell, _ = describe_pose_in_best_cell(pose_w, descriptions, best_cell)
+        descriptions, pose_in_cell, _ = ground_pose_to_best_cell(pose_w, descriptions, best_cell)
         assert np.allclose(pose_in_cell, pose_w)
 
         pose = Pose(pose_in_cell, pose_w, best_cell.id, descriptions)
@@ -193,7 +195,7 @@ class Kitti360FineSyntheticDataset(Dataset):
         return list(np.unique(known_words))  
 
 if __name__ == '__main__':
-    base_path = './data/k360_decouple'
+    base_path = './data/k360_cs30_cd15_scY_pd10_pc1_spY'
     folder_name = '2013_05_28_drive_0003_sync'
     args = EasyDict(pad_size=16, num_mentioned=6)
 
