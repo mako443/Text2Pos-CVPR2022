@@ -70,12 +70,13 @@ class Object3d:
         return obj
 
 class DescriptionPoseCell:
-    def __init__(self, object_id, object_instance_id, object_label, object_color_rgb, object_color_text, direction, offset_center, offset_closest, closest_point):
-        self.object_id = object_id
-        self.object_instance_id = object_instance_id
-        self.object_label = object_label
-        self.object_color_rgb = object_color_rgb
-        self.object_color_text = object_color_text
+    # def __init__(self, object_id, object_instance_id, object_label, object_color_rgb, object_color_text, direction, offset_center, offset_closest, closest_point):
+    def __init__(self, object: Object3d, direction, offset_center, offset_closest, closest_point):
+        self.object_id = object.id
+        self.object_instance_id = object.instance_id
+        self.object_label = object.label
+        self.object_color_rgb = object.get_color_rgb()
+        self.object_color_text = object.get_color_text()
         self.direction = direction # Text might not match offset later in best-cell!
         self.offset_center = offset_center[0:2] # Offset to center of object
         self.offset_closest = offset_closest[0:2] # Offset to closest-point of object
@@ -105,7 +106,7 @@ class DescriptionBestCell:
         d.object_id = object_id
         # d.offset_center = offset_center[0:2]
         # d.offset_closest = offset_closest[0:2]
-        d.closest_point = closest_point[0:2]
+        d.closest_point = closest_point[0:2] # Only in best-cell!
         d.is_matched = True
         return d
 

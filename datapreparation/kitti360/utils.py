@@ -171,9 +171,12 @@ COLORS = np.array([
        [171.00852191, 170.05737735, 155.00130334]
     ]) / 255.0
 
-COLOR_NAMES = ['color-0', 'color-1', 'color-2', 'color-3', 'color-4', 'color-5', 'color-6', 'color-7']
+# COLOR_NAMES = ['color-0', 'color-1', 'color-2', 'color-3', 'color-4', 'color-5', 'color-6', 'color-7']
+'''
+Note that these names are not completely precise as the fitted colors are mostly gray-scale.
+However, the models just learn them as words without deeper meaning, so they don't have a more complex effect.
+'''
+COLOR_NAMES = ['dark-green', 'gray', 'gray-green', 'bright-gray', 'gray', 'black', 'green', 'beige'] 
 
-# def get_color_histogram():
-    # dists = cdist(colors, anchors)
-    # indices = np.argmin(dists, axis=1)
-    # unique, counts = np.unique(indices, return_counts=True)
+from scipy.spatial.distance import cdist
+dists = cdist(COLORS, COLORS)
