@@ -29,6 +29,7 @@ TODO:
 - Train w/ best-cell enough? Or train w/ all possible cells (0.5+ matched, near enough)?
 - Variate cell-sizes
 - Variate closest / mid / pose-cell / best-cell
+- Check note in eval_epoch
 
 - synthetic cells -> Ok (0.25), gap smaller
 - flip the training cells (pose, objects, direction words) -> Good, 0.42 now
@@ -102,7 +103,7 @@ printed = False
 def eval_epoch(model, dataloader, args):
     """Top-k retrieval for each pose against all cells in the dataset.
     NOTE: The way the cells are read from the Cells-Only-Dataset, they may have been augmented differently during the actual training. Cells-Only does not flip and shuffle!
-    TODO: Is this ok? Otherwise, just sent in as batches, ignore that non-pose cells are missing.
+    TODO: Is this ok? Otherwise, just sent in as batches, ignore that non-pose cells are missing. Augmented cells a better metric or not?
 
     Args:
         model ([type]): The model
@@ -132,7 +133,7 @@ def eval_epoch(model, dataloader, args):
     text_encodings = np.zeros((len(dataloader.dataset), model.embed_dim))
     query_cell_ids = np.zeros(len(dataloader.dataset), dtype='<U32')
 
-    # Encode the queries
+    # Encode the query side
     index_offset = 0
     for batch in dataloader:
         text_enc = model.encode_text(batch['texts'])
@@ -191,11 +192,11 @@ if __name__ == "__main__":
     '''
     if args.dataset == 'K360':
         train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
-        dataset_train = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, shuffle_hints=True, flip_poses=True)
+        dataset_train = Kitti360CoarseDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], train_transform, shuffle_hints=True, flip_poses=True)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=args.shuffle)
 
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        dataset_val = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TEST, val_transform)
+        dataset_val = Kitti360CoarseDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], val_transform)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=False)    
 
     # train_words = dataset_train.get_known_words()
@@ -223,6 +224,9 @@ if __name__ == "__main__":
     for lr in learning_rates:
         model = CellRetrievalNetwork(dataset_train.get_known_classes(), COLOR_NAMES_K360, dataset_train.get_known_words(), args)
         model.to(device) 
+
+        torch.save(model, 'coarse_debug.pth')
+        quit()
 
         optimizer = optim.Adam(model.parameters(), lr=lr)
         if args.ranking_loss == 'pairwise':

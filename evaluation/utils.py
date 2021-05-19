@@ -1,6 +1,17 @@
 import numpy as np
 
-def eval_pose_accuracies(dataset, retrievals, pos_in_cell, top_k=[1,3,5], threshs=[30,]):
+def calc_sample_accuracies(pose_w, top_cells, pos_in_cell, top_k, threshs):
+    assert len(top_cells) == max(top_k) == len(pos_in_cell)
+    num_samples = len(top_cells)
+    
+    # Calc the pose-prediction in world coordinates for each cell
+    pred_w = np.array([top_cells[i].bbox_w[0:2] + pos_in_cell[i, :] * top_cells[i].cell_size for i in range(num_samples)])
+
+    # Calc the distances to the gt-pose
+    dists = np.linalg.norm(pose_w[0:2] - pred_w, axis=1)
+    return {k: {t: dists[0:k] <= t for t in threshs} for k in top_k}
+
+def depr_eval_pose_accuracies(dataset, retrievals, pos_in_cell, top_k=[1,3,5], threshs=[30,]):
     """
     Note: All done in 2D x-y / floor plane
 
@@ -14,7 +25,7 @@ def eval_pose_accuracies(dataset, retrievals, pos_in_cell, top_k=[1,3,5], thresh
     assert len(dataset) == len(retrievals) # A retrieval for each query
     assert len(dataset) == len(pos_in_cell) # An offset prediction for each cell
 
-    WEITER: Send in poses as List of objects, re-project accordingly. 
+    # WEITER: Send in poses as List of objects, re-project accordingly. 
     
     # For each cell, get the actual pose-prediciton in world-coordinates
     pose_preds = []

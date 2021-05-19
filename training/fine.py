@@ -30,7 +30,7 @@ from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 '''
 TODO:
 - Prevent opposite-direction matches!
-- Train on real train-data again
+- Train on real train-data again (Care to flip poses including hints!)
 - Aux. train color + class helpful?
 - Which augmentation: RandomFlips, RandomRotate, Nothing? -> Not much difference?
 - 512 points ok? -> 1024 maye slightly better but seems ok. Possibly re-check w/ aux-loss

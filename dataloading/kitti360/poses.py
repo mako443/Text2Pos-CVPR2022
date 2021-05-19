@@ -43,12 +43,14 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform):
     matched_ids = [descr.object_id for descr in descriptions if descr.is_matched]
     matched_objects = [cell_objects_dict[matched_id] for matched_id in matched_ids]
 
+    assert len(pose.descriptions) - pose.get_number_unmatched() == len(matched_objects)
+
     # Hints and descriptions have to be in same order
     for descr, hint in zip(descriptions, hints):
         assert descr.object_label in hint
 
     # Gather offsets
-    offsets = np.array([descr.offset_center for descr in descriptions])[:, 0:2]        
+    offsets = np.array([descr.offset_center for descr in descriptions])[:, 0:2]  
 
     # Gather matched objects
     objects, matches = [], [] # Matches as [(obj_idx, hint_idx)]
@@ -62,8 +64,6 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform):
             hint_idx = i_descr
             matches.append((obj_idx, hint_idx))
             
-    # TODO: add unmatched hints in all_matches!
-
     # Gather distractors, i.e. remaining objects
     for obj in cell.objects:
         if obj.id not in matched_ids:
