@@ -26,6 +26,7 @@ def parse_arguments():
     parser.add_argument('--num_mentioned', type=int, default=6)
     parser.add_argument('--pad_size', type=int, default=16)
     parser.add_argument('--describe_by', type=str, default='closest')
+    parser.add_argument('--conf_method', type=int, default=1)
 
     # Cell retrieval
     parser.add_argument('--margin', type=float, default=0.35) # Before: 0.5

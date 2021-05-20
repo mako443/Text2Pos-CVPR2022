@@ -84,7 +84,7 @@ def eval_conf(model, dataset):
         idx = np.random.randint(len(dataset))
         data = Kitti360CoarseDataset.collate_fn([dataset[idx], ])
         output = model(data['objects'], data['debug_hint_descriptions'], data['object_points'])
-        print(output.P[0])
+        print(output.P[0].type(torch.float16))
         conf = get_confidences(output.P.detach().cpu().numpy())
         assert len(conf) == 1
         confs.append(conf[0])
@@ -92,14 +92,13 @@ def eval_conf(model, dataset):
         for idx in np.random.randint(len(dataset), size=4):
             data = Kitti360CoarseDataset.collate_fn([dataset[idx], ])
             output = model(data['objects'], data['debug_hint_descriptions'], data['object_points'])
-            print(output.P[0])
+            print(output.P[0].type(torch.float16))
             conf = get_confidences(output.P.detach().cpu().numpy())
             assert len(conf) == 1
             confs.append(conf[0])
 
         print(confs)
         print('\n --- \n')
-        
 
         scores.append(np.argmax(confs) == 0)
     print('Score:', np.mean(scores))
@@ -115,34 +114,22 @@ def run_fine(model, retrievals, dataloader, args):
 
     t0 = time.time()
     # Obtain the matches, offsets and confidences for each pose vs. its top-cells
-    # TODO: Speed this up!
+    # Using a dataloader does not make it much faster ;)
     matches = []
     offsets = []
     confidences = []
     cell_ids = []
     poses_w = []
-    if not args.use_batching:
-        for i_sample, sample in enumerate(dataset_topk):
-            output = model(sample['objects'], sample['hint_descriptions'], sample['object_points'])
-            matches.append(output.matches0.detach().cpu().numpy())
-            offsets.append(output.offsets.detach().cpu().numpy())
-            confs = get_confidences(output.P.detach().cpu().numpy())
-            assert len(confs) == num_samples
-            confidences.append(confs)
-            
-            cell_ids.append([cell.id for cell in sample['cells']])
-            poses_w.append(sample['poses'][0].pose_w)
-    else:
-        for i_batch, batch in enumerate(dataloader_topk):
-            output = model(batch['objects'], batch['hint_descriptions'], batch['object_points'])
-            batch_size = len(batch['poses'])
-            assert batch_size % num_samples == 0
-            for i_sample in range(batch_size // num_samples):
-                matches.append(output.matches0.detach().cpu().numpy()[i_sample * num_samples : (i_sample + 1) * num_samples])
-                offsets.append(output.offsets.detach().cpu().numpy()[i_sample * num_samples : (i_sample + 1) * num_samples])
-
-                cell_ids.append([cell.id for cell in batch['cells'][i_sample * num_samples : (i_sample + 1) * num_samples]])
-                poses_w.append(batch['poses'][i_sample * num_samples].pose_w)
+    for i_sample, sample in enumerate(dataset_topk):
+        output = model(sample['objects'], sample['hint_descriptions'], sample['object_points'])
+        matches.append(output.matches0.detach().cpu().numpy())
+        offsets.append(output.offsets.detach().cpu().numpy())
+        confs = get_confidences(output.P.detach().cpu().numpy())
+        assert len(confs) == num_samples
+        confidences.append(confs)
+        
+        cell_ids.append([cell.id for cell in sample['cells']])
+        poses_w.append(sample['poses'][0].pose_w)
 
     assert len(matches) == len(offsets) == len(retrievals)
     cell_ids = np.array(cell_ids)

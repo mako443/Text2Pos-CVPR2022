@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 from easydict import EasyDict
+import os
 import os.path as osp
 
 from models.cell_retrieval import CellRetrievalNetwork
@@ -182,8 +183,8 @@ if __name__ == "__main__":
     dataset_name = dataset_name.split('/')[-1]
     print(f'Directory: {dataset_name}')
 
-    plot_name = f'Coarse-{dataset_name}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_em{args.pointnet_embed}_p{args.pointnet_numpoints}_freeze{args.pointnet_freeze}_m{args.margin:0.2f}_s{args.shuffle}_g{args.lr_gamma}.png'    
-    print('Plot:', plot_name, '\n')
+    plot_path = f'./plots/{dataset_name}/Coarse-bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_em{args.pointnet_embed}_p{args.pointnet_numpoints}_freeze{args.pointnet_freeze}_m{args.margin:0.2f}_s{args.shuffle}_g{args.lr_gamma}.png'    
+    print('Plot:', plot_path, '\n')
 
     # WEITER: care time / epochs, args.describe_best_cell
 
@@ -225,9 +226,6 @@ if __name__ == "__main__":
         model = CellRetrievalNetwork(dataset_train.get_known_classes(), COLOR_NAMES_K360, dataset_train.get_known_words(), args)
         model.to(device) 
 
-        torch.save(model, 'coarse_debug.pth')
-        quit()
-
         optimizer = optim.Adam(model.parameters(), lr=lr)
         if args.ranking_loss == 'pairwise':
             criterion = PairwiseRankingLoss(margin=args.margin)
@@ -268,7 +266,10 @@ if __name__ == "__main__":
         # Saving best model (w/o early stopping)
         acc = val_acc[max(args.top_k)]
         if acc > best_val_accuracy:
-            model_path = f"./checkpoints/coarse_{dataset_name}_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"
+            model_path = f"./checkpoints/{dataset_name}/coarse_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"
+            if not osp.isdir(osp.dirname(model_path)):
+                os.mkdir(osp.dirname(model_path))
+
             print(f'Saving model at {acc:0.2f} to {model_path}')
             try:
                 torch.save(model, model_path)
@@ -290,5 +291,7 @@ if __name__ == "__main__":
         **train_accs,
         **val_accs,
     }
-    plot_metrics(metrics, './plots/'+plot_name)    
+    if not osp.isdir(osp.dirname(plot_path)):
+        os.mkdir(osp.dirname(plot_path))    
+    plot_metrics(metrics, './plots/'+plot_path)    
 

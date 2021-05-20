@@ -179,6 +179,9 @@ class SuperGlueMatch(torch.nn.Module):
         outputs.matches0 = matcher_output['matches0']
         outputs.matches1 = matcher_output['matches1']
         outputs.offsets = offsets
+
+        outputs.matching_scores0 = matcher_output['matching_scores0']
+        outputs.matching_scores1 = matcher_output['matching_scores1']
         # outputs.class_preds = object_class_preds
         # outputs.color_preds = object_color_preds
 

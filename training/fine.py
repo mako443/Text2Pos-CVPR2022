@@ -9,6 +9,7 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 from easydict import EasyDict
+import os
 import os.path as osp
 
 from models.superglue_matcher import SuperGlueMatch
@@ -29,24 +30,24 @@ from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
 TODO:
-- Prevent opposite-direction matches!
-- Train on real train-data again (Care to flip poses including hints!)
-- Aux. train color + class helpful?
-- Which augmentation: RandomFlips, RandomRotate, Nothing? -> Not much difference?
-- 512 points ok? -> 1024 maye slightly better but seems ok. Possibly re-check w/ aux-loss
-- Merge differently / variations?
-- Pre-train helpful?
-- Handle or discuss objects gt-selection / overflow. 32 would be enough for most
-
+- Train on real train-data again (Care to flip poses/cells including hints!)
 - compare mean/offset accuracies with closest/center in offset-pred and pos_in_cell
+
+- Handle or discuss objects gt-selection / overflow. 32 would be enough for most
+- Merge differently / variations?
+
+- Which augmentation: RandomFlips, RandomRotate, Nothing? -> Not much difference?
+- Aux. train color + class helpful?
 
 - Refactoring: train (on-top, classes, center/closest point, color rgb/text, )
 - feature ablation
 - regress offsets: is error more in direction or magnitude? optimize?
 - Pad at (0.5,0.5) for less harmfull miss-matches?
-- Variable num_mentioned? (Care also at other places, potentially use lists there)
 
 NOTES:
+- Pre-train helpful? -> Apparently safer
+- 512 points ok? -> 1024 maye slightly better but seems ok. Possibly re-check w/ aux-loss
+- Prevent opposite-direction matches! -> Done with offset_closest comparison
 - Random number of pads/distractors: acc. improved ✓
 - Keep PN frozen? -> Bad
 '''
@@ -130,6 +131,49 @@ def eval_epoch(model, dataloader, args):
         stats[key] = np.mean(stats[key])
     return stats
 
+def get_conf1(P):
+    return np.sum(P[:, 0:-1, 0:-1])
+
+def get_conf2(output):
+    matching_scores = output.matching_scores0
+    if len(matching_scores) == 0:
+        return 0.0
+    else:
+        return matching_scores.sum().item()
+
+@torch.no_grad()
+def eval_conf(model, dataset, args):
+    accs = []
+    for i_sample in range(100):
+        confs = []
+
+        idx = np.random.randint(len(dataset))
+        data = Kitti360FineDataset.collate_fn([dataset[idx], ])
+        hints = data['hint_descriptions']
+        output = model(data['objects'], hints, data['object_points'])
+        if args.conf_method == 1:
+            confs.append(get_conf1(output.P.detach().cpu().numpy()))
+        if args.conf_method == 2:
+            confs.append(get_conf2(output))            
+
+        for _ in range(4):
+            idx = np.random.randint(len(dataset))
+            data = Kitti360FineDataset.collate_fn([dataset[idx], ])
+            hints = data['hint_descriptions']
+            output = model(data['objects'], hints, data['object_points'])
+            if args.conf_method == 1:
+                confs.append(get_conf1(output.P.detach().cpu().numpy()))
+            if args.conf_method == 2:
+                confs.append(get_conf2(output))  
+
+        if i_sample % 10 == 0:
+            print(np.float16(confs))
+
+        accs.append(np.argmax(confs) == 0)
+
+    print('Conf score:', np.mean(accs))
+
+
 if __name__ == "__main__":
     args = parse_arguments()
     print(str(args).replace(',','\n'), '\n')
@@ -138,16 +182,19 @@ if __name__ == "__main__":
     dataset_name = dataset_name.split('/')[-1]
     print(f'Directory: {dataset_name}')
 
-    plot_name = f'Fine-{dataset_name}_bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
-    print('Plot:', plot_name, '\n')
+    plot_path = f'./plots/{dataset_name}/Fine-bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
+    print('Plot:', plot_path, '\n')
+
+    # Eval conf: sums and matching-confs. Use FineDatasetMulti
 
     '''
     Create data loaders
     '''    
     if args.dataset == 'K360':
         train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])
-        dataset_train = Kitti360FineSyntheticDataset(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, length=1024, fixed_seed=False)
-        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360FineSyntheticDataset.collate_fn)
+        # dataset_train = Kitti360FineSyntheticDataset(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, length=1024, fixed_seed=False)
+        dataset_train = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, args)
+        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360FineSyntheticDataset.collate_fn, shuffle=args.shuffle)
 
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
         dataset_val = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TEST, val_transform, args)
@@ -177,7 +224,7 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_rates = np.logspace(-3.0, -4.0 ,3) #[args.lr_idx : args.lr_idx + 1] # Larger than -3 throws error (even with warm-up)
+    learning_rates = np.logspace(-3.0, -4.0 ,3)[0:1] #[args.lr_idx : args.lr_idx + 1] # Larger than -3 throws error (even with warm-up)
 
     train_stats_loss = {lr: [] for lr in learning_rates}
     train_stats_loss_offsets = {lr: [] for lr in learning_rates}
@@ -209,7 +256,7 @@ if __name__ == "__main__":
         for epoch in range(args.epochs):
             if epoch==3:
                 optimizer = optim.Adam(model.parameters(), lr=lr)
-                scheduler = optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)            
+                scheduler = optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)     
 
             # loss, train_recall, train_precision, epoch_time = train_epoch(model, dataloader_train, args)
             train_out = train_epoch(model, dataloader_train, args)
@@ -227,7 +274,11 @@ if __name__ == "__main__":
             val_stats_precision[lr].append(val_out.precision)     
             val_stats_pose_mid[lr].append(val_out.pose_mid)
             val_stats_pose_mean[lr].append(val_out.pose_mean)
-            val_stats_pose_offsets[lr].append(val_out.pose_offsets)                   
+            val_stats_pose_offsets[lr].append(val_out.pose_offsets)   
+
+            print()
+            eval_conf(model, dataset_val, args)            
+            print()
 
             if scheduler: 
                 scheduler.step()
@@ -241,7 +292,10 @@ if __name__ == "__main__":
 
         acc = np.mean((val_out.recall, val_out.precision))
         if acc > best_val_recallPrecision:
-            model_path = f"./checkpoints/fine_{dataset_name}_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"
+            model_path = f"./checkpoints/{dataset_name}/fine_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"
+            if not osp.isdir(osp.dirname(model_path)):
+                os.mkdir(osp.dirname(model_path))
+
             print('Saving model to', model_path)
             try:
                 torch.save(model, model_path)
@@ -266,6 +320,8 @@ if __name__ == "__main__":
         'val-pose_mean': val_stats_pose_mean,
         'val-pose_offsets': val_stats_pose_offsets,      
     }
-    plot_metrics(metrics, './plots/'+plot_name)        
+    if not osp.isdir(osp.dirname(plot_path)):
+        os.mkdir(osp.dirname(plot_path))
+    plot_metrics(metrics, plot_path)        
 
     
