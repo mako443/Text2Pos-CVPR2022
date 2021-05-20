@@ -133,7 +133,7 @@ class Kitti360FineSyntheticDataset(Dataset):
         descriptions, pose_in_cell, _ = ground_pose_to_best_cell(pose_w, descriptions, best_cell)
         assert np.allclose(pose_in_cell, pose_w)
 
-        pose = Pose(pose_in_cell, pose_w, best_cell.id, descriptions)
+        pose = Pose(pose_in_cell, pose_w, best_cell.id, "synt", descriptions)
 
         # Debuggings
         if False:

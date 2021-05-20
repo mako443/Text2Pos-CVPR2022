@@ -39,7 +39,7 @@ class Kitti360TopKDataset(Dataset):
         # Cut-off objects
         # TODO: Matching possible if best-cell, otherwise just ignore. Pad_size 16 or 32 ok?
         if len(objects) > self.args.pad_size:
-            print('Objects overflow: ', len(objects))
+            # print('Objects overflow: ', len(objects))
             objects = objects[0 : self.args.pad_size]
 
         while len(objects) < self.args.pad_size:
@@ -53,7 +53,8 @@ class Kitti360TopKDataset(Dataset):
             'poses': pose,
             'objects': objects,
             'object_points': object_points,
-            'hint_descriptions': hint_descriptions
+            'hint_descriptions': hint_descriptions,
+            'cells': cell
         }
 
     def __getitem__(self, idx):
@@ -62,7 +63,7 @@ class Kitti360TopKDataset(Dataset):
         pose = self.poses[idx]
         retrievals = self.retrievals[idx]
 
-        return Kitti360TopKDataset.collate_fn([
+        return Kitti360TopKDataset.collate_append([
             self.load_pose_and_cell(pose, self.cells_dict[cell_id]) for cell_id in retrievals
         ])
 
@@ -70,11 +71,20 @@ class Kitti360TopKDataset(Dataset):
     def __len__(self):
         return len(self.poses)
 
-    def collate_fn(data):
+    def collate_append(data):
         batch = {}
         for key in data[0].keys():
             batch[key] = [data[i][key] for i in range(len(data))]
         return batch    
+
+    def collate_extend(data):
+        batch = {}
+        for key in data[0].keys():
+            batch[key] = []
+            for i in range(len(data)):
+                assert isinstance(data[i][key], list)
+                batch[key].extend(data[i][key])
+        return batch 
 
 if __name__ == '__main__':
     from dataloading.kitti360.cells import Kitti360CoarseDatasetMulti
@@ -94,5 +104,5 @@ if __name__ == '__main__':
     dataset = Kitti360TopKDataset(dataset_coarse.all_poses, dataset_coarse.all_cells, retrievals, transform, args)
     data = dataset[0]
 
-    loader = DataLoader(dataset, batch_size=1, collate_fn=Kitti360TopKDataset.collate_fn)
-    data = next(iter(loader))
+    loader = DataLoader(dataset, batch_size=2, collate_fn=Kitti360TopKDataset.collate_extend)
+    batch = next(iter(loader))

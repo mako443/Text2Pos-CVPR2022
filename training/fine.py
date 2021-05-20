@@ -36,6 +36,7 @@ TODO:
 - 512 points ok? -> 1024 maye slightly better but seems ok. Possibly re-check w/ aux-loss
 - Merge differently / variations?
 - Pre-train helpful?
+- Handle or discuss objects gt-selection / overflow. 32 would be enough for most
 
 - compare mean/offset accuracies with closest/center in offset-pred and pos_in_cell
 

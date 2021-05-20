@@ -63,7 +63,8 @@ class Kitti360CoarseDataset(Kitti360BaseDataset):
             'cell_ids': pose.cell_id,
             'scene_names': self.scene_name,
             'object_class_indices': object_class_indices,
-            'object_color_indices': object_color_indices            
+            'object_color_indices': object_color_indices,
+            'debug_hint_descriptions': hints # Care: Not shuffled etc! 
         } 
 
     def __len__(self):

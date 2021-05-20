@@ -305,7 +305,7 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
         if args.describe_best_cell:
             assert num_unmatched == 0, "Unmatched descriptors for best cell!"
 
-        pose = Pose(pose_in_cell, location, best_cell.id, descriptions)
+        pose = Pose(pose_in_cell, location, best_cell.id, best_cell.scene_name, descriptions)
         poses.append(pose)
 
     print(f'None poses: {len(none_indices)} / {len(locations)}, avg. unmatched: {np.mean(unmatched_counts):0.1f}')
@@ -368,7 +368,7 @@ if __name__ == '__main__':
     pose_cell = create_cell(-1, "pose", pose_cell_bbox, objects)   
     descriptions = describe_pose_in_pose_cell(pose.pose_w, pose_cell, args.describe_by, args.num_mentioned) 
     descriptions, pose_in_cell, num_unmatched = ground_pose_to_best_cell(pose.pose_w, descriptions, pose_cell)
-    pose_pose = Pose(pose_in_cell, pose.pose_w, best_cell.id, descriptions)
+    pose_pose = Pose(pose_in_cell, pose.pose_w, best_cell.id, best_cell.scene_name, descriptions)
     img_pose = plot_pose_in_best_cell(pose_cell, pose_pose)
 
     quit()

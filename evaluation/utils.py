@@ -1,15 +1,24 @@
 import numpy as np
 
-def calc_sample_accuracies(pose_w, top_cells, pos_in_cell, top_k, threshs):
-    assert len(top_cells) == max(top_k) == len(pos_in_cell)
+def calc_sample_accuracies(pose, top_cells, pos_in_cells, top_k, threshs):
+    pose_w = pose.pose_w
+    assert len(top_cells) == max(top_k) == len(pos_in_cells)
     num_samples = len(top_cells)
     
     # Calc the pose-prediction in world coordinates for each cell
-    pred_w = np.array([top_cells[i].bbox_w[0:2] + pos_in_cell[i, :] * top_cells[i].cell_size for i in range(num_samples)])
+    pred_w = np.array([top_cells[i].bbox_w[0:2] + pos_in_cells[i, :] * top_cells[i].cell_size for i in range(num_samples)])
 
     # Calc the distances to the gt-pose
     dists = np.linalg.norm(pose_w[0:2] - pred_w, axis=1)
-    return {k: {t: dists[0:k] <= t for t in threshs} for k in top_k}
+    assert len(dists) == max(top_k)
+
+    # Discard close-by distances from different scenes
+    pose_scene_name = pose.cell_id.split('_')[0]
+    cell_scene_names = np.array([cell.id.split('_')[0] for cell in top_cells])
+    dists[pose_scene_name != cell_scene_names] = np.inf
+
+    # Calculate the accuracy: is one of the top-k dists small enough?
+    return {k: {t: np.min(dists[0:k]) <= t for t in threshs} for k in top_k}
 
 def depr_eval_pose_accuracies(dataset, retrievals, pos_in_cell, top_k=[1,3,5], threshs=[30,]):
     """
@@ -56,12 +65,12 @@ def depr_eval_pose_accuracies(dataset, retrievals, pos_in_cell, top_k=[1,3,5], t
 
     return accuracies
 
-def print_accuracies(accuracies):
-    print('\n\t Accuracies:')
+def print_accuracies(accuracies, name=""):
+    print(f'\n\t Accuracies {name}:')
     for t in accuracies:
-        print(f'{t:2.0f}: ', end="")
+        print(f'{t:2.0f}:\t', end="")
         for k in accuracies[t]:
-            print(f'{k:2.0f}: {accuracies[t][k]:0.2f}', end="")
+            print(f'{k:2.0f}: {accuracies[t][k]:0.2f}\t', end="")
         print()
 
         
