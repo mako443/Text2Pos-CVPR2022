@@ -84,12 +84,12 @@ class Kitti360TopKDataset(Dataset):
             for i in range(len(data)):
                 assert isinstance(data[i][key], list)
                 batch[key].extend(data[i][key])
-        return batch 
+        return batch
 
 if __name__ == '__main__':
     from dataloading.kitti360.cells import Kitti360CoarseDatasetMulti
 
-    base_path = './data/k360_cs30_cd15_scY_pd10_pc1_spY'
+    base_path = './data/k360_cs30_cd15_scY_pd10_pc1_spY_closest'
     folder_name = '2013_05_28_drive_0003_sync'    
 
     args = EasyDict(pad_size=16, top_k=(1, 3, 5))
@@ -104,5 +104,5 @@ if __name__ == '__main__':
     dataset = Kitti360TopKDataset(dataset_coarse.all_poses, dataset_coarse.all_cells, retrievals, transform, args)
     data = dataset[0]
 
-    loader = DataLoader(dataset, batch_size=2, collate_fn=Kitti360TopKDataset.collate_extend)
+    loader = DataLoader(dataset, batch_size=2, collate_fn=Kitti360TopKDataset.collate_append)
     batch = next(iter(loader))

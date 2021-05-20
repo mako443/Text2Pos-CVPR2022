@@ -6,6 +6,7 @@ import pickle
 import numpy as np
 import cv2
 from easydict import EasyDict
+from numpy.lib.function_base import flip
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -17,25 +18,9 @@ from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS
 from datapreparation.kitti360.imports import Object3d, Cell, Pose
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
+from dataloading.kitti360.utils import batch_object_points, flip_pose_in_cell
 
-def batch_object_points(objects: List[Object3d], transform):
-    """Generates a PyG-Batch for the objects of a single cell.
-    Note: Aggregating an entire batch of cells into a single PyG-Batch would exceed the limit of 256 sub-graphs.
-    Note: The objects can be transformed / augmented freely, as their center-points are encoded separately.
-
-    Args:
-        objects (List[Object3d]): Cell objects
-        transform: PyG-Transform
-    """
-    # CARE: Transforms not working with batches?! Doing it object-by-object here!
-    data_list = [Data(x=torch.tensor(obj.rgb, dtype=torch.float), pos=torch.tensor(obj.xyz, dtype=torch.float)) for obj in objects]
-    for i in range(len(data_list)):
-        data_list[i] = transform(data_list[i])
-
-    batch = Batch.from_data_list(data_list)
-    return batch
-
-def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform):
+def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, flip_pose=False):
     assert pose.cell_id == cell.id
 
     descriptions = pose.descriptions
@@ -126,12 +111,20 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform):
     # matches, all_matches = np.array(matches), np.array(all_matches)
     # assert np.sum(all_matches[:, 1] == len(descriptions)) == len(objects) - len(descriptions)
 
+    text = ' '.join(hints)
+
+    # TODO: flip here. This does not affect the the order and matches.
+    # Flip objects, hint_descriptions, object_points, offsets, pose
+    if flip_pose:
+        if np.random.choice((True,False)):
+            pose, cell, text, hints, offsets = flip_pose_in_cell(pose, cell, text, 1, hints, offsets) # Horizontal
+        if np.random.choice((True,False)):
+            pose, cell, text, hints, offsets = flip_pose_in_cell(pose, cell, text, -1, hints, offsets) # Vertical
+
     object_points = batch_object_points(objects, transform)
 
     object_class_indices = [CLASS_TO_INDEX[obj.label] for obj in objects]
     object_color_indices = [COLOR_NAMES.index(obj.get_color_text()) for obj in objects]        
-
-    text = ' '.join(hints)
 
     return {
         'poses': pose,
@@ -148,25 +141,27 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform):
     }            
 
 class Kitti360FineDataset(Kitti360BaseDataset):
-    def __init__(self, base_path, scene_name, transform, args):
+    def __init__(self, base_path, scene_name, transform, args, flip_pose=False):
         super().__init__(base_path, scene_name)
         self.pad_size = args.pad_size
         self.transform = transform
+        self.flip_pose = flip_pose
 
     def __getitem__(self, idx):
         pose = self.poses[idx]
         cell = self.cells_dict[pose.cell_id]
         hints = self.hint_descriptions[idx]
         
-        return load_pose_and_cell(pose, cell, hints, self.pad_size, self.transform)
+        return load_pose_and_cell(pose, cell, hints, self.pad_size, self.transform, self.flip_pose)
 
     def __len__(self):
         return len(self.poses)
 
 class Kitti360FineDatasetMulti(Dataset):
-    def __init__(self, base_path, scene_names, transform, args):
+    def __init__(self, base_path, scene_names, transform, args, flip_pose=False):
         self.scene_names = scene_names
-        self.datasets = [Kitti360FineDataset(base_path, scene_name, transform, args) for scene_name in scene_names]
+        self.flip_pose = flip_pose
+        self.datasets = [Kitti360FineDataset(base_path, scene_name, transform, args, flip_pose) for scene_name in scene_names]
 
         print(str(self))
 
@@ -181,7 +176,7 @@ class Kitti360FineDatasetMulti(Dataset):
         assert False
 
     def __repr__(self):
-        return f'Kitti360FineDatasetMulti: {len(self)} poses from {len(self.datasets)} scenes.'
+        return f'Kitti360FineDatasetMulti: {len(self)} poses from {len(self.datasets)} scenes, flip: {self.flip_pose}.'
 
     def __len__(self):
         return np.sum([len(ds) for ds in self.datasets])
