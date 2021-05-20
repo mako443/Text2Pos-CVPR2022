@@ -358,18 +358,19 @@ if __name__ == '__main__':
     assert res is True, "Too many pose nones, quitting."
 
     '''
-    Debug
+    # Debug
     cells_dict = {cell.id: cell for cell in cells}
     pose = poses[0]
     best_cell = cells_dict[pose.cell_id]
     img_best = plot_pose_in_best_cell(best_cell, pose)
-       
+
     pose_cell_bbox = np.hstack((pose.pose_w - args.cell_size/2, pose.pose_w + args.cell_size/2))
     pose_cell = create_cell(-1, "pose", pose_cell_bbox, objects)   
     descriptions = describe_pose_in_pose_cell(pose.pose_w, pose_cell, args.describe_by, args.num_mentioned) 
     descriptions, pose_in_cell, num_unmatched = ground_pose_to_best_cell(pose.pose_w, descriptions, pose_cell)
     pose_pose = Pose(pose_in_cell, pose.pose_w, best_cell.id, descriptions)
     img_pose = plot_pose_in_best_cell(pose_cell, pose_pose)
+
     quit()
     '''
 

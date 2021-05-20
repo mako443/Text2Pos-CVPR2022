@@ -120,7 +120,10 @@ class Kitti360CoarseDatasetMulti(Dataset):
         self.transform = transform
         self.flip_poses = flip_poses
         self.datasets = [Kitti360CoarseDataset(base_path, scene_name, transform, shuffle_hints, flip_poses) for scene_name in scene_names]
-        self.all_cells = [cell for dataset in self.datasets for cell in dataset.cells] # Gathering cells for retrieval plotting
+        
+        self.all_cells = [cell for dataset in self.datasets for cell in dataset.cells] # For cell-only dataset
+        self.all_poses = [pose for dataset in self.datasets for pose in dataset.poses] # For eval
+
 
         cell_ids = [cell.id for cell in self.all_cells]
         assert len(np.unique(cell_ids)) == len(self.all_cells) # IDs should not repeat
