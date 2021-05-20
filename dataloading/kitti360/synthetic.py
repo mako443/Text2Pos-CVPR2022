@@ -43,14 +43,13 @@ class Kitti360FineSyntheticDataset(Dataset):
         self.transform = transform
         self.pad_size = args.pad_size
         self.num_mentioned = args.num_mentioned
+        self.describe_by = args.describe_by
         self.length = length
         self.fixed_seed = fixed_seed
         self.colors = COLORS
         self.color_names = COLOR_NAMES 
 
-        print('\n CARE WHICH SYNTHETIC DESCRIBE STRATEGY! \n')
-
-        print(f'Kitti360FineSyntheticDataset, fixed seed: {fixed_seed}, length: {length}, sampling from {len(objects_dataset)} objects')    
+        print(f'Kitti360FineSyntheticDataset, fixed seed: {fixed_seed}, length: {length}, sampling from {len(objects_dataset)} objects, describe {self.describe_by}')    
 
     def create_synthetic_cell_and_pose(self):
         """Create a synthetic cell for fine localization training.
@@ -117,7 +116,7 @@ class Kitti360FineSyntheticDataset(Dataset):
         assert np.allclose(pose_cell.cell_size, 1.0)            
 
         # Describe in pose-cell with all objects
-        descriptions = describe_pose_in_pose_cell(pose_w, pose_cell, 'closest', self.num_mentioned, max_dist=np.inf) # Use max-dist here since cells have same bbox anyhow (objects explicitly deleted)
+        descriptions = describe_pose_in_pose_cell(pose_w, pose_cell, self.describe_by, self.num_mentioned, max_dist=np.inf) # Use max-dist here since cells have same bbox anyhow (objects explicitly deleted)
 
         # Randomly delete up to num_mentiond / 2 of the matched objects to create objects-side bins.
         num_delete = np.random.randint(self.num_mentioned / 2 + 1)

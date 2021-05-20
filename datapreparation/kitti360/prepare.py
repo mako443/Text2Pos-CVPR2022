@@ -1,6 +1,6 @@
 from typing import List
 
-import cv2
+# import cv2
 import os
 import os.path as osp
 import numpy as np
@@ -316,11 +316,11 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
 
 if __name__ == '__main__':
     np.random.seed(4096) # Set seed to re-produce results
-    
+
     # 2013_05_28_drive_0003_sync
     args = parse_arguments()
     print(str(args).replace(',','\n'))
-    print()
+    print()   
 
     cell_locations, cell_location_objects = create_locations(args.path_in, args.scene_name, location_distance=args.cell_dist, return_location_objects=True)        
     pose_locations, pose_location_objects = create_locations(args.path_in, args.scene_name, location_distance=args.pose_dist, return_location_objects=True)        
@@ -357,20 +357,21 @@ if __name__ == '__main__':
     res, poses = create_poses(objects, pose_locations, cells, args)
     assert res is True, "Too many pose nones, quitting."
 
-    # Debug
+    '''
+    Debug
     cells_dict = {cell.id: cell for cell in cells}
     pose = poses[0]
     best_cell = cells_dict[pose.cell_id]
     img_best = plot_pose_in_best_cell(best_cell, pose)
-
+       
     pose_cell_bbox = np.hstack((pose.pose_w - args.cell_size/2, pose.pose_w + args.cell_size/2))
     pose_cell = create_cell(-1, "pose", pose_cell_bbox, objects)   
     descriptions = describe_pose_in_pose_cell(pose.pose_w, pose_cell, args.describe_by, args.num_mentioned) 
     descriptions, pose_in_cell, num_unmatched = ground_pose_to_best_cell(pose.pose_w, descriptions, pose_cell)
     pose_pose = Pose(pose_in_cell, pose.pose_w, best_cell.id, descriptions)
     img_pose = plot_pose_in_best_cell(pose_cell, pose_pose)
-
     quit()
+    '''
 
     t_poses_created = time.time()
 
@@ -393,4 +394,4 @@ if __name__ == '__main__':
     print(pose.get_text())
 
     img = plot_pose_in_best_cell(cell, pose)
-    cv2.imwrite(f'cell_demo_idx{idx}.png', img)
+    cv2.imwrite(f'cell_{args.describe_by}_idx{idx}.png', img)
