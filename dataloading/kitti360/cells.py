@@ -17,7 +17,7 @@ from datapreparation.kitti360.utils import CLASS_TO_INDEX, COLOR_NAMES
 from datapreparation.kitti360.imports import Object3d, Cell, Pose
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell, plot_pose_in_best_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
-from dataloading.kitti360.poses import batch_object_points
+from dataloading.kitti360.utils import batch_object_points, flip_pose_in_cell
 
 '''
 Augmentations:
@@ -68,51 +68,6 @@ class Kitti360CoarseDataset(Kitti360BaseDataset):
 
     def __len__(self):
         return len(self.poses)
-
-# TODO: for free orientations, possibly flip cell only, create descriptions and hints again
-# OR: numeric vectors in descriptions, flip cell objects and description.direction, then create hints again
-# Flip pose, too?
-def flip_pose_in_cell(pose: Pose, cell: Cell, text, direction):
-    """Flips the cell horizontally or vertically
-    CARE: Needs adjustment for non-compass directions
-    CARE: Description.object_closest_point is flipped but direction in description is not flipped.
-
-    Args:
-        pose (Pose): The pose to flip, is copied before modification    
-        cell (Cell): The cell to flip, is copied before modification
-        text (str): The text description to flip
-        direction (int): Horizontally (+1) or vertically (-1)
-
-    Returns:
-        Pose: flipped pose
-        Cell: flipped cell
-        str: flipped text
-    """
-    assert direction in (-1, 1)
-
-    pose = deepcopy(pose)
-    cell = deepcopy(cell)
-
-    if direction == 1: #Horizontally
-        pose.pose[0] = 1.0 - pose.pose[0]
-        for obj in cell.objects:
-            obj.xyz[:, 0] = 1 - obj.xyz[:, 0]
-        for descr in pose.descriptions:
-            descr.closest_point[0] = 1.0 - descr.closest_point[0]
-
-        text = text.replace('east','east-flipped').replace('west','east').replace('east-flipped', 'west')
-    elif direction == -1: #Vertically
-        pose.pose[1] = 1.0 - pose.pose[1]
-        for obj in cell.objects:
-            obj.xyz[:, 1] = 1 - obj.xyz[:, 1]
-        for descr in pose.descriptions:
-            descr.closest_point[1] = 1.0 - descr.closest_point[1]            
-              
-        text = text.replace('north', 'north-flipped'). replace('south', 'north').replace('north-flipped', 'south')
-
-    assert 'flipped' not in text
-
-    return pose, cell, text
     
 class Kitti360CoarseDatasetMulti(Dataset):
     def __init__(self, base_path, scene_names, transform, shuffle_hints=False, flip_poses=False):
@@ -188,7 +143,7 @@ class Kitti360CoarseCellOnlyDataset(Dataset):
         return len(self.cells)        
 
 if __name__ == '__main__':
-    base_path = './data/k360_decouple'
+    base_path = './data/k360_cs30_cd15_scY_pd10_pc1_spY_closest'
     folder_name = '2013_05_28_drive_0003_sync'    
 
     transform = T.FixedPoints(256)
@@ -196,4 +151,6 @@ if __name__ == '__main__':
     dataset = Kitti360CoarseDatasetMulti(base_path, [folder_name, ], transform, shuffle_hints=False, flip_poses=False)
     data = dataset[0]
     pose, cell, text = data['poses'], data['cells'], data['texts']
-    pose_f, cell_f, text_f = flip_pose_in_cell(pose, cell, text, 1)
+    offsets = np.array([descr.offset_closest for descr in pose.descriptions])
+    hints = text.split('.')
+    pose_f, cell_f, text_f, hints_f, offsets_f = flip_pose_in_cell(pose, cell, text, 1, hints=hints, offsets=offsets)

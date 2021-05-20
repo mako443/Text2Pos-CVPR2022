@@ -62,7 +62,7 @@ class Kitti360TopKDataset(Dataset):
         pose = self.poses[idx]
         retrievals = self.retrievals[idx]
 
-        return Kitti360TopKDataset.collate_fn([
+        return Kitti360TopKDataset.collate_append([
             self.load_pose_and_cell(pose, self.cells_dict[cell_id]) for cell_id in retrievals
         ])
 
@@ -70,16 +70,25 @@ class Kitti360TopKDataset(Dataset):
     def __len__(self):
         return len(self.poses)
 
-    def collate_fn(data):
+    def collate_append(data):
         batch = {}
         for key in data[0].keys():
             batch[key] = [data[i][key] for i in range(len(data))]
         return batch    
 
+    def collate_extend(data):
+        batch = {}
+        for key in data[0].keys():
+            batch[key] = []
+            for i in range(len(data)):
+                assert isinstance(data[i][key], list)
+                batch[key].extend(data[i][key])
+        return batch
+
 if __name__ == '__main__':
     from dataloading.kitti360.cells import Kitti360CoarseDatasetMulti
 
-    base_path = './data/k360_cs30_cd15_scY_pd10_pc1_spY'
+    base_path = './data/k360_cs30_cd15_scY_pd10_pc1_spY_closest'
     folder_name = '2013_05_28_drive_0003_sync'    
 
     args = EasyDict(pad_size=16, top_k=(1, 3, 5))
@@ -94,5 +103,5 @@ if __name__ == '__main__':
     dataset = Kitti360TopKDataset(dataset_coarse.all_poses, dataset_coarse.all_cells, retrievals, transform, args)
     data = dataset[0]
 
-    loader = DataLoader(dataset, batch_size=1, collate_fn=Kitti360TopKDataset.collate_fn)
-    data = next(iter(loader))
+    loader = DataLoader(dataset, batch_size=2, collate_fn=Kitti360TopKDataset.collate_append)
+    batch = next(iter(loader))
