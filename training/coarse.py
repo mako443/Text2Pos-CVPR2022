@@ -25,9 +25,15 @@ from training.losses import MatchingLoss, PairwiseRankingLoss, HardestRankingLos
 from training.utils import plot_retrievals
 
 '''
+RESULTS:
+-
+
 TODO:
+- Train w/ near-enough cells (also flip or no flip)
+- Eval vs. closest cells -> Values worse?!?!
+
 - Remove identical negative? (If necessary, just remove one of the samples -.-)
-- Train w/ all possible cells (0.5+ matched / near enough)? Should not need grounding to non-best cells!
+
 - Variate cell-sizes
 - Variate closest / mid / pose-cell / best-cell
 - Check note in eval_epoch
@@ -122,18 +128,22 @@ def eval_epoch(model, dataloader, args):
 
     model.eval() # Now eval() seems to increase results
     accuracies = {k: [] for k in args.top_k}
+    accuracies_close = {k: [] for k in args.top_k}
 
     # TODO: Use this again if batches!
     # num_samples = len(dataloader.dataset) if isinstance(dataloader, DataLoader) else np.sum([len(batch['texts']) for batch in dataloader]) 
 
     cells_dataset = dataloader.dataset.get_cell_dataset()
     cells_dataloader = DataLoader(cells_dataset, batch_size=args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=False)
+    cells_dict = {cell.id: cell for cell in cells_dataset.cells}
+    cell_size = cells_dataset.cells[0].cell_size
 
     cell_encodings = np.zeros((len(cells_dataset), model.embed_dim))
     db_cell_ids = np.zeros(len(cells_dataset), dtype='<U32')
 
     text_encodings = np.zeros((len(dataloader.dataset), model.embed_dim))
     query_cell_ids = np.zeros(len(dataloader.dataset), dtype='<U32')
+    query_poses_w = np.array([pose.pose_w[0:2] for pose in dataloader.dataset.all_poses])
 
     # Encode the query side
     index_offset = 0
@@ -164,17 +174,27 @@ def eval_epoch(model, dataloader, args):
 
         sorted_indices = sorted_indices[0 : np.max(args.top_k)]
         
+        # Best-cell hit accuracy
         retrieved_cell_ids = db_cell_ids[sorted_indices]
         target_cell_id = query_cell_ids[query_idx]
-
+        
         for k in args.top_k:
             accuracies[k].append(target_cell_id in retrieved_cell_ids[0 : k])
         top_retrievals[query_idx] = retrieved_cell_ids
 
+        # Close-by accuracy
+        # CARE/TODO: can be wrong across scenes!
+        target_pose_w = query_poses_w[query_idx]
+        retrieved_cell_poses = [cells_dict[cell_id].get_center()[0:2] for cell_id in retrieved_cell_ids]
+        dists = np.linalg.norm(target_pose_w - retrieved_cell_poses, axis=1)
+        for k in args.top_k:
+            accuracies_close[k].append(np.any(dists[0 : k] <= cell_size / 2))
+
     for k in args.top_k:
         accuracies[k] = np.mean(accuracies[k])
+        accuracies_close[k] = np.mean(accuracies_close[k])
 
-    return accuracies, top_retrievals
+    return accuracies, accuracies_close, top_retrievals
 
 if __name__ == "__main__":
     args = parse_arguments()
@@ -184,21 +204,20 @@ if __name__ == "__main__":
     dataset_name = dataset_name.split('/')[-1]
     print(f'Directory: {dataset_name}')
 
-    plot_path = f'./plots/{dataset_name}/Coarse-bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_v{args.variation}_em{args.pointnet_embed}_p{args.pointnet_numpoints}_freeze{args.pointnet_freeze}_m{args.margin:0.2f}_s{args.shuffle}_g{args.lr_gamma}.png'    
+    plot_path = f'./plots/{dataset_name}/Coarse-bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_em{int(args.pointnet_embed)}_p{args.pointnet_numpoints}_frz{int(args.pointnet_freeze)}_m{args.margin:0.2f}_s{int(args.shuffle)}_g{args.lr_gamma}.png'
     print('Plot:', plot_path, '\n')
-
-    # WEITER: care time / epochs, args.describe_best_cell
 
     '''
     Create data loaders
     '''
     if args.dataset == 'K360':
+        # ['2013_05_28_drive_0003_sync', ]
         train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
-        dataset_train = Kitti360CoarseDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], train_transform, shuffle_hints=True, flip_poses=True)
+        dataset_train = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, shuffle_hints=True, sample_close_cell=False, flip_poses=True)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=args.shuffle)
 
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        dataset_val = Kitti360CoarseDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], val_transform)
+        dataset_val = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TEST, val_transform)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=False)    
 
     # train_words = dataset_train.get_known_words()
@@ -220,6 +239,7 @@ if __name__ == "__main__":
     dict_loss = {lr: [] for lr in learning_rates}
     dict_acc = {k: {lr: [] for lr in learning_rates} for k in args.top_k}
     dict_acc_val = {k: {lr: [] for lr in learning_rates} for k in args.top_k}    
+    dict_acc_val_close = {k: {lr: [] for lr in learning_rates} for k in args.top_k}
     
     best_val_accuracy = -1
 
@@ -245,15 +265,15 @@ if __name__ == "__main__":
 
             loss, train_batches = train_epoch(model, dataloader_train, args)
             # train_acc, train_retrievals = eval_epoch(model, train_batches, args)
-            train_acc, train_retrievals = eval_epoch(model, dataloader_train, args) # TODO/CARE: Is this ok? Send in batches again?
-            val_acc, val_retrievals = eval_epoch(model, dataloader_val, args)
+            train_acc, train_acc_close, train_retrievals = eval_epoch(model, dataloader_train, args) # TODO/CARE: Is this ok? Send in batches again?
+            val_acc, val_acc_close, val_retrievals = eval_epoch(model, dataloader_val, args)
 
             key = lr
             dict_loss[key].append(loss)
             for k in args.top_k:
                 dict_acc[k][key].append(train_acc[k])
                 dict_acc_val[k][key].append(val_acc[k])
-
+                dict_acc_val_close[k][key].append(val_acc_close[k])
 
             scheduler.step()
             print(f'\t lr {lr:0.4} loss {loss:0.2f} epoch {epoch} train-acc: ', end="")
@@ -261,7 +281,10 @@ if __name__ == "__main__":
                 print(f'{k}-{v:0.2f} ', end="")
             print('val-acc: ', end="")
             for k, v in val_acc.items():
-                print(f'{k}-{v:0.2f} ', end="")            
+                print(f'{k}-{v:0.2f} ', end="")  
+            print('val-acc-close: ', end="")
+            for k, v in val_acc_close.items():
+                print(f'{k}-{v:0.2f} ', end="")                            
             print("", flush=True)
 
         # Saving best model (w/o early stopping)
@@ -284,15 +307,17 @@ if __name__ == "__main__":
     Save plots
     '''
     # plot_name = f'Cells-{args.dataset}_s{scene_name.split('_')[-2]}_bs{args.batch_size}_mb{args.max_batches}_e{args.embed_dim}_l-{args.ranking_loss}_m{args.margin}_f{"-".join(args.use_features)}.png'
-
     train_accs = {f'train-acc-{k}': dict_acc[k] for k in args.top_k}
     val_accs = {f'val-acc-{k}': dict_acc_val[k] for k in args.top_k}
+    val_accs_close = {f'val-close-{k}': dict_acc_val_close[k] for k in args.top_k}
+
     metrics = {
         'train-loss': dict_loss,
         **train_accs,
         **val_accs,
+        **val_accs_close,
     }
     if not osp.isdir(osp.dirname(plot_path)):
         os.mkdir(osp.dirname(plot_path))    
-    plot_metrics(metrics, './plots/'+plot_path)    
+    plot_metrics(metrics, plot_path)    
 

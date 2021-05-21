@@ -28,7 +28,7 @@ class Kitti360ObjectsDataset(Kitti360BaseDataset):
         # Note: objects are retrieved from cells, not the (un-clustered) scene-objects
         self.objects = [obj for cell in self.cells for obj in cell.objects]
         
-        print(self)
+        # print(self)
 
     def __getitem__(self, idx):
         obj = self.objects[idx]

@@ -46,10 +46,12 @@ def run_coarse(model, dataloader, args):
     model.eval()
 
     # Run retrieval model to obtain top-cells
-    retrieval_accuracies, retrievals = eval_epoch_retrieval(model, dataloader, args)
+    retrieval_accuracies, retrieval_accuracies_close, retrievals = eval_epoch_retrieval(model, dataloader, args)
     retrievals = [retrievals[idx] for idx in range(len(retrievals))] # Dict -> list
     print('Retrieval Accs:')
     print(retrieval_accuracies)
+    print('Retrieval Accs Close:')
+    print(retrieval_accuracies_close)    
     assert len(retrievals) == len(dataloader.dataset.all_poses)
 
     all_cells_dict = {cell.id: cell for cell in dataloader.dataset.all_cells}

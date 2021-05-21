@@ -26,15 +26,27 @@ Augmentations:
 - flip cell
 '''
 class Kitti360CoarseDataset(Kitti360BaseDataset):
-    def __init__(self, base_path, scene_name, transform, shuffle_hints=False, flip_poses=False):
+    def __init__(self, base_path, scene_name, transform, shuffle_hints=False, flip_poses=False, sample_close_cell=False):
         super().__init__(base_path, scene_name)
         self.shuffle_hints = shuffle_hints
         self.transform = transform
         self.flip_poses = flip_poses
+        
+        self.sample_close_cell = sample_close_cell
+        self.cell_centers = np.array([cell.get_center()[0:2] for cell in self.cells])
 
     def __getitem__(self, idx):
         pose = self.poses[idx]
-        cell = self.cells_dict[pose.cell_id]
+
+        # TODO/CARE: If it doesn't work, check if there is a problem with flipping later on
+        if self.sample_close_cell:
+            cell_size = self.cells[0].cell_size
+            dists = np.linalg.norm(self.cell_centers - pose.pose_w[0:2], axis=1)
+            indices = np.argwhere(dists <= cell_size / 2).flatten()
+            cell = self.cells[np.random.choice(indices)]
+            assert np.linalg.norm(cell.get_center()[0:2] - pose.pose_w[0:2]) < cell_size
+        else:
+            cell = self.cells_dict[pose.cell_id]
         hints = self.hint_descriptions[idx]
         
         if self.shuffle_hints:
@@ -71,11 +83,12 @@ class Kitti360CoarseDataset(Kitti360BaseDataset):
         return len(self.poses)
     
 class Kitti360CoarseDatasetMulti(Dataset):
-    def __init__(self, base_path, scene_names, transform, shuffle_hints=False, flip_poses=False):
+    def __init__(self, base_path, scene_names, transform, shuffle_hints=False, flip_poses=False, sample_close_cell=False):
         self.scene_names = scene_names
         self.transform = transform
         self.flip_poses = flip_poses
-        self.datasets = [Kitti360CoarseDataset(base_path, scene_name, transform, shuffle_hints, flip_poses) for scene_name in scene_names]
+        self.sample_close_cell = sample_close_cell
+        self.datasets = [Kitti360CoarseDataset(base_path, scene_name, transform, shuffle_hints, flip_poses, sample_close_cell) for scene_name in scene_names]
         
         self.all_cells = [cell for dataset in self.datasets for cell in dataset.cells] # For cell-only dataset
         self.all_poses = [pose for dataset in self.datasets for pose in dataset.poses] # For eval
@@ -100,7 +113,7 @@ class Kitti360CoarseDatasetMulti(Dataset):
         return np.sum([len(ds) for ds in self.datasets])
 
     def __repr__(self):
-        return f'Kitti360CellDatasetMulti: {len(self.scene_names)} scenes, {len(self)} poses, {len(self.all_cells)} cells, flip {self.flip_poses}'
+        return f'Kitti360CellDatasetMulti: {len(self.scene_names)} scenes, {len(self)} poses, {len(self.all_cells)} cells, flip {self.flip_poses}, close-cell {self.sample_close_cell}'
 
     def get_known_words(self):
         known_words = []

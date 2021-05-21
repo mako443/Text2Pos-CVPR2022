@@ -273,13 +273,27 @@ class SuperGlue(nn.Module):
         scores = scores / self.config['descriptor_dim']**.5
 
         #TODO: better with L2?
+        if torch.any(torch.isnan(scores)).item():
+            print('NAN-0!')        
+            print(scores)
+            print(desc0, desc1)
 
         # Run the optimal transport.
         scores = log_optimal_transport(
             scores, self.bin_score,
             iters=self.config['sinkhorn_iterations'])
+
+        if torch.any(torch.isnan(scores)).item():
+            print('NAN-1!')        
+            print(scores)
+            print(desc0, desc1)            
         
         P = torch.exp(scores) #Scores including dustbins, exp() to inverse the log-space optimal transport
+
+        if torch.any(torch.isnan(P)).item():
+            print('NAN-0!')        
+            print(scores)
+            print(desc0, desc1)        
 
         # Get the matches with score above "match_threshold".
         max0, max1 = scores[:, :-1, :-1].max(2), scores[:, :-1, :-1].max(1)

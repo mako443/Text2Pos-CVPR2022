@@ -29,9 +29,13 @@ from training.plots import plot_metrics
 from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
+RESULTS:
+-
+
 TODO:
 - Train on real train-data again (Care to flip poses/cells including hints!)
 - compare mean/offset accuracies with closest/center in offset-pred and pos_in_cell
+- See if improves on smaller threshold
 
 - Handle or discuss objects gt-selection / overflow. 32 would be enough for most
 - Merge differently / variations?
@@ -82,8 +86,14 @@ def train_epoch(model, dataloader, args):
             print(f'Losses: {loss_matching.item():0.3f} {loss_offsets.item():0.3f}')
             printed = True
 
-        loss.backward()
-        optimizer.step()
+        try:
+            loss.backward()
+            optimizer.step()
+        except Exception as e:
+            print()
+            print(str(e))
+            print()
+            print(batch['all_matches'])
 
         recall, precision = calc_recall_precision(batch['matches'], output.matches0.cpu().detach().numpy(), output.matches1.cpu().detach().numpy())
 
@@ -135,11 +145,13 @@ def get_conf1(P):
     return np.sum(P[:, 0:-1, 0:-1])
 
 def get_conf2(output):
+    matches = output.matches0
     matching_scores = output.matching_scores0
-    if len(matching_scores) == 0:
-        return 0.0
-    else:
-        return matching_scores.sum().item()
+    return matching_scores[matches>=0].sum().item()
+    # if len(matching_scores) == 0:
+    #     return 0.0
+    # else:
+    #     return matching_scores.sum().item()
 
 @torch.no_grad()
 def eval_conf(model, dataset, args):
@@ -151,28 +163,21 @@ def eval_conf(model, dataset, args):
         data = Kitti360FineDataset.collate_fn([dataset[idx], ])
         hints = data['hint_descriptions']
         output = model(data['objects'], hints, data['object_points'])
-        if args.conf_method == 1:
-            confs.append(get_conf1(output.P.detach().cpu().numpy()))
-        if args.conf_method == 2:
-            confs.append(get_conf2(output))            
-
+        
+        matches = output.matches0.detach().cpu().numpy()
+        confs.append(np.sum(matches >= 0))
+         
         for _ in range(4):
             idx = np.random.randint(len(dataset))
             data = Kitti360FineDataset.collate_fn([dataset[idx], ])
             hints = data['hint_descriptions']
             output = model(data['objects'], hints, data['object_points'])
-            if args.conf_method == 1:
-                confs.append(get_conf1(output.P.detach().cpu().numpy()))
-            if args.conf_method == 2:
-                confs.append(get_conf2(output))  
-
-        if i_sample % 10 == 0:
-            print(np.float16(confs))
+            matches = output.matches0.detach().cpu().numpy()
+            confs.append(np.sum(matches >= 0))
 
         accs.append(np.argmax(confs) == 0)
 
-    print('Conf score:', np.mean(accs))
-
+    print('Conf score:', np.mean(accs))   
 
 if __name__ == "__main__":
     args = parse_arguments()
@@ -186,14 +191,22 @@ if __name__ == "__main__":
     print('Plot:', plot_path, '\n')
 
     # Eval conf: sums and matching-confs. Use FineDatasetMulti
+    # WEITER: Nans anzeigen, kleinere LR?
+
+    '''
+    no-shift - best: k360_cs30_cd15_scN_pd10_pc4_spY_closest_bestCell
+    no-shift - pose: k360_cs30_cd15_scN_pd10_pc4_spY_closest
+    shift    - best: k360_cs30_cd15_scY_pd10_pc4_spY_closest_bestCell
+    shfit    - pose: k360_cs30_cd15_scY_pd10_pc4_spY_closest
+    '''    
 
     '''
     Create data loaders
     '''    
     if args.dataset == 'K360':
         train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])
-        # dataset_train = Kitti360FineSyntheticDataset(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, length=1024, fixed_seed=False)
-        dataset_train = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, args)
+        dataset_train = Kitti360FineSyntheticDataset(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, length=1024, fixed_seed=False)
+        # dataset_train = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, flip_pose=False)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360FineSyntheticDataset.collate_fn, shuffle=args.shuffle)
 
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
@@ -224,7 +237,7 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_rates = np.logspace(-3.0, -4.0 ,3)[0:1] #[args.lr_idx : args.lr_idx + 1] # Larger than -3 throws error (even with warm-up)
+    learning_rates = np.logspace(-3.0, -4.0 ,3)[args.lr_idx : args.lr_idx + 1] # Larger than -3 throws error (even with warm-up)
 
     train_stats_loss = {lr: [] for lr in learning_rates}
     train_stats_loss_offsets = {lr: [] for lr in learning_rates}
@@ -277,7 +290,7 @@ if __name__ == "__main__":
             val_stats_pose_offsets[lr].append(val_out.pose_offsets)   
 
             print()
-            eval_conf(model, dataset_val, args)            
+            eval_conf(model, dataset_val, args)
             print()
 
             if scheduler: 
@@ -325,3 +338,4 @@ if __name__ == "__main__":
     plot_metrics(metrics, plot_path)        
 
     
+ 

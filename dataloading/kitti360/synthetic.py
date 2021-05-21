@@ -49,7 +49,7 @@ class Kitti360FineSyntheticDataset(Dataset):
         self.colors = COLORS
         self.color_names = COLOR_NAMES 
 
-        print(f'Kitti360FineSyntheticDataset, fixed seed: {fixed_seed}, length: {length}, sampling from {len(objects_dataset)} objects, describe {self.describe_by}')    
+        print(f'Kitti360FineSyntheticDataset, fixed seed: {fixed_seed}, length: {length}, sampling from {len(objects_dataset)} objects, describe: <{self.describe_by}>')    
 
     def create_synthetic_cell_and_pose(self):
         """Create a synthetic cell for fine localization training.

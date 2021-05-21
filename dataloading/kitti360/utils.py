@@ -31,7 +31,8 @@ def flip_pose_in_cell(pose: Pose, cell: Cell, text, direction, hints=None, offse
 
     pose = deepcopy(pose)
     cell = deepcopy(cell)
-    offsets = offsets.copy()
+    if offsets is not None:
+        offsets = offsets.copy()
 
     if direction == 1: #Horizontally
         pose.pose[0] = 1.0 - pose.pose[0]
