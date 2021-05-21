@@ -8,6 +8,8 @@ import pickle
 import sys
 import time
 
+from scipy.spatial.distance import cdist
+
 import open3d
 try:
     import pptk
@@ -188,6 +190,7 @@ def create_cells(objects, locations, scene_name, cell_size, args) -> List[Cell]:
     print('Creating cells...')
     cells = []
     none_indices = []
+    locations = np.array(locations)
     
     assert len(scene_name.split('_')) == 6
     scene_name_short = scene_name.split('_')[-2]
@@ -207,7 +210,26 @@ def create_cells(objects, locations, scene_name, cell_size, args) -> List[Cell]:
         locations[:, 0:2] += shifts
 
         cell_locations = np.ones_like(locations) * np.inf
+    elif args.grid_cells:
+        # Define the grid
+        x0, y0 = np.int0(np.min(locations[:, 0:2], axis=0))
+        x1, y1 = np.int0(np.max(locations[:, 0:2], axis=0))
+        x_centers = np.mgrid[x0 : x1 : int(args.cell_dist), y0 : y1 : int(args.cell_dist)][0].flatten()
+        y_centers = np.mgrid[x0 : x1 : int(args.cell_dist), y0 : y1 : int(args.cell_dist)][1].flatten()
+        centers = np.vstack((x_centers, y_centers)).T
 
+        # Filter out far-away centers
+        distances = cdist(centers, locations[:, 0:2])
+        center_indices = np.min(distances, axis=1) <= cell_size
+        closest_location_indices = np.argmin(distances, axis=1)
+
+        centers = centers[center_indices]
+        closest_location_indices = closest_location_indices[center_indices]
+
+        # Add appropriate heights to the centers - we are not evaluating with heights, this is just a short-cut around a 3-dim grid
+        centers = np.hstack((centers, locations[closest_location_indices, 2:3]))
+        locations = centers
+        
     for i_location, location in enumerate(locations):
         # Skip cell if it is too close
         if args.shift_cells: 
@@ -229,7 +251,7 @@ def create_cells(objects, locations, scene_name, cell_size, args) -> List[Cell]:
             cell_locations[i_location] = location
     
     print(f'None cells: {len(none_indices)} / {len(locations)}')
-    if len(none_indices) > len(locations)/3:
+    if len(none_indices) > len(locations)/2:
         return False, none_indices
     else:
         return True, cells
@@ -255,7 +277,7 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
     cell_centers = np.array([cell.bbox_w for cell in cells])
     cell_centers = 1/2 * (cell_centers[:, 0:3] + cell_centers[:, 3:6])
 
-    if args.pose_count > 0:
+    if args.pose_count > 1:
         locations = np.repeat(locations, args.pose_count, axis=0) # Repeat the locations to increase the number of poses. (Poses are randomly shifted below.)
         assert args.shift_poses == True, "Pose-count greater than 1 but pose shifting is deactivated!"
 
