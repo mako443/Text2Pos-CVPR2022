@@ -30,12 +30,20 @@ from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
 RESULTS:
--
+- train-offset always at 0.2, 0.15 before center-offset?
+- val-offset and val-mean always at 0.2, 0.1 before center-offset?
+- train recall + precision > 0.8
+- val recall + precision 0.6 - 0.7
+- best-cell: cell-shift is same, maybe even a little better
+- pose-cell w/o shift: recall + precision slightly lower, accuracies ~ same
+- pose-cell w/  shift: recall, precision and accs back at best+shift, 0.6-0.7
 
 TODO:
 - Train on real train-data again (Care to flip poses/cells including hints!)
 - compare mean/offset accuracies with closest/center in offset-pred and pos_in_cell
 - See if improves on smaller threshold
+
+- How to get 0.1 - 0.15 train/val accs? Predict + eval closest?
 
 - Handle or discuss objects gt-selection / overflow. 32 would be enough for most
 - Merge differently / variations?
