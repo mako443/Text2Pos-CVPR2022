@@ -162,6 +162,8 @@ class Kitti360FineDatasetMulti(Dataset):
         self.scene_names = scene_names
         self.flip_pose = flip_pose
         self.datasets = [Kitti360FineDataset(base_path, scene_name, transform, args, flip_pose) for scene_name in scene_names]
+        
+        self.all_cells = [cell for dataset in self.datasets for cell in dataset.cells] # For eval stats
 
         print(str(self))
 
@@ -176,7 +178,7 @@ class Kitti360FineDatasetMulti(Dataset):
         assert False
 
     def __repr__(self):
-        return f'Kitti360FineDatasetMulti: {len(self)} poses from {len(self.datasets)} scenes, flip: {self.flip_pose}.'
+        return f'Kitti360FineDatasetMulti: {len(self)} poses from {len(self.datasets)} scenes, {len(self.all_cells)} cells, flip: {self.flip_pose}.'
 
     def __len__(self):
         return np.sum([len(ds) for ds in self.datasets])

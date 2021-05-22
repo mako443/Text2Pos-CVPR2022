@@ -13,10 +13,7 @@ import os
 import os.path as osp
 
 from models.superglue_matcher import SuperGlueMatch
-from models.tf_matcher import TransformerMatch
 
-# from dataloading.semantic3d.semantic3d import Semantic3dPoseReferenceMockDataset, Semantic3dPoseReferenceDataset, Semantic3dPoseReferenceDatasetMulti
-# from dataloading.kitti360.poses import Kitti360PoseReferenceDataset, Kitti360PoseReferenceDatasetMulti, Kitti360PoseReferenceMockDataset
 from dataloading.kitti360.poses import Kitti360FineDataset, Kitti360FineDatasetMulti
 from dataloading.kitti360.synthetic import Kitti360FineSyntheticDataset
 
@@ -30,12 +27,20 @@ from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
 RESULTS:
--
+- train-offset always at 0.2, 0.15 before center-offset?
+- val-offset and val-mean always at 0.2, 0.1 before center-offset?
+- train recall + precision > 0.8
+- val recall + precision 0.6 - 0.7
+- best-cell: cell-shift is same, maybe even a little better
+- pose-cell w/o shift: recall + precision slightly lower, accuracies ~ same
+- pose-cell w/  shift: recall, precision and accs back at best+shift, 0.6-0.7
 
 TODO:
 - Train on real train-data again (Care to flip poses/cells including hints!)
 - compare mean/offset accuracies with closest/center in offset-pred and pos_in_cell
 - See if improves on smaller threshold
+
+- How to get 0.1 - 0.15 train/val accs? Predict + eval closest?
 
 - Handle or discuss objects gt-selection / overflow. 32 would be enough for most
 - Merge differently / variations?
@@ -121,13 +126,13 @@ def eval_epoch(model, dataloader, args):
         pose_mean = [],
         pose_offsets = [],
     )
-    offset_vectors = []
-    matches0_vectors = []
+    # offset_vectors = []
+    # matches0_vectors = []
 
     for i_batch, batch in enumerate(dataloader):
         output = model(batch['objects'], batch['hint_descriptions'], batch['object_points'])
-        offset_vectors.append(output.offsets.detach().cpu().numpy())
-        matches0_vectors.append(output.matches0.detach().cpu().numpy())
+        # offset_vectors.append(output.offsets.detach().cpu().numpy())
+        # matches0_vectors.append(output.matches0.detach().cpu().numpy())
 
         recall, precision = calc_recall_precision(batch['matches'], output.matches0.cpu().detach().numpy(), output.matches1.cpu().detach().numpy())
         stats.recall.append(recall)
@@ -156,6 +161,7 @@ def get_conf2(output):
 @torch.no_grad()
 def eval_conf(model, dataset, args):
     accs = []
+    accs_old = []
     for i_sample in range(100):
         confs = []
 
@@ -176,8 +182,10 @@ def eval_conf(model, dataset, args):
             confs.append(np.sum(matches >= 0))
 
         accs.append(np.argmax(confs) == 0)
+        accs.append(np.argmax(np.flip(confs)) == len(confs)-1)
+        accs_old.append(np.argmax(confs) == 0)
 
-    print('Conf score:', np.mean(accs))   
+    print('Conf score:', np.mean(accs), np.mean(accs_old))   
 
 if __name__ == "__main__":
     args = parse_arguments()
@@ -187,7 +195,7 @@ if __name__ == "__main__":
     dataset_name = dataset_name.split('/')[-1]
     print(f'Directory: {dataset_name}')
 
-    plot_path = f'./plots/{dataset_name}/Fine-bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
+    plot_path = f'./plots/{dataset_name}/Fine-bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}.png'
     print('Plot:', plot_path, '\n')
 
     # Eval conf: sums and matching-confs. Use FineDatasetMulti
@@ -205,8 +213,8 @@ if __name__ == "__main__":
     '''    
     if args.dataset == 'K360':
         train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])
-        dataset_train = Kitti360FineSyntheticDataset(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, length=1024, fixed_seed=False)
-        # dataset_train = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, flip_pose=False)
+        # dataset_train = Kitti360FineSyntheticDataset(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, length=1024, fixed_seed=False)
+        dataset_train = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, flip_pose=False)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360FineSyntheticDataset.collate_fn, shuffle=args.shuffle)
 
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])

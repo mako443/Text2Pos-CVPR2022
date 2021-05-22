@@ -43,6 +43,11 @@ def parse_arguments():
     parser.add_argument('--pointnet_features', type=int, default=2)
     # parser.add_argument('--pointnet_center', action='store_true')   
 
+    # Offset regressor
+    parser.add_argument('--regressor_dim', type=int, default=128)
+    parser.add_argument('--regressor_learn', type=str, default='center') # Center or closest
+    parser.add_argument('--regressor_eval', type=str, default='center') # Center or closest
+
     # Others
     parser.add_argument('--epochs', type=int, default=16)
     # parser.add_argument('--alpha_obj_ref', type=float, default=2.0)
