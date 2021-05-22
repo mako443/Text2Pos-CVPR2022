@@ -6,6 +6,8 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Text2Pos models and ablations')
 
     # General
+    parser.add_argument('--purpose', type=str, default="")
+
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--num_distractors', default='all')
     parser.add_argument('--max_batches', type=int, default=None)
