@@ -131,13 +131,14 @@ class DescriptionBestCell:
         return f'Pose is {self.direction} of a {self.object_color_text} {self.object_label}' + (' (✓)' if self.is_matched else ' (☓)')
 
 class Pose:
-    def __init__(self, pose_in_cell, pose_w, cell_id, scene_name, descriptions: List[DescriptionBestCell]):
+    def __init__(self, pose_in_cell, pose_w, cell_id, scene_name, descriptions: List[DescriptionBestCell], described_by:str=None):
         assert isinstance(descriptions[0], DescriptionBestCell)
         self.pose = pose_in_cell # The pose in the best cell (specified by cell_id), normed to ∈ [0, 1]
         self.pose_w = pose_w
         self.cell_id = cell_id # ID of the best cell in the database
         self.descriptions = descriptions
         self.scene_name = scene_name
+        self.described_by = described_by
 
     def __repr__(self) -> str:
         return f'Pose at {self.pose_w} in {self.cell_id}'

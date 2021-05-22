@@ -41,7 +41,7 @@ def parse_arguments():
 
     print(f'Folders: {args.path_in} -> {args.path_out}')
 
-    assert args.describe_by in ('closest', 'class', 'direction', 'random')
+    assert args.describe_by in ('closest', 'class', 'direction', 'random', 'all')
     assert args.shift_cells + args.grid_cells < 2 # Only of of them
 
     # Create dirs

@@ -283,6 +283,7 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
         assert args.shift_poses == True, "Pose-count greater than 1 but pose shifting is deactivated!"
 
     unmatched_counts = []
+    num_duplicates = 0
     for i_location, location in enumerate(locations):
         # Shift the poses randomly to de-correlate database-side cells and query-side poses.
         if args.shift_poses:
@@ -296,10 +297,6 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
             none_indices.append(i_location)
             continue
 
-        '''
-        TODO: Description strategy hier auswählen, später hier alle 4-5x hintereinander die Pose duplizieren
-        '''
-
         # Create an extra cell on top of the pose to create the query-side description decoupled from the database-side cells.
         pose_cell_bbox = np.hstack((location - args.cell_size/2, location + args.cell_size/2)) # [x0, y0, z0, x1, y1, z1]
         pose_cell = create_cell(-1, "pose", pose_cell_bbox, objects)
@@ -307,29 +304,48 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
             none_indices.append(i_location)
             continue
 
-        if args.describe_best_cell: # Ablation: use ground-truth best cell to describe the pose
-            assert args.describe_by == 'closest'
-            descriptions = describe_pose_in_pose_cell(location, best_cell, args.describe_by, args.num_mentioned)
-        else: # Obtain the descriptions based on the pose-cell
-            descriptions = describe_pose_in_pose_cell(location, pose_cell, args.describe_by, args.num_mentioned)
+        # Select description strategy / strategies
+        if args.describe_by == 'all':
+            description_methods = ('closest', 'class', 'direction')
+        else:
+            description_methods = (args.describe_by, )
 
-        if descriptions is None or len(descriptions)<args.num_mentioned:
-            none_indices.append(i_location)
-            continue
-        
-        assert len(descriptions) == args.num_mentioned
+        mentioned_object_ids = []
+        do_break = False
+        for description_method in description_methods:
+            if do_break:
+                break
 
-        # Convert the descriptions to the best-matching database cell for training. Some descriptions might not be matched anymore.
-        descriptions, pose_in_cell, num_unmatched = ground_pose_to_best_cell(location, descriptions, best_cell)
-        assert len(descriptions) == args.num_mentioned
-        unmatched_counts.append(num_unmatched)
+            if args.describe_best_cell: # Ablation: use ground-truth best cell to describe the pose
+                descriptions = describe_pose_in_pose_cell(location, best_cell, description_method, args.num_mentioned)
+            else: # Obtain the descriptions based on the pose-cell
+                descriptions = describe_pose_in_pose_cell(location, pose_cell, description_method, args.num_mentioned)
 
-        if args.describe_best_cell:
-            assert num_unmatched == 0, "Unmatched descriptors for best cell!"
+            if descriptions is None or len(descriptions)<args.num_mentioned:
+                none_indices.append(i_location)
+                do_break = True # Don't try again with other strategy
+                continue
+            
+            assert len(descriptions) == args.num_mentioned
 
-        pose = Pose(pose_in_cell, location, best_cell.id, best_cell.scene_name, descriptions)
-        poses.append(pose)
+            # Convert the descriptions to the best-matching database cell for training. Some descriptions might not be matched anymore.
+            descriptions, pose_in_cell, num_unmatched = ground_pose_to_best_cell(location, descriptions, best_cell)
+            assert len(descriptions) == args.num_mentioned
+            unmatched_counts.append(num_unmatched)
 
+            if args.describe_best_cell:
+                assert num_unmatched == 0, "Unmatched descriptors for best cell!"
+
+            # Only append the new description if it actually comes out different than the ones before
+            mentioned_ids = sorted([d.object_id for d in descriptions if d.is_matched])
+            if mentioned_ids in mentioned_object_ids:
+                num_duplicates += 1
+            else:
+                pose = Pose(pose_in_cell, location, best_cell.id, best_cell.scene_name, descriptions, described_by=description_method)
+                poses.append(pose)
+                mentioned_object_ids.append(mentioned_ids)
+
+    print(f'Num duplicates: {num_duplicates} / {len(poses)}')
     print(f'None poses: {len(none_indices)} / {len(locations)}, avg. unmatched: {np.mean(unmatched_counts):0.1f}')
     if len(none_indices) > len(locations) / 2:
         return False, none_indices
