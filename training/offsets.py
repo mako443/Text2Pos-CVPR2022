@@ -8,6 +8,8 @@ import torch_geometric.transforms as T
 import numpy as np
 import matplotlib.pyplot as plt
 from easydict import EasyDict
+import os
+import os.path as osp
 
 from models.offset_regression import OffsetRegressor
 
@@ -17,6 +19,13 @@ from dataloading.kitti360.poses import Kitti360FineDatasetMulti, Kitti360FineDat
 from training.args import parse_arguments
 from training.plots import plot_metrics
 from training.losses import calc_pose_error
+
+'''
+TODO:
+- Train + eval all 8 of pose/best, learn closest/center, eval closest/center
+- Flip or not?
+- Use in Fine model
+'''
 
 def train_epoch(model, dataloader, args):
     model.train()
@@ -43,14 +52,22 @@ def eval_epoch(model, dataloader, args):
     )
 
     for i_batch, batch in enumerate(dataloader):
+        batch_size = len(batch['poses'])
+
         preds = model(batch['hint_descriptions'])
         preds = preds.detach().cpu().numpy()
 
         # Calculations with ground-truth matches!
-        # TODO: is it correct with the matches like this?
-        stats.pose_mid.append(      calc_pose_error(batch['objects'], batch['matches'], batch['poses'], preds, use_mid_pred=True))
-        stats.pose_mean.append(     calc_pose_error(batch['objects'], batch['matches'], batch['poses'], np.zeros_like(preds)))
-        stats.pose_offsets.append(  calc_pose_error(batch['objects'], batch['matches'], batch['poses'], preds))
+        # Re-create the matching-output from SuperGlue with gt-matches
+        pad_size = np.max([len(matches_sample) for matches_sample in batch['matches']])
+        matches = np.ones((batch_size, pad_size), dtype=np.int32) * -1
+        for i, matches_sample in enumerate(batch['matches']):
+            for (obj_idx, hint_idx) in matches_sample:
+                matches[i, obj_idx] = hint_idx
+
+        stats.pose_mid.append(      calc_pose_error(batch['objects'], matches, batch['poses'], preds, use_mid_pred=True))
+        stats.pose_mean.append(     calc_pose_error(batch['objects'], matches, batch['poses'], np.zeros_like(preds)))
+        stats.pose_offsets.append(  calc_pose_error(batch['objects'], matches, batch['poses'], preds))
 
     for key in stats.keys():
         stats[key] = np.mean(stats[key])
@@ -63,7 +80,7 @@ if __name__ == "__main__":
     dataset_name = dataset_name.split('/')[-1]
     print(f'Directory: {dataset_name}')
 
-    plot_path = f'./plots/{dataset_name}/Offsets_bs{args.batch_size}_e{args.regressor_dim}_l-{args.regressor_learn}_ev{args.regressor_eval}_s{args.shuffle}_g{args.lr_gamma}'
+    plot_path = f'./plots/{dataset_name}/Offsets_bs{args.batch_size}_e{args.regressor_dim}_rc-{args.regressor_cell}_rl-{args.regressor_learn}_re-{args.regressor_eval}_s{args.shuffle}_g{args.lr_gamma}.png'
     print('Plot:', plot_path, '\n')
 
     # Load data sets
@@ -80,7 +97,7 @@ if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)    
 
     # Start training
-    learning_rates = np.logspace(-2, -4, 3)
+    learning_rates = np.logspace(-1, -3, 3)
 
     train_stats_loss = {lr: [] for lr in learning_rates}
     train_stats_pose_mid = {lr: [] for lr in learning_rates}
@@ -119,14 +136,39 @@ if __name__ == "__main__":
             scheduler.step()
 
             print((
-                f'\t epoch {epoch}, lr {lr:0.6},'
-                f't-mid {stats_train.pose_mid}, t-mean {stats_train.pose_mean}, t-offsets {stats_train.pose_offsets},'
-                f'v-mid {stats_val.pose_mid}, v-mean {stats_val.pose_mean}, v-offsets {stats_val.pose_offsets}'
+                f'\t epoch {epoch}, lr {lr:0.6}, loss {loss:0.3f}'
+                f't-mid {stats_train.pose_mid:0.2f}, t-mean {stats_train.pose_mean:0.2f}, t-offsets {stats_train.pose_offsets:0.2f},'
+                f'v-mid {stats_val.pose_mid:0.2f}, v-mean {stats_val.pose_mean:0.2f}, v-offsets {stats_val.pose_offsets:0.2f}'
             ), flush=True)
 
 
         if stats_val.pose_offsets > best_val_offsets:
-            pass
+            model_path = f"./checkpoints/{dataset_name}/offsets_acc{stats_val.pose_offsets:0.2f}.pth"
+            if not osp.isdir(osp.dirname(model_path)):
+                os.mkdir(osp.dirname(model_path))
+            print('Saving model to', model_path)
+            try:
+                torch.save(model, model_path)
+            except Exception as e:
+                print('Error saving model:', str(e))
+            best_val_offsets = stats_val.pose_offsets
+
+    '''
+    Save plots
+    '''
+    metrics = {
+        'train-loss': train_stats_loss,
+        'train-pose-mid': train_stats_pose_mid,
+        'train-pose-mean': train_stats_pose_mean,
+        'train-pose-offsets': train_stats_pose_offsets,
+        'val-pose-mid': val_stats_pose_mid,
+        'val-pose-mean': val_stats_pose_mean,
+        'val-pose-offsets': val_stats_pose_offsets,
+    }        
+    if not osp.isdir(osp.dirname(plot_path)):
+        os.mkdir(osp.dirname(plot_path))
+    plot_metrics(metrics, plot_path)
+    
 
 
 

@@ -169,17 +169,12 @@ def ground_pose_to_best_cell(pose_w: np.ndarray, pose_cell_descriptions: List[De
             else: # Offset is close -> object is matched               
                 matched_object_ids.append(best_obj.id) # Prevent the object from being matched again
                 
+                # Calculating these 3 now for best-cell and saving them as well.
                 closest_point = best_obj.get_closest_point(pose)
-                # Currently only set in pose_cell and passed this way through
-                # offset_center = pose - obj.get_center() 
-                # offset_closest = pose - closest_point 
+                best_offset_center = pose - best_obj.get_center() 
+                best_offset_closest = pose - closest_point 
 
-                # color_dist = np.linalg.norm(descr.object_color_rgb - best_obj.get_color_rgb())
-                # if color_dist > 0.25:
-                #     print(descr.object_color_text, best_obj.get_color_text(), f'{np.linalg.norm(descr.offset_closest - best_closest_offset):0.2f}')
-
-                # best_cell_descriptions.append(DescriptionBestCell.from_matched(descr, obj.id, offset_center, offset_closest, closest_point))
-                best_cell_descriptions.append(DescriptionBestCell.from_matched(descr, best_obj.id, closest_point))
+                best_cell_descriptions.append(DescriptionBestCell.from_matched(descr, best_obj.id, closest_point, best_offset_center, best_offset_closest))
 
     return best_cell_descriptions, pose, num_unmatched
     

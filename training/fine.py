@@ -15,10 +15,10 @@ import os.path as osp
 from models.superglue_matcher import SuperGlueMatch
 
 from dataloading.kitti360.poses import Kitti360FineDataset, Kitti360FineDatasetMulti
-from dataloading.kitti360.synthetic import Kitti360FineSyntheticDataset
+# from dataloading.kitti360.synthetic import Kitti360FineSyntheticDataset
 
 from datapreparation.semantic3d.imports import COLORS as COLORS_S3D, COLOR_NAMES as COLOR_NAMES_S3D
-from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360
+from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360, SCENE_NAMES_TEST
 from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_TEST
 
 from training.args import parse_arguments
@@ -215,11 +215,12 @@ if __name__ == "__main__":
         train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])
         # dataset_train = Kitti360FineSyntheticDataset(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, length=1024, fixed_seed=False)
         dataset_train = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, flip_pose=False)
-        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360FineSyntheticDataset.collate_fn, shuffle=args.shuffle)
+        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn, shuffle=args.shuffle)
 
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
         dataset_val = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TEST, val_transform, args)
-        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360FineSyntheticDataset.collate_fn)  
+        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn)  
+
         
     # print(sorted(dataset_train.get_known_classes()))
     # print(sorted(dataset_val.get_known_classes()))
@@ -339,7 +340,7 @@ if __name__ == "__main__":
         'val-precision': val_stats_precision,
         'val-pose_mid': val_stats_pose_mid,
         'val-pose_mean': val_stats_pose_mean,
-        'val-pose_offsets': val_stats_pose_offsets,      
+        'val-pose_offsets': val_stats_pose_offsets          
     }
     if not osp.isdir(osp.dirname(plot_path)):
         os.mkdir(osp.dirname(plot_path))

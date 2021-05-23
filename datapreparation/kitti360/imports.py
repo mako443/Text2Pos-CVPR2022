@@ -91,7 +91,7 @@ class DescriptionBestCell:
     Current offset policy: all taken from pose_cell and passed through. Training on center_offsets
     '''
     @classmethod
-    def from_matched(cls, descr: DescriptionPoseCell, object_id, closest_point):
+    def from_matched(cls, descr: DescriptionPoseCell, object_id, best_closest_point, best_offset_center, best_offset_closest):
         d = DescriptionBestCell()
         # Original attributes
         d.object_instance_id = descr.object_instance_id
@@ -99,14 +99,16 @@ class DescriptionBestCell:
         d.object_color_rgb = descr.object_color_rgb
         d.object_color_text = descr.object_color_text
         d.direction = descr.direction
-        d.offset_center = descr.offset_center
-        d.offset_closest = descr.offset_closest
+        d.offset_center = descr.offset_center # Retained from pose-cell
+        d.offset_closest = descr.offset_closest # Retained from pose-cell
 
         # Updated attributes matched in best-cell
         d.object_id = object_id
         # d.offset_center = offset_center[0:2]
         # d.offset_closest = offset_closest[0:2]
-        d.closest_point = closest_point[0:2] # Only in best-cell!
+        d.closest_point = best_closest_point[0:2] # Updated to best-cell
+        d.best_offset_center = best_offset_center # Updated to best-cell
+        d.best_offset_closest = best_offset_closest # Updated to best-cell
         d.is_matched = True
         return d
 

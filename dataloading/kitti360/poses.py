@@ -157,6 +157,12 @@ class Kitti360FineDataset(Kitti360BaseDataset):
     def __len__(self):
         return len(self.poses)
 
+    def collate_fn(data):
+        batch = {}
+        for key in data[0].keys():
+            batch[key] = [data[i][key] for i in range(len(data))]
+        return batch         
+
 class Kitti360FineDatasetMulti(Dataset):
     def __init__(self, base_path, scene_names, transform, args, flip_pose=False):
         self.scene_names = scene_names

@@ -47,6 +47,7 @@ def parse_arguments():
 
     # Offset regressor
     parser.add_argument('--regressor_dim', type=int, default=128)
+    parser.add_argument('--regressor_cell', type=str, default='pose') # Pose or best
     parser.add_argument('--regressor_learn', type=str, default='center') # Center or closest
     parser.add_argument('--regressor_eval', type=str, default='center') # Center or closest
 
@@ -70,6 +71,10 @@ def parse_arguments():
         args.max_batches = int(args.max_batches)
     except:
         pass    
+
+    assert args.regressor_cell in ('pose', 'best')
+    assert args.regressor_learn in ('center', 'closest')
+    assert args.regressor_eval in ('center', 'closest')
     
     args.dataset = args.dataset.upper()
     assert args.dataset in ('S3D', 'K360')
