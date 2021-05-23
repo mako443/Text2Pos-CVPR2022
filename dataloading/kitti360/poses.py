@@ -163,6 +163,7 @@ class Kitti360FineDatasetMulti(Dataset):
         self.flip_pose = flip_pose
         self.datasets = [Kitti360FineDataset(base_path, scene_name, transform, args, flip_pose) for scene_name in scene_names]
         
+        self.all_poses = [pose for dataset in self.datasets for pose in dataset.poses] # For stats
         self.all_cells = [cell for dataset in self.datasets for cell in dataset.cells] # For eval stats
 
         print(str(self))
@@ -178,7 +179,9 @@ class Kitti360FineDatasetMulti(Dataset):
         assert False
 
     def __repr__(self):
-        return f'Kitti360FineDatasetMulti: {len(self)} poses from {len(self.datasets)} scenes, {len(self.all_cells)} cells, flip: {self.flip_pose}.'
+        poses = np.array([pose.pose_w for pose in self.all_poses])
+        num_poses = len(np.unique(poses, axis=0)) # CARE: Might be possible that is is slightly inaccurate if there are actually overlaps        
+        return f'Kitti360FineDatasetMulti: {len(self)} descriptions for {num_poses} unique poses from {len(self.datasets)} scenes, {len(self.all_cells)} cells, flip: {self.flip_pose}.'
 
     def __len__(self):
         return np.sum([len(ds) for ds in self.datasets])

@@ -34,10 +34,12 @@ TODO:
 
 - Remove identical negative? (If necessary, just remove one of the samples -.-)
 
-- Variate cell-sizes
+- Variate cell-sizes (Care: possibly re-train PN++)
 - Variate closest / mid / pose-cell / best-cell
 - Check note in eval_epoch
 - Encode bbox in object_encoder
+
+- Re-train PN on final dataset
 
 - synthetic cells -> Ok (0.25), gap smaller
 - flip the training cells (pose, objects, direction words) -> Good, 0.42 now

@@ -113,7 +113,9 @@ class Kitti360CoarseDatasetMulti(Dataset):
         return np.sum([len(ds) for ds in self.datasets])
 
     def __repr__(self):
-        return f'Kitti360CellDatasetMulti: {len(self.scene_names)} scenes, {len(self)} poses, {len(self.all_cells)} cells, flip {self.flip_poses}, close-cell {self.sample_close_cell}'
+        poses = np.array([pose.pose_w for pose in self.all_poses])
+        num_poses = len(np.unique(poses, axis=0)) # CARE: Might be possible that is is slightly inaccurate if there are actually overlaps
+        return f'Kitti360CellDatasetMulti: {len(self.scene_names)} scenes, {len(self)} descriptions for {num_poses} unique poses, {len(self.all_cells)} cells, flip {self.flip_poses}, close-cell {self.sample_close_cell}'
 
     def get_known_words(self):
         known_words = []
