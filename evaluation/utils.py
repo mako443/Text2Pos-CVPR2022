@@ -72,5 +72,6 @@ def print_accuracies(accuracies, name=""):
         for k in accuracies[t]:
             print(f'{k:2.0f}: {accuracies[t][k]:0.2f}\t', end="")
         print()
+    print("", flush=True)
 
         

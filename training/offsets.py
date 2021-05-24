@@ -23,6 +23,7 @@ from training.losses import calc_pose_error
 '''
 TODO:
 - Train + eval all 8 of pose/best, learn closest/center, eval closest/center
+- If necessary, update get_pose_in_cell() call in eval.pipeline, too...
 - Flip or not?
 - Use in Fine model
 '''
@@ -34,7 +35,10 @@ def train_epoch(model, dataloader, args):
     for i_batch, batch in enumerate(dataloader):
         optimizer.zero_grad()
         preds = model(batch['hint_descriptions'])
-        loss = criterion(preds, torch.tensor(batch['offsets'], dtype=torch.float, device=DEVICE))
+
+        valid = torch.tensor(batch['offsets_valid'], device=DEVICE)
+        targets = torch.tensor(batch['offsets'], dtype=torch.float, device=DEVICE)
+        loss = criterion(preds[valid], targets[valid])
 
         loss.backward()
         optimizer.step()
@@ -65,9 +69,15 @@ def eval_epoch(model, dataloader, args):
             for (obj_idx, hint_idx) in matches_sample:
                 matches[i, obj_idx] = hint_idx
 
-        stats.pose_mid.append(      calc_pose_error(batch['objects'], matches, batch['poses'], preds, use_mid_pred=True))
-        stats.pose_mean.append(     calc_pose_error(batch['objects'], matches, batch['poses'], np.zeros_like(preds)))
-        stats.pose_offsets.append(  calc_pose_error(batch['objects'], matches, batch['poses'], preds))
+        if args.regressor_eval == 'closest':
+            stats.pose_mid.append(      calc_pose_error(batch['objects'], matches, batch['poses'], preds, use_mid_pred=True, debug_use_closest=True))
+            stats.pose_mean.append(     calc_pose_error(batch['objects'], matches, batch['poses'], np.zeros_like(preds), debug_use_closest=True))
+            stats.pose_offsets.append(  calc_pose_error(batch['objects'], matches, batch['poses'], preds, debug_use_closest=True))
+        else:
+            stats.pose_mid.append(      calc_pose_error(batch['objects'], matches, batch['poses'], preds, use_mid_pred=True))
+            stats.pose_mean.append(     calc_pose_error(batch['objects'], matches, batch['poses'], np.zeros_like(preds)))
+            stats.pose_offsets.append(  calc_pose_error(batch['objects'], matches, batch['poses'], preds))            
+
 
     for key in stats.keys():
         stats[key] = np.mean(stats[key])
@@ -75,6 +85,7 @@ def eval_epoch(model, dataloader, args):
 
 if __name__ == "__main__":
     args = parse_arguments()
+    print(str(args).replace(',','\n'), '\n')
 
     dataset_name = args.base_path[:-1] if args.base_path.endswith('/') else args.base_path
     dataset_name = dataset_name.split('/')[-1]
@@ -82,6 +93,8 @@ if __name__ == "__main__":
 
     plot_path = f'./plots/{dataset_name}/Offsets_bs{args.batch_size}_e{args.regressor_dim}_rc-{args.regressor_cell}_rl-{args.regressor_learn}_re-{args.regressor_eval}_s{args.shuffle}_g{args.lr_gamma}.png'
     print('Plot:', plot_path, '\n')
+
+    print('XXX CARE WRONG DIRECTORY XXX')
 
     # Load data sets
     # ['2013_05_28_drive_0003_sync', ]
@@ -108,7 +121,7 @@ if __name__ == "__main__":
     val_stats_pose_mean = {lr: [] for lr in learning_rates}
     val_stats_pose_offsets = {lr: [] for lr in learning_rates}
 
-    best_val_offsets = -1
+    best_val_offsets = np.inf
 
     for lr in learning_rates:
         model = OffsetRegressor(dataset_train.get_known_words(), args)
@@ -136,13 +149,13 @@ if __name__ == "__main__":
             scheduler.step()
 
             print((
-                f'\t epoch {epoch}, lr {lr:0.6}, loss {loss:0.3f}'
-                f't-mid {stats_train.pose_mid:0.2f}, t-mean {stats_train.pose_mean:0.2f}, t-offsets {stats_train.pose_offsets:0.2f},'
+                f'\t epoch {epoch}, lr {lr:0.6}, loss {loss:0.3f}, '
+                f't-mid {stats_train.pose_mid:0.2f}, t-mean {stats_train.pose_mean:0.2f}, t-offsets {stats_train.pose_offsets:0.2f}, '
                 f'v-mid {stats_val.pose_mid:0.2f}, v-mean {stats_val.pose_mean:0.2f}, v-offsets {stats_val.pose_offsets:0.2f}'
             ), flush=True)
 
 
-        if stats_val.pose_offsets > best_val_offsets:
+        if stats_val.pose_offsets < best_val_offsets: # CARE: lower is better here!
             model_path = f"./checkpoints/{dataset_name}/offsets_acc{stats_val.pose_offsets:0.2f}.pth"
             if not osp.isdir(osp.dirname(model_path)):
                 os.mkdir(osp.dirname(model_path))

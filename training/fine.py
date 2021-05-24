@@ -42,6 +42,8 @@ TODO:
 
 - How to get 0.1 - 0.15 train/val accs? Predict + eval closest?
 
+- Force data to mention only 180° or something if needed?
+
 - Handle or discuss objects gt-selection / overflow. 32 would be enough for most
 - Merge differently / variations?
 
@@ -314,7 +316,7 @@ if __name__ == "__main__":
 
         acc = np.mean((val_out.recall, val_out.precision))
         if acc > best_val_recallPrecision:
-            model_path = f"./checkpoints/{dataset_name}/fine_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"
+            model_path = f"./checkpoints/{dataset_name}/fine_acc{acc:0.2f}_lr{args.lr_idx}_obj-{args.num_mentioned}-{args.pad_size}_p{args.pointnet_numpoints}.pth"
             if not osp.isdir(osp.dirname(model_path)):
                 os.mkdir(osp.dirname(model_path))
 

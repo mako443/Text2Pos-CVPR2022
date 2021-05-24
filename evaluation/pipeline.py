@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 import time
 
 from training.plots import plot_metrics
-from training.losses import calc_pose_error
+# from training.losses import calc_pose_error # This cannot be used here anymore!!
 from evaluation.args import parse_arguments
 from evaluation.utils import calc_sample_accuracies, print_accuracies
 
@@ -26,7 +26,9 @@ import torch_geometric.transforms as T
 
 '''
 TODO:
-- Fine: which objects to cut-off? Just pad_size=32 not different.
+- Fine: which objects to cut-off? Just pad_size=32 not different, try to select perfectly?
+- Fine: select by cluster (2*cell-size) + conf
+
 - How to handle orientation predictions?
 '''
 
@@ -74,43 +76,10 @@ def run_coarse(model, dataloader, args):
 
     return retrievals, accuracies
 
-def get_confidences(P):
-    assert len(P.shape) == 3 # [batch_size, objects, hints]
-    return np.sum(P[:, 0:-1, 0:-1], axis=(1,2))
-  
-@torch.no_grad()
-def eval_conf(model, dataset):
-    scores = []
-    for i_sample in range(10):
-        confs = []
-        idx = np.random.randint(len(dataset))
-        data = Kitti360CoarseDataset.collate_fn([dataset[idx], ])
-        output = model(data['objects'], data['debug_hint_descriptions'], data['object_points'])
-        print(output.P[0].type(torch.float16))
-        conf = get_confidences(output.P.detach().cpu().numpy())
-        assert len(conf) == 1
-        confs.append(conf[0])
-
-        for idx in np.random.randint(len(dataset), size=4):
-            data = Kitti360CoarseDataset.collate_fn([dataset[idx], ])
-            output = model(data['objects'], data['debug_hint_descriptions'], data['object_points'])
-            print(output.P[0].type(torch.float16))
-            conf = get_confidences(output.P.detach().cpu().numpy())
-            assert len(conf) == 1
-            confs.append(conf[0])
-
-        print(confs)
-        print('\n --- \n')
-
-        scores.append(np.argmax(confs) == 0)
-    print('Score:', np.mean(scores))
-
-
 @torch.no_grad()
 def run_fine(model, retrievals, dataloader, args):
     # A batch in this dataset contains max(top_k) times the pose vs. each of the max(top_k) top-cells.
     dataset_topk = Kitti360TopKDataset(dataloader.dataset.all_poses, dataloader.dataset.all_cells, retrievals, transform, args)
-    dataloader_topk = DataLoader(dataset_topk, batch_size=6, collate_fn=Kitti360TopKDataset.collate_extend)
 
     num_samples = max(args.top_k)
 
@@ -126,7 +95,9 @@ def run_fine(model, retrievals, dataloader, args):
         output = model(sample['objects'], sample['hint_descriptions'], sample['object_points'])
         matches.append(output.matches0.detach().cpu().numpy())
         offsets.append(output.offsets.detach().cpu().numpy())
-        confs = get_confidences(output.P.detach().cpu().numpy())
+        # confs = get_confidences(output.P.detach().cpu().numpy())
+        assert len(output.matches0.shape)==2
+        confs = np.sum(output.matches0.detach().cpu().numpy(), axis=1)
         assert len(confs) == num_samples
         confidences.append(confs)
         
@@ -193,23 +164,6 @@ def run_fine(model, retrievals, dataloader, args):
     return accuracies_mean, accuracies_offset, accuracies_mean_conf
 
 
-
-@torch.no_grad()
-def depr_run_fine(model, dataloader):
-    raise Exception("Not udpated yet!")
-    offsets = []
-    matches0 = []    
-    for i_batch, batch in enumerate(dataloader):
-        output = model(batch['objects'], batch['hint_descriptions'], batch['object_points'])
-        offsets.append(output.offsets.detach().cpu().numpy())
-        matches0.append(output.matches0.detach().cpu().numpy())
-    return np.vstack((offsets)), np.vstack((matches0))        
-
-'''
-- Eval accuracies directly in run_matching(), rename run_coarse(), run_fine()
-- Use TopK-Dataset, for now no DataLoader
-'''
-
 if __name__ == '__main__':
     args = parse_arguments()
     print(str(args).replace(',','\n'), '\n')
@@ -223,8 +177,8 @@ if __name__ == '__main__':
     # dataloader_retrieval = DataLoader(dataset_retrieval, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn)
     # dataloader_matching = DataLoader(dataset_matching, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceDataset.collate_fn)
 
-    # dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, shuffle_hints=False, flip_poses=False)
-    dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], transform, shuffle_hints=False, flip_poses=False)
+    dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, shuffle_hints=False, flip_poses=False)
+    # dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], transform, shuffle_hints=False, flip_poses=False)
     dataloader_retrieval = DataLoader(dataset_retrieval, batch_size = args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn)
 
     # dataset_cell_only = dataset_retrieval.get_cell_dataset()
@@ -233,8 +187,8 @@ if __name__ == '__main__':
     model_retrieval = torch.load(args.path_coarse)
     model_matching = torch.load(args.path_fine)
 
-    eval_conf(model_matching, dataset_retrieval)
-    quit()
+    # eval_conf(model_matching, dataset_retrieval)
+    # quit()
 
     # Run coarse
     retrievals, coarse_accuracies = run_coarse(model_retrieval, dataloader_retrieval, args)

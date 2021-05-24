@@ -107,8 +107,8 @@ class DescriptionBestCell:
         # d.offset_center = offset_center[0:2]
         # d.offset_closest = offset_closest[0:2]
         d.closest_point = best_closest_point[0:2] # Updated to best-cell
-        d.best_offset_center = best_offset_center # Updated to best-cell
-        d.best_offset_closest = best_offset_closest # Updated to best-cell
+        d.best_offset_center = best_offset_center[0:2] # Updated to best-cell
+        d.best_offset_closest = best_offset_closest[0:2] # Updated to best-cell
         d.is_matched = True
         return d
 

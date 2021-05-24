@@ -47,6 +47,7 @@ def parse_arguments():
 
     # Offset regressor
     parser.add_argument('--regressor_dim', type=int, default=128)
+    # Standard was pose-center-center
     parser.add_argument('--regressor_cell', type=str, default='pose') # Pose or best
     parser.add_argument('--regressor_learn', type=str, default='center') # Center or closest
     parser.add_argument('--regressor_eval', type=str, default='center') # Center or closest

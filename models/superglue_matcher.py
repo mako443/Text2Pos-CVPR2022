@@ -196,7 +196,7 @@ class SuperGlueMatch(torch.nn.Module):
     def get_device(self):
         return next(self.mlp_offsets.parameters()).device              
 
-def get_pos_in_cell(objects: List[Object3d_K360], matches0, offsets):
+def get_pos_in_cell(objects: List[Object3d_K360], matches0, offsets, debug_closest_points=None):
     """Extract a pose estimation relative to the cell (∈ [0,1]²) by
     adding up for each matched objects its location plus offset-vector of corresponding hint,
     then taking the average.
@@ -210,11 +210,18 @@ def get_pos_in_cell(objects: List[Object3d_K360], matches0, offsets):
         np.ndarray: Pose estimate
     """
     pose_preds = [] # For each match the object-location plus corresponding offset-vector
-    for obj_idx, hint_idx in enumerate(matches0):
-        if obj_idx == -1 or hint_idx == -1:
-            continue
-        # pose_preds.append(objects[obj_idx].closest_point[0:2] + offsets[hint_idx]) # Object location plus offset of corresponding hint
-        pose_preds.append(objects[obj_idx].get_center()[0:2] + offsets[hint_idx]) # Object location plus offset of corresponding hint
+    if debug_closest_points is not None:
+        assert len(debug_closest_points) == len(objects)
+        for obj_idx, hint_idx in enumerate(matches0):
+            if obj_idx == -1 or hint_idx == -1:
+                continue
+            pose_preds.append(debug_closest_points[obj_idx][0:2] + offsets[hint_idx])
+    else:
+        for obj_idx, hint_idx in enumerate(matches0):
+            if obj_idx == -1 or hint_idx == -1:
+                continue
+            # pose_preds.append(objects[obj_idx].closest_point[0:2] + offsets[hint_idx]) # Object location plus offset of corresponding hint
+            pose_preds.append(objects[obj_idx].get_center()[0:2] + offsets[hint_idx]) # Object location plus offset of corresponding hint
     return np.mean(pose_preds, axis=0) if len(pose_preds) > 0 else np.array((0.5,0.5)) # Guess the middle if no matches
 
 if __name__ == "__main__":

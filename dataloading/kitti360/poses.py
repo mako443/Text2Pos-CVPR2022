@@ -20,7 +20,7 @@ from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
 from dataloading.kitti360.utils import batch_object_points, flip_pose_in_cell
 
-def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, flip_pose=False):
+def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args, flip_pose=False):
     assert pose.cell_id == cell.id
 
     descriptions = pose.descriptions
@@ -35,7 +35,38 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, flip_
         assert descr.object_label in hint
 
     # Gather offsets
-    offsets = np.array([descr.offset_center for descr in descriptions])[:, 0:2]  
+    if args.regressor_cell == 'pose' and args.regressor_learn == 'closest':
+        offsets = np.array([descr.offset_closest for descr in descriptions])[:, 0:2]
+    if args.regressor_cell == 'pose' and args.regressor_learn == 'center':
+        offsets = np.array([descr.offset_center for descr in descriptions])[:, 0:2]            
+    if args.regressor_cell == 'best' and args.regressor_learn == 'closest':
+        # offsets = np.array([descr.best_offset_closest for descr in descriptions])[:, 0:2]
+        offsets = np.ones((6, 2), dtype=np.float) * np.inf
+        for i_descr, descr in enumerate(descriptions):
+            if descr.is_matched: 
+                offsets[i_descr] = descr.best_offset_closest[0:2]
+    if args.regressor_cell == 'best' and args.regressor_learn == 'center':
+        # offsets = np.array([descr.best_offset_center for descr in descriptions])[:, 0:2]                
+        offsets = np.ones((6, 2), dtype=np.float) * np.inf
+        for i_descr, descr in enumerate(descriptions):
+            if descr.is_matched: 
+                offsets[i_descr] = descr.best_offset_center[0:2]        
+              
+
+    offsets = np.array(offsets)
+    if len(offsets) != 6:
+        print()
+        print(len(offsets), len(descriptions), len(hints), args.regressor_cell, args.regressor_learn)
+    assert len(descriptions) == 6
+    assert len(offsets) == 6
+
+
+    # print()
+    # print(offsets.dtype)
+    # print(offsets)
+    offsets_valid = np.sum(np.isnan(offsets)) == 0
+
+    # offsets = np.array([descr.offset_center for descr in descriptions])[:, 0:2]  
 
     # Gather matched objects
     objects, matches = [], [] # Matches as [(obj_idx, hint_idx)]
@@ -136,6 +167,7 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, flip_
         'matches': matches,
         'all_matches': all_matches,
         'offsets': np.array(offsets),
+        'offsets_valid': offsets_valid,
         'object_class_indices': object_class_indices,
         'object_color_indices': object_color_indices
     }            
@@ -146,13 +178,14 @@ class Kitti360FineDataset(Kitti360BaseDataset):
         self.pad_size = args.pad_size
         self.transform = transform
         self.flip_pose = flip_pose
+        self.args = args
 
     def __getitem__(self, idx):
         pose = self.poses[idx]
         cell = self.cells_dict[pose.cell_id]
         hints = self.hint_descriptions[idx]
         
-        return load_pose_and_cell(pose, cell, hints, self.pad_size, self.transform, self.flip_pose)
+        return load_pose_and_cell(pose, cell, hints, self.pad_size, self.transform, self.args, flip_pose=self.flip_pose)
 
     def __len__(self):
         return len(self.poses)
