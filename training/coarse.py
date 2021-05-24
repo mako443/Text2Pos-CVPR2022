@@ -15,7 +15,7 @@ import os.path as osp
 
 from models.cell_retrieval import CellRetrievalNetwork
 
-from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_TEST
+from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_VAL
 from datapreparation.kitti360.utils import COLOR_NAMES as COLOR_NAMES_K360
 from dataloading.kitti360.cells import Kitti360CoarseDatasetMulti, Kitti360CoarseDataset
 
@@ -206,7 +206,7 @@ if __name__ == "__main__":
     dataset_name = dataset_name.split('/')[-1]
     print(f'Directory: {dataset_name}')
 
-    plot_path = f'./plots/{dataset_name}/Coarse-Data_ds{args.data_split}-bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_em{int(args.pointnet_embed)}_p{args.pointnet_numpoints}_frz{int(args.pointnet_freeze)}_m{args.margin:0.2f}_s{int(args.shuffle)}_g{args.lr_gamma}.png'
+    plot_path = f'./plots/{dataset_name}/Coarse_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_em{int(args.pointnet_embed)}_p{args.pointnet_numpoints}_frz{int(args.pointnet_freeze)}_m{args.margin:0.2f}_s{int(args.shuffle)}_g{args.lr_gamma}.png'
     print('Plot:', plot_path, '\n')
 
     '''
@@ -219,7 +219,7 @@ if __name__ == "__main__":
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=args.shuffle)
 
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        dataset_val = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TEST, val_transform)
+        dataset_val = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_VAL, val_transform)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=False)    
         
     # train_words = dataset_train.get_known_words()

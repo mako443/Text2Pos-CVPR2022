@@ -14,10 +14,9 @@ from evaluation.args import parse_arguments
 from evaluation.utils import calc_sample_accuracies, print_accuracies
 
 from dataloading.kitti360.cells import Kitti360CoarseDataset, Kitti360CoarseDatasetMulti
-# from dataloading.kitti360.poses import Kitti360PoseReferenceDatasetMulti, Kitti360PoseReferenceDataset
 from dataloading.kitti360.eval import Kitti360TopKDataset
 
-from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_TEST
+from datapreparation.kitti360.utils import SCENE_NAMES_TEST
 
 from training.coarse import eval_epoch as eval_epoch_retrieval
 from models.superglue_matcher import get_pos_in_cell

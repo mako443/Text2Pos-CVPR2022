@@ -13,7 +13,7 @@ import os.path as osp
 
 from models.offset_regression import OffsetRegressor
 
-from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_TEST
+from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_VAL
 from dataloading.kitti360.poses import Kitti360FineDatasetMulti, Kitti360FineDataset
 
 from training.args import parse_arguments
@@ -36,9 +36,12 @@ def train_epoch(model, dataloader, args):
         optimizer.zero_grad()
         preds = model(batch['hint_descriptions'])
 
-        valid = torch.tensor(batch['offsets_valid'], device=DEVICE)
         targets = torch.tensor(batch['offsets'], dtype=torch.float, device=DEVICE)
-        loss = criterion(preds[valid], targets[valid])
+        # valid = torch.tensor(batch['offsets_valid'], device=DEVICE)
+        # assert torch.sum(torch.isnan(preds[valid])).item() == 0
+        # assert torch.sum(torch.isnan(targets[valid])).item() == 0
+
+        loss = criterion(preds, targets)
 
         loss.backward()
         optimizer.step()
@@ -94,15 +97,13 @@ if __name__ == "__main__":
     plot_path = f'./plots/{dataset_name}/Offsets_bs{args.batch_size}_e{args.regressor_dim}_rc-{args.regressor_cell}_rl-{args.regressor_learn}_re-{args.regressor_eval}_s{args.shuffle}_g{args.lr_gamma}.png'
     print('Plot:', plot_path, '\n')
 
-    print('XXX CARE WRONG DIRECTORY XXX')
-
     # Load data sets
     # ['2013_05_28_drive_0003_sync', ]
     transform = T.Compose([T.FixedPoints(32), ])
-    dataset_train = Kitti360FineDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], transform, args, flip_pose=False)
+    dataset_train = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, transform, args, flip_pose=False)
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn, shuffle=args.shuffle)
 
-    dataset_val = Kitti360FineDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], transform, args, flip_pose=False)
+    dataset_val = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_VAL, transform, args, flip_pose=False)
     dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn, shuffle=False)
 
     DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -110,7 +111,7 @@ if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)    
 
     # Start training
-    learning_rates = np.logspace(-1, -3, 3)
+    learning_rates = np.logspace(-1, -3, 3) [1: ]
 
     train_stats_loss = {lr: [] for lr in learning_rates}
     train_stats_pose_mid = {lr: [] for lr in learning_rates}

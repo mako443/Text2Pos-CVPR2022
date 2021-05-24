@@ -19,7 +19,7 @@ from dataloading.kitti360.poses import Kitti360FineDataset, Kitti360FineDatasetM
 
 from datapreparation.semantic3d.imports import COLORS as COLORS_S3D, COLOR_NAMES as COLOR_NAMES_S3D
 from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360, SCENE_NAMES_TEST
-from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_TEST
+from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_VAL
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
@@ -34,23 +34,15 @@ RESULTS:
 - best-cell: cell-shift is same, maybe even a little better
 - pose-cell w/o shift: recall + precision slightly lower, accuracies ~ same
 - pose-cell w/  shift: recall, precision and accs back at best+shift, 0.6-0.7
+- See if improves on smaller threshold -> Yes!
+- compare mean/offset accuracies with closest/center in offset-pred and pos_in_cell -> Not much difference in any case, all 0.11 with perfect matching
 
 TODO:
-- Train on real train-data again (Care to flip poses/cells including hints!)
-- compare mean/offset accuracies with closest/center in offset-pred and pos_in_cell
-- See if improves on smaller threshold
-
-- How to get 0.1 - 0.15 train/val accs? Predict + eval closest?
-
-- Force data to mention only 180° or something if needed?
+- Try regress and match only direction (do not say "on-top", learn on centers)
 
 - Handle or discuss objects gt-selection / overflow. 32 would be enough for most
 - Merge differently / variations?
 
-- Which augmentation: RandomFlips, RandomRotate, Nothing? -> Not much difference?
-- Aux. train color + class helpful?
-
-- Refactoring: train (on-top, classes, center/closest point, color rgb/text, )
 - feature ablation
 - regress offsets: is error more in direction or magnitude? optimize?
 - Pad at (0.5,0.5) for less harmfull miss-matches?
@@ -200,16 +192,6 @@ if __name__ == "__main__":
     plot_path = f'./plots/{dataset_name}/Fine-bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}.png'
     print('Plot:', plot_path, '\n')
 
-    # Eval conf: sums and matching-confs. Use FineDatasetMulti
-    # WEITER: Nans anzeigen, kleinere LR?
-
-    '''
-    no-shift - best: k360_cs30_cd15_scN_pd10_pc4_spY_closest_bestCell
-    no-shift - pose: k360_cs30_cd15_scN_pd10_pc4_spY_closest
-    shift    - best: k360_cs30_cd15_scY_pd10_pc4_spY_closest_bestCell
-    shfit    - pose: k360_cs30_cd15_scY_pd10_pc4_spY_closest
-    '''    
-
     '''
     Create data loaders
     '''    
@@ -220,7 +202,7 @@ if __name__ == "__main__":
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn, shuffle=args.shuffle)
 
         val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        dataset_val = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TEST, val_transform, args)
+        dataset_val = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_VAL, val_transform, args)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn)  
 
         

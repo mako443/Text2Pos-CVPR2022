@@ -35,30 +35,34 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args,
         assert descr.object_label in hint
 
     # Gather offsets
+    # CARE: Currently on trains on best-offsets if available (matched)!
     if args.regressor_cell == 'pose' and args.regressor_learn == 'closest':
         offsets = np.array([descr.offset_closest for descr in descriptions])[:, 0:2]
     if args.regressor_cell == 'pose' and args.regressor_learn == 'center':
         offsets = np.array([descr.offset_center for descr in descriptions])[:, 0:2]            
     if args.regressor_cell == 'best' and args.regressor_learn == 'closest':
         # offsets = np.array([descr.best_offset_closest for descr in descriptions])[:, 0:2]
-        offsets = np.ones((6, 2), dtype=np.float) * np.inf
+        offsets = []
         for i_descr, descr in enumerate(descriptions):
             if descr.is_matched: 
-                offsets[i_descr] = descr.best_offset_closest[0:2]
+                offsets.append(descr.best_offset_closest[0:2])
+            else:
+                offsets.append(descr.offset_closest[0:2])
     if args.regressor_cell == 'best' and args.regressor_learn == 'center':
         # offsets = np.array([descr.best_offset_center for descr in descriptions])[:, 0:2]                
-        offsets = np.ones((6, 2), dtype=np.float) * np.inf
+        offsets = []
         for i_descr, descr in enumerate(descriptions):
             if descr.is_matched: 
-                offsets[i_descr] = descr.best_offset_center[0:2]        
-              
+                offsets.append(descr.best_offset_center[0:2])
+            else:
+                offsets.append(descr.offset_center[0:2])
 
     offsets = np.array(offsets)
-    if len(offsets) != 6:
-        print()
-        print(len(offsets), len(descriptions), len(hints), args.regressor_cell, args.regressor_learn)
-    assert len(descriptions) == 6
-    assert len(offsets) == 6
+    # if len(offsets) != 6:
+    #     print()
+    #     print(len(offsets), len(descriptions), len(hints), args.regressor_cell, args.regressor_learn)
+    # assert len(descriptions) == 6
+    # assert len(offsets) == 6
 
 
     # print()
@@ -167,7 +171,7 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args,
         'matches': matches,
         'all_matches': all_matches,
         'offsets': np.array(offsets),
-        'offsets_valid': offsets_valid,
+        # 'offsets_valid': offsets_valid,
         'object_class_indices': object_class_indices,
         'object_color_indices': object_color_indices
     }            
