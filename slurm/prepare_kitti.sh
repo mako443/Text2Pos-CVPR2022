@@ -2,8 +2,8 @@
 #SBATCH --job-name="K360 data prepare"
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
-#SBATCH --time=1:59:00
+#SBATCH --mem=64G
+#SBATCH --time=2:59:00
 #SBATCH --mail-type=NONE
 #SBATCH --output=slurm-%j.out
 #SBATCH --error=slurm-%j.out

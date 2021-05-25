@@ -18,6 +18,14 @@ def get_direction(obj, pose):
         if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]<=0: direction='south'  
     return direction
 
+def get_direction_noOntop(obj, pose):
+    obj2pose = pose[0:2] - obj.get_center()[0:2]
+    if abs(obj2pose[0])>=abs(obj2pose[1]) and obj2pose[0]>=0: direction='east'
+    if abs(obj2pose[0])>=abs(obj2pose[1]) and obj2pose[0]<=0: direction='west'
+    if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]>=0: direction='north'
+    if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]<=0: direction='south'  
+    return direction
+
 def select_objects_closest(objects: List[Object3d], pose, num_mentioned):
     distances = np.linalg.norm([obj.get_closest_point(pose) - pose for obj in objects], axis=1)
     indices = np.argsort(distances)[0 : num_mentioned]

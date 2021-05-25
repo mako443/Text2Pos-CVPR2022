@@ -24,9 +24,13 @@ from models.superglue_matcher import get_pos_in_cell
 import torch_geometric.transforms as T 
 
 '''
+RESULTS
+- Check top-3 conf -> Not better
+
 TODO:
 - Fine: which objects to cut-off? Just pad_size=32 not different, try to select perfectly?
 - Fine: select by cluster (2*cell-size) + conf
+- Try to add num_matches*10 + sum(match_scores[correctly_matched])
 
 - How to handle orientation predictions?
 '''
@@ -96,7 +100,9 @@ def run_fine(model, retrievals, dataloader, args):
         offsets.append(output.offsets.detach().cpu().numpy())
         # confs = get_confidences(output.P.detach().cpu().numpy())
         assert len(output.matches0.shape)==2
-        confs = np.sum(output.matches0.detach().cpu().numpy(), axis=1)
+        out_matches = output.matches0.detach().cpu().numpy()
+        # out_match_confs = output.matching_scores0.detach().cpu().numpy()
+        confs = np.sum(out_matches >= 0, axis=1)# * 10 + np.sum(out_match_confs[out_ma])
         assert len(confs) == num_samples
         confidences.append(confs)
         
@@ -221,3 +227,11 @@ if __name__ == '__main__':
     accuracies = eval_pose_accuracies(dataset_retrieval, retrievals, pos_in_cell, top_k=args.top_k, threshs=threshs)    
     print_accuracies(accuracies)
     
+'''
+- Re-run cd10 w/ new models (cd20 egal) -> Running
+- Re-run cd15 w/ Pad24 and Pad32 -> Running
+- Re-train cd5 (more memory ;) ) -> Running
+- Build cd03, hope that doesn't help anymore -> Prepare running
+
+- Implement continue training for these other cell-dists
+'''

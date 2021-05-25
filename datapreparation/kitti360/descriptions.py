@@ -4,7 +4,7 @@ from sklearn.cluster import DBSCAN
 
 from datapreparation.kitti360.imports import Object3d, Cell, Pose, DescriptionPoseCell, DescriptionBestCell
 from datapreparation.kitti360.utils import STUFF_CLASSES
-from datapreparation.kitti360.select import get_direction, select_objects_closest, select_objects_direction, select_objects_class, select_objects_random
+from datapreparation.kitti360.select import get_direction, get_direction_noOntop, select_objects_closest, select_objects_direction, select_objects_class, select_objects_random
 
 from copy import deepcopy
 
@@ -97,7 +97,7 @@ def create_cell(cell_idx, scene_name, bbox_w, scene_objects: List[Object3d], min
 
     return Cell(cell_idx, scene_name, cell_objects, cell_size, bbox_w)
 
-def describe_pose_in_pose_cell(pose_w, cell: Cell, select_by, num_mentioned, max_dist=0.5) -> List[DescriptionPoseCell]:
+def describe_pose_in_pose_cell(pose_w, cell: Cell, select_by, num_mentioned, max_dist=0.5, no_ontop=False) -> List[DescriptionPoseCell]:
     # Assert pose is close to cell_center
     # assert np.allclose(pose_w, cell.get_center())
     assert len(cell.objects) >= num_mentioned, f'Only {len(cell.objects)} objects'
@@ -123,7 +123,10 @@ def describe_pose_in_pose_cell(pose_w, cell: Cell, select_by, num_mentioned, max
 
     descriptions = []
     for obj in selected_objects:
-        direction = get_direction(obj, pose)
+        if no_ontop:
+            direction = get_direction_noOntop(obj, pose)
+        else:
+            direction = get_direction(obj, pose)
         closest_point = obj.get_closest_point(pose)
 
         offset_center = pose - obj.get_center()

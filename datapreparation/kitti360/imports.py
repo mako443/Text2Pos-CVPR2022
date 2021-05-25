@@ -165,8 +165,8 @@ class Cell:
             Pose_w as (x,y,z) in original world-coordinates
         """
         self.scene_name = scene_name
-        self.id = f'{scene_name}_{idx:04.0f}' # Incrementing alpha-numeric id in format 00XX_XXXX
-        assert len(self.id) == 9, self.id
+        self.id = f'{scene_name}_{idx:05.0f}' # Incrementing alpha-numeric id in format 00XX_XXXXX
+        assert len(self.id) == 10, self.id
         self.objects = objects
         # self.descriptions = descriptions
         # self.pose = pose    

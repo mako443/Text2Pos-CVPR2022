@@ -287,6 +287,7 @@ if __name__ == "__main__":
             print('val-acc-close: ', end="")
             for k, v in val_acc_close.items():
                 print(f'{k}-{v:0.2f} ', end="") 
+            print("\n", flush=True)
 
         # Saving best model (w/o early stopping)
         acc = val_acc[max(args.top_k)]

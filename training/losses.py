@@ -7,7 +7,7 @@ from easydict import EasyDict
 
 from datapreparation.kitti360.imports import Object3d, Pose, Cell
 
-from models.superglue_matcher import get_pos_in_cell
+from models.superglue_matcher import get_pos_in_cell, get_pos_in_cell_intersect
 
 class MatchingLoss(nn.Module):
     def __init__(self):
@@ -52,8 +52,21 @@ def calc_recall_precision(batch_gt_matches, batch_matches0, batch_matches1):
 
     return np.mean(all_recalls), np.mean(all_precisions)
 
+def calc_pose_error_intersect(objects, matches0, poses: List[Pose], directions):
+    assert len(objects) == len(matches0) == len(poses)
+    assert isinstance(poses[0], Pose)
+
+    batch_size, pad_size = matches0.shape
+    poses = np.array([pose.pose for pose in poses])[:, 0:2] # Assuming this is the best cell!
+
+    errors = []
+    for i_sample in range(batch_size):
+        pose_prediction = get_pos_in_cell_intersect(objects[i_sample], matches0[i_sample], directions[i_sample])
+        errors.append(np.linalg.norm(poses[i_sample] - pose_prediction))
+    return np.mean(errors)
+
 # Verified against old function ✓
-def calc_pose_error(objects, matches0, poses: List[Pose], offsets=None, use_mid_pred=False, debug_use_closest=False):
+def calc_pose_error(objects, matches0, poses: List[Pose], offsets=None, use_mid_pred=False):
     """Calculates the mean error of a batch by averaging the positions of all matches objects plus corresp. offsets.
     All calculations are in x-y-plane.
 
@@ -79,23 +92,12 @@ def calc_pose_error(objects, matches0, poses: List[Pose], offsets=None, use_mid_
         offsets = np.zeros((batch_size, pad_size, 2)) # Set zero offsets to just predict the mean of matched-objects' centers
 
     errors = []
-    if debug_use_closest:
-        for i_sample in range(batch_size):
-            if use_mid_pred:
-                pose_prediction = np.array((0.5, 0.5))
-            else:
-                p = np.array((poses[i_sample][0], poses[i_sample][0], 0))
-                debug_closest_points = np.array([obj.get_closest_point(p) for obj in objects[i_sample]])[:, 0:2]
-                pose_prediction = get_pos_in_cell(objects[i_sample], matches0[i_sample], offsets[i_sample], debug_closest_points=debug_closest_points)
-            errors.append(np.linalg.norm(poses[i_sample] - pose_prediction))
-    else: 
-        for i_sample in range(batch_size):
-            if use_mid_pred:
-                pose_prediction = np.array((0.5, 0.5))
-            else:
-                pose_prediction = get_pos_in_cell(objects[i_sample], matches0[i_sample], offsets[i_sample])
-            
-            errors.append(np.linalg.norm(poses[i_sample] - pose_prediction))
+    for i_sample in range(batch_size):
+        if use_mid_pred:
+            pose_prediction = np.array((0.5, 0.5))
+        else:
+            pose_prediction = get_pos_in_cell(objects[i_sample], matches0[i_sample], offsets[i_sample])
+        errors.append(np.linalg.norm(poses[i_sample] - pose_prediction))
     return np.mean(errors)
         
 

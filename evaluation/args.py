@@ -13,8 +13,8 @@ def parse_arguments():
     parser.add_argument('--base_path', type=str)
     parser.add_argument('--path_coarse', type=str, help="The path to the Cell-Retrieval model")
     parser.add_argument('--path_fine', type=str, help="The path to the Hints-to-Objects matching model")
-    parser.add_argument('--top_k', type=int, nargs='+', default=[1, 5])
-    parser.add_argument('--threshs', type=int, nargs='+', default=[6, 10, 15]) # Possibly over-write here when it becomes a list of tuples
+    parser.add_argument('--top_k', type=int, nargs='+', default=[1, 5, 10, 20])
+    parser.add_argument('--threshs', type=int, nargs='+', default=[6, 10, 15, 30]) # Possibly over-write here when it becomes a list of tuples
     parser.add_argument('--pad_size', type=int, default=16)
 
     parser.add_argument('--use_batching', action='store_true')

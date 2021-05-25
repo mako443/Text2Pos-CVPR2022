@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 
 import torch_geometric.transforms as T 
@@ -18,12 +19,11 @@ from dataloading.kitti360.poses import Kitti360FineDatasetMulti, Kitti360FineDat
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
-from training.losses import calc_pose_error
+from training.losses import calc_pose_error, calc_pose_error_intersect
 
 '''
 TODO:
-- Train + eval all 8 of pose/best, learn closest/center, eval closest/center
-- If necessary, update get_pose_in_cell() call in eval.pipeline, too...
+- Train + eval all 8 of pose/best, learn closest/center, eval closest/center -> Not better than pose-center-center (0.11)
 - Flip or not?
 - Use in Fine model
 '''
@@ -32,14 +32,21 @@ def train_epoch(model, dataloader, args):
     model.train()
     losses = []
 
+    printed=False
     for i_batch, batch in enumerate(dataloader):
         optimizer.zero_grad()
         preds = model(batch['hint_descriptions'])
 
         targets = torch.tensor(batch['offsets'], dtype=torch.float, device=DEVICE)
+        targets = F.normalize(targets, dim=-1)
         # valid = torch.tensor(batch['offsets_valid'], device=DEVICE)
         # assert torch.sum(torch.isnan(preds[valid])).item() == 0
         # assert torch.sum(torch.isnan(targets[valid])).item() == 0
+        if not printed:
+            print(preds[0])
+            print(targets[0])
+            print()
+            printed=True
 
         loss = criterion(preds, targets)
 
@@ -72,16 +79,11 @@ def eval_epoch(model, dataloader, args):
             for (obj_idx, hint_idx) in matches_sample:
                 matches[i, obj_idx] = hint_idx
 
-        if args.regressor_eval == 'closest':
-            stats.pose_mid.append(      calc_pose_error(batch['objects'], matches, batch['poses'], preds, use_mid_pred=True, debug_use_closest=True))
-            stats.pose_mean.append(     calc_pose_error(batch['objects'], matches, batch['poses'], np.zeros_like(preds), debug_use_closest=True))
-            stats.pose_offsets.append(  calc_pose_error(batch['objects'], matches, batch['poses'], preds, debug_use_closest=True))
-        else:
-            stats.pose_mid.append(      calc_pose_error(batch['objects'], matches, batch['poses'], preds, use_mid_pred=True))
-            stats.pose_mean.append(     calc_pose_error(batch['objects'], matches, batch['poses'], np.zeros_like(preds)))
-            stats.pose_offsets.append(  calc_pose_error(batch['objects'], matches, batch['poses'], preds))            
-
-
+        stats.pose_mid.append(      calc_pose_error(batch['objects'], matches, batch['poses'], preds, use_mid_pred=True))
+        stats.pose_mean.append(     calc_pose_error(batch['objects'], matches, batch['poses'], np.zeros_like(preds)))
+        # stats.pose_offsets.append(  calc_pose_error(batch['objects'], matches, batch['poses'], preds))     
+        stats.pose_offsets.append(calc_pose_error_intersect(batch['objects'], matches, batch['poses'], preds))       
+        
     for key in stats.keys():
         stats[key] = np.mean(stats[key])
     return stats
@@ -97,13 +99,15 @@ if __name__ == "__main__":
     plot_path = f'./plots/{dataset_name}/Offsets_bs{args.batch_size}_e{args.regressor_dim}_rc-{args.regressor_cell}_rl-{args.regressor_learn}_re-{args.regressor_eval}_s{args.shuffle}_g{args.lr_gamma}.png'
     print('Plot:', plot_path, '\n')
 
+    print('CARE WRONG DIRS!')
+
     # Load data sets
     # ['2013_05_28_drive_0003_sync', ]
     transform = T.Compose([T.FixedPoints(32), ])
-    dataset_train = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, transform, args, flip_pose=False)
+    dataset_train = Kitti360FineDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], transform, args, flip_pose=False)
     dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn, shuffle=args.shuffle)
 
-    dataset_val = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_VAL, transform, args, flip_pose=False)
+    dataset_val = Kitti360FineDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], transform, args, flip_pose=False)
     dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn, shuffle=False)
 
     DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')

@@ -22,6 +22,7 @@ def parse_arguments():
     parser.add_argument('--shift_poses', action='store_true')  
 
     parser.add_argument('--describe_best_cell', action='store_true') 
+    parser.add_argument('--no_ontop', action='store_true')
 
     args = parser.parse_args()
     
@@ -38,6 +39,8 @@ def parse_arguments():
     args.path_out = f'{args.path_out}_cs{args.cell_size}_cd{args.cell_dist}_sc{cells_text}_pd{args.pose_dist}_pc{args.pose_count}_sp{"Y" if args.shift_poses else "N"}_{args.describe_by}'
     if args.describe_best_cell:
         args.path_out += '_bestCell'
+    if args.no_ontop:
+        args.path_out += '_noOntop'
 
     print(f'Folders: {args.path_in} -> {args.path_out}')
 
