@@ -112,19 +112,15 @@ printed = False
 @torch.no_grad()
 def eval_epoch(model, dataloader, args):
     """Top-k retrieval for each pose against all cells in the dataset.
-    NOTE: The way the cells are read from the Cells-Only-Dataset, they may have been augmented differently during the actual training. Cells-Only does not flip and shuffle!
-    TODO: Is this ok? Otherwise, just sent in as batches, ignore that non-pose cells are missing. Augmented cells a better metric or not?
 
     Args:
-        model ([type]): The model
-        dataloader ([type]): Train or test dataloader
-        args ([type]): Global arguments
-        cell_encodings ([np.ndarray]): Encodings already given, ignore dataloader, (used for Mock-Data)
-        text_encodings ([np.ndarray]): Encodings already given, ignore dataloader, (used for Mock-Data)
+        model: The model
+        dataloader: Train or test dataloader
+        args: Global arguments
 
     Returns:
         Dict: Top-k accuracies
-        Dict: Top retrievals
+        Dict: Top retrievals as {query_idx: top_cell_ids}
     """
     assert args.ranking_loss != 'triplet' # Else also update evaluation.pipeline
 

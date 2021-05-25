@@ -8,7 +8,6 @@ import torch
 from torch.utils.data import DataLoader
 import time
 
-from training.plots import plot_metrics
 # from training.losses import calc_pose_error # This cannot be used here anymore!!
 from evaluation.args import parse_arguments
 from evaluation.utils import calc_sample_accuracies, print_accuracies
@@ -31,6 +30,7 @@ TODO:
 - Fine: which objects to cut-off? Just pad_size=32 not different, try to select perfectly?
 - Fine: select by cluster (2*cell-size) + conf
 - Try to add num_matches*10 + sum(match_scores[correctly_matched])
+- Care to deactive transform for no-augmentation studies ;)
 
 - How to handle orientation predictions?
 '''
@@ -50,14 +50,20 @@ def run_coarse(model, dataloader, args):
     """
     model.eval()
 
-    # Run retrieval model to obtain top-cells
-    retrieval_accuracies, retrieval_accuracies_close, retrievals = eval_epoch_retrieval(model, dataloader, args)
-    retrievals = [retrievals[idx] for idx in range(len(retrievals))] # Dict -> list
-    print('Retrieval Accs:')
-    print(retrieval_accuracies)
-    print('Retrieval Accs Close:')
-    print(retrieval_accuracies_close)    
-    assert len(retrievals) == len(dataloader.dataset.all_poses)
+    if args.coarse_oracle: # Build retrievals as [[best_cell, best_cell, ...], [best_cell, best_cell, ...]]
+        retrievals = []
+        max_k = max(args.top_k)
+        for pose in dataloader.dataset.all_poses:
+            retrievals.append([pose.cell_id for i in range(max_k)])
+    else:
+        # Run retrieval model to obtain top-cells
+        retrieval_accuracies, retrieval_accuracies_close, retrievals = eval_epoch_retrieval(model, dataloader, args)
+        retrievals = [retrievals[idx] for idx in range(len(retrievals))] # Dict -> list
+        print('Retrieval Accs:')
+        print(retrieval_accuracies)
+        print('Retrieval Accs Close:')
+        print(retrieval_accuracies_close)    
+        assert len(retrievals) == len(dataloader.dataset.all_poses)
 
     all_cells_dict = {cell.id: cell for cell in dataloader.dataset.all_cells}
 
@@ -78,6 +84,33 @@ def run_coarse(model, dataloader, args):
             accuracies[k][t] = np.mean(accuracies[k][t])
 
     return retrievals, accuracies
+
+def run_fine_oracle(retrievals, dataloader, args):
+    assert len(retrievals) == len(dataloader.dataset) == len(dataloader.dataset.all_poses)
+    all_cells_dict = {cell.id: cell for cell in dataloader.dataset.all_cells}
+
+    accuracies = {k: {t: [] for t in args.threshs} for k in args.top_k}
+    for i_pose, pose in enumerate(dataloader.dataset.all_poses):
+        top_cells = [all_cells_dict[cell_id] for cell_id in retrievals[i_pose]]
+        
+        # Get the ideal in-cell location for each retrieval
+        pos_in_cells = []
+        for cell in top_cells:
+            loc = (pose.pose_w[0:2] - cell.bbox_w[0:2]) / cell.cell_size
+            loc = np.clip(loc, 0, 1)
+            pos_in_cells.append(loc)
+        pos_in_cells = np.array(pos_in_cells)
+
+        accs = calc_sample_accuracies(pose, top_cells, pos_in_cells, args.top_k, args.threshs)
+
+        for k in args.top_k:
+            for t in args.threshs:
+                accuracies[k][t].append(accs[k][t])
+    
+    for k in args.top_k:
+        for t in args.threshs:
+            accuracies[k][t] = np.mean(accuracies[k][t])
+    return accuracies
 
 @torch.no_grad()
 def run_fine(model, retrievals, dataloader, args):
@@ -175,12 +208,6 @@ if __name__ == '__main__':
 
     # Load datasets
     transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-    # dataset_retrieval = Kitti360CellDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, split=None)
-    # dataset_matching = Kitti360PoseReferenceDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, args, split=None)
-    # assert len(dataset_retrieval) == len(dataset_matching) # If poses and cells become separate, this will need dedicated handling
-    
-    # dataloader_retrieval = DataLoader(dataset_retrieval, batch_size=args.batch_size, collate_fn=Kitti360CellDataset.collate_fn)
-    # dataloader_matching = DataLoader(dataset_matching, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceDataset.collate_fn)
 
     dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, shuffle_hints=False, flip_poses=False)
     # dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], transform, shuffle_hints=False, flip_poses=False)
@@ -200,32 +227,14 @@ if __name__ == '__main__':
     print_accuracies(coarse_accuracies, "Coarse")
 
     # Run fine
-    accuracies_mean, accuracies_offsets, accuracies_mean_conf = run_fine(model_matching, retrievals, dataloader_retrieval, args)
-    print_accuracies(accuracies_mean, "Fine (mean)")
-    print_accuracies(accuracies_offsets, "Fine (offsets)")
-    print_accuracies(accuracies_mean_conf, "Fine (mean-conf)")
-
-    quit()
-    # OLD
-
-    # Run retrieval
-    retrievals = run_retrieval(model_retrieval, dataloader_retrieval)
-    pos_in_cell = [np.array((0.5, 0.5)) for i in range(len(dataset_retrieval))] # Estimate middle of the cell for each retrieval
-    accuracies = eval_pose_accuracies(dataset_retrieval, retrievals, pos_in_cell, top_k=args.top_k, threshs=threshs)
-    print_accuracies(accuracies)
-
-    # Run matching
-    offsets, matches0 = run_matching(model_matching, dataloader_matching)
-
-    # Without offsets
-    pos_in_cell = [get_pos_in_cell(dataset_matching[i]['objects'], matches0[i], np.zeros_like(offsets[i])) for i in range(len(dataset_matching))] # Zero-offsets to just take mean of objects
-    accuracies = eval_pose_accuracies(dataset_retrieval, retrievals, pos_in_cell, top_k=args.top_k, threshs=threshs)
-    print_accuracies(accuracies)
-
-    # With offsets
-    pos_in_cell = [get_pos_in_cell(dataset_matching[i]['objects'], matches0[i], offsets[i]) for i in range(len(dataset_matching))] # Using actual offset-vectors
-    accuracies = eval_pose_accuracies(dataset_retrieval, retrievals, pos_in_cell, top_k=args.top_k, threshs=threshs)    
-    print_accuracies(accuracies)
+    if args.fine_oracle:
+        accuracies = run_fine_oracle(retrievals, dataloader_retrieval, args)
+        print_accuracies(accuracies, "Fine (oracle)")
+    else:
+        accuracies_mean, accuracies_offsets, accuracies_mean_conf = run_fine(model_matching, retrievals, dataloader_retrieval, args)
+        print_accuracies(accuracies_mean, "Fine (mean)")
+        print_accuracies(accuracies_offsets, "Fine (offsets)")
+        print_accuracies(accuracies_mean_conf, "Fine (mean-conf)")
     
 '''
 - Re-run cd10 w/ new models (cd20 egal) -> Running
@@ -233,5 +242,5 @@ if __name__ == '__main__':
 - Re-train cd5 (more memory ;) ) -> Running
 - Build cd03, hope that doesn't help anymore -> Prepare running
 
-- Implement continue training for these other cell-dists
+- Implement continue training for these other cell-dists (if helpful)
 '''

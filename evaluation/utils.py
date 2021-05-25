@@ -67,6 +67,22 @@ def depr_eval_pose_accuracies(dataset, retrievals, pos_in_cell, top_k=[1,3,5], t
 
 def print_accuracies(accuracies, name=""):
     print(f'\n\t Accuracies {name}:')
+    top_k = list(accuracies.keys())
+
+    for t in accuracies[top_k[0]]:
+        print(f'\t{t:4.0f}', end="")
+    print()
+
+    for k in accuracies:
+        print(f'{k:2.0f}:\t', end="")
+        for t in accuracies[k]:
+            # print(f'{t:2.0f}: {accuracies[k][t]:0.2f}\t', end="")
+            print(f'{accuracies[k][t]:0.2f}\t', end="")
+        print()
+    print("", flush=True)
+
+def depr_print_accuracies(accuracies, name=""):
+    print(f'\n\t Accuracies {name}:')
     for t in accuracies:
         print(f'{t:2.0f}:\t', end="")
         for k in accuracies[t]:
