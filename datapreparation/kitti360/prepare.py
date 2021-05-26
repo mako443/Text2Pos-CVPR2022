@@ -241,7 +241,7 @@ def create_cells(objects, locations, scene_name, cell_size, args) -> List[Cell]:
         # print(f'\r \t locations {i_location} / {len(locations)}', end='')
         bbox = np.hstack((location - cell_size/2, location + cell_size/2)) # [x0, y0, z0, x1, y1, z1]
 
-        cell = create_cell(i_location, scene_name_short, bbox, objects)
+        cell = create_cell(i_location, scene_name_short, bbox, objects, num_mentioned=args.num_mentioned)
         if cell is not None:
             cells.append(cell)
         else:
@@ -299,7 +299,7 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
 
         # Create an extra cell on top of the pose to create the query-side description decoupled from the database-side cells.
         pose_cell_bbox = np.hstack((location - args.cell_size/2, location + args.cell_size/2)) # [x0, y0, z0, x1, y1, z1]
-        pose_cell = create_cell(-1, "pose", pose_cell_bbox, objects)
+        pose_cell = create_cell(-1, "pose", pose_cell_bbox, objects, num_mentioned=args.num_mentioned)
         if pose_cell is None: # Pose can be too far from objects to describe it
             none_indices.append(i_location)
             continue
@@ -347,7 +347,7 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
 
     print(f'Num duplicates: {num_duplicates} / {len(poses)}')
     print(f'None poses: {len(none_indices)} / {len(locations)}, avg. unmatched: {np.mean(unmatched_counts):0.1f}')
-    if len(none_indices) > len(locations) / 2:
+    if len(none_indices) > len(locations) * 2/3:
         return False, none_indices
     else:
         return True, poses          

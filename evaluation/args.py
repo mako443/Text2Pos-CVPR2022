@@ -15,6 +15,8 @@ def parse_arguments():
     parser.add_argument('--path_coarse', type=str, help="The path to the Cell-Retrieval model")
     parser.add_argument('--path_fine', type=str, help="The path to the Hints-to-Objects matching model")
 
+    parser.add_argument('--augmentation', type=int, default=6)
+
     # Options
     parser.add_argument('--top_k', type=int, nargs='+', default=[1, 5, 10])
     parser.add_argument('--threshs', type=int, nargs='+', default=[5, 10, 15]) # Possibly over-write here when it becomes a list of tuples
@@ -42,6 +44,7 @@ def parse_arguments():
 
     assert osp.isfile(args.path_coarse)
     assert osp.isfile(args.path_fine)
+    assert args.augmentation in range(7)
 
     return args
 

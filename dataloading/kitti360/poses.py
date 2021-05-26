@@ -28,6 +28,7 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args,
     matched_ids = [descr.object_id for descr in descriptions if descr.is_matched]
     matched_objects = [cell_objects_dict[matched_id] for matched_id in matched_ids]
 
+    assert len(pose.descriptions) == args.num_mentioned
     assert len(pose.descriptions) - pose.get_number_unmatched() == len(matched_objects)
 
     # Hints and descriptions have to be in same order

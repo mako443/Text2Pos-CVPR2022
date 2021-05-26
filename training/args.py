@@ -24,6 +24,7 @@ def parse_arguments():
     parser.add_argument('--lr_idx', type=int)
 
     parser.add_argument('--continue_path', type=str, help="Set to continue from a previous checkpoint")
+    parser.add_argument('--augmentation', type=int, default=6)
 
     # SuperGlue
     parser.add_argument('--sinkhorn_iters', type=int, default=50)
@@ -40,12 +41,10 @@ def parse_arguments():
     parser.add_argument('--pointnet_layers', type=int, default=3)
     parser.add_argument('--pointnet_variation', type=int, default=0)
     parser.add_argument('--pointnet_numpoints', type=int, default=256)
-    # parser.add_argument('--pointnet_transform', type=int, default=0)
     parser.add_argument('--pointnet_path', type=str, default='./checkpoints/pointnet_acc0.86_lr1_p256.pth')
     parser.add_argument('--pointnet_freeze', action='store_true')
     parser.add_argument('--pointnet_embed', action='store_true')    
     parser.add_argument('--pointnet_features', type=int, default=2)
-    # parser.add_argument('--pointnet_center', action='store_true')   
 
     # Offset regressor
     parser.add_argument('--regressor_dim', type=int, default=128)
@@ -56,12 +55,7 @@ def parse_arguments():
 
     # Others
     parser.add_argument('--epochs', type=int, default=16)
-    # parser.add_argument('--alpha_obj_ref', type=float, default=2.0)
-    # parser.add_argument('--alpha_target_class', type=float, default=100.0)
-    # parser.add_argument('--alpha_obj_class', type=float, default=1.0)
-    # parser.add_argument('--alpha_offset', type=float, default=0.01)
     parser.add_argument('--lr_gamma', type=float, default=1.0)
-    parser.add_argument('--scene_names', nargs='+', default=[])
     
 
     args = parser.parse_args()
@@ -77,6 +71,7 @@ def parse_arguments():
 
     if bool(args.continue_path):
         assert osp.isfile(args.continue_path)
+    assert args.augmentation in range(7)
 
     assert args.regressor_cell in ('pose', 'best')
     assert args.regressor_learn in ('center', 'closest')

@@ -61,7 +61,7 @@ def create_synthetic_cell(bbox_w, area_objects: List[Object3d], min_objects=6, i
 
     return Cell(-1, "mock", cell_objects, cell_size, bbox_w)
 
-def create_cell(cell_idx, scene_name, bbox_w, scene_objects: List[Object3d], min_objects=6, inside_fraction=1/3, stuff_min=250): # Before: 500
+def create_cell(cell_idx, scene_name, bbox_w, scene_objects: List[Object3d], num_mentioned=6, inside_fraction=1/3, stuff_min=250): # Before: 500
     cell_objects = []
     for obj in scene_objects:
         assert obj.id < 1e7
@@ -88,7 +88,7 @@ def create_cell(cell_idx, scene_name, bbox_w, scene_objects: List[Object3d], min
     #     cell_objects = scene_objects
     #     cell_size = np.max(bbox_w[3:6] - bbox_w[0:3])
 
-    if len(cell_objects) < min_objects:
+    if len(cell_objects) < num_mentioned:
         return None        
 
     # Reset all ids
@@ -100,7 +100,7 @@ def create_cell(cell_idx, scene_name, bbox_w, scene_objects: List[Object3d], min
 def describe_pose_in_pose_cell(pose_w, cell: Cell, select_by, num_mentioned, max_dist=0.5, no_ontop=False) -> List[DescriptionPoseCell]:
     # Assert pose is close to cell_center
     # assert np.allclose(pose_w, cell.get_center())
-    assert len(cell.objects) >= num_mentioned, f'Only {len(cell.objects)} objects'
+    assert len(cell.objects) >= num_mentioned, f'Only {len(cell.objects)} objects, expected at least {num_mentioned}'
 
     # Norm pose
     pose = (pose_w - cell.bbox_w[0:3]) / cell.cell_size
