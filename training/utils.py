@@ -1,9 +1,51 @@
 import numpy as np
 import cv2
+from numpy.lib.arraysetops import isin
 from dataloading.kitti360.base import Kitti360BaseDataset
 from datapreparation.kitti360.drawing import plot_cell
 
-def plot_retrievals(top_retrievals, dataset, count=5):
+def plot_retrievals(top_retrievals, dataset, count=3, top_k=3):
+    assert isinstance(top_retrievals, list)
+    
+    cells_dict = {cell.id: cell for cell in dataset.all_cells}
+
+    # Plot <count> positives
+    count_pos = 0
+    while count_pos < count:
+        idx = np.random.randint(len(top_retrievals))
+        pose = dataset.all_poses[idx]
+        retrievals = top_retrievals[idx]
+        if pose.cell_id in retrievals[0 : top_k]:
+            images = []
+            images.append(plot_cell(cells_dict[pose.cell_id]))
+            for cell_id in retrievals[0 : top_k]:
+                images.append(plot_cell(cells_dict[cell_id]))
+
+            sep = np.ones((images[0].shape[0], 100, 3), np.uint8) * 255
+            images.insert(1, sep)
+            cv2.imwrite(f"ret_pos_{count_pos}.png", np.hstack(images))
+            print('Saved pos!')
+            count_pos += 1
+
+    # Plot <count> negatives
+    count_neg = 0 
+    while count_neg < count:
+        idx = np.random.randint(len(top_retrievals))
+        pose = dataset.all_poses[idx]
+        retrievals = top_retrievals[idx]
+        if pose.cell_id not in retrievals[0 : top_k]:
+            images = []
+            images.append(plot_cell(cells_dict[pose.cell_id]))
+            for cell_id in retrievals[0 : top_k]:
+                images.append(plot_cell(cells_dict[cell_id]))
+
+            sep = np.ones((images[0].shape[0], 100, 3), np.uint8) * 255
+            images.insert(1, sep)
+            cv2.imwrite(f"ret_neg_{count_neg}.png", np.hstack(images))
+            print('Saved neg!')
+            count_neg += 1
+
+def depr_plot_retrievals(top_retrievals, dataset, count=5):
     """Plots <count> targets and their top-3 retrievals next to each other if the target is not in top-10.
     CARE: Assumes query and database items have the same indices, i.e. query-index == target-index.
 

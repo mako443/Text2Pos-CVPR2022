@@ -16,9 +16,13 @@ def parse_arguments():
     parser.add_argument('--path_fine', type=str, help="The path to the Hints-to-Objects matching model")
 
     # Options
-    parser.add_argument('--top_k', type=int, nargs='+', default=[1, 5, 10, 20])
-    parser.add_argument('--threshs', type=int, nargs='+', default=[6, 10, 15, 30]) # Possibly over-write here when it becomes a list of tuples
+    parser.add_argument('--top_k', type=int, nargs='+', default=[1, 5, 10])
+    parser.add_argument('--threshs', type=int, nargs='+', default=[5, 10, 15]) # Possibly over-write here when it becomes a list of tuples
     parser.add_argument('--pad_size', type=int, default=16)
+    parser.add_argument('--use_validation', action='store_true', help="Run on the validation instead of the test-set")
+
+    parser.add_argument('--plot_retrievals', action='store_true', help="Plot 3 success and fail examples, then quit.")
+    parser.add_argument('--coarse_only', action='store_true')
 
     # Oracles
     parser.add_argument('--coarse_oracle', action='store_true', help="Use gt-retrievals")
@@ -27,8 +31,11 @@ def parse_arguments():
     # Object-encoder / PointNet
     parser.add_argument('--pointnet_numpoints', type=int, default=256)
 
-    # Various
+    # Various - don't change these!
     parser.add_argument('--ranking_loss', type=str, default='pairwise')
+    parser.add_argument('--regressor_cell', type=str, default='pose') # Pose or best
+    parser.add_argument('--regressor_learn', type=str, default='center') # Center or closest
+    parser.add_argument('--regressor_eval', type=str, default='center') # Center or closest    
 
 
     args = parser.parse_args()

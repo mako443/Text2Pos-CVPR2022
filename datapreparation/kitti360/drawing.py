@@ -56,19 +56,47 @@ def plot_objects(objects, pose=None, scale=1024):
 
     return cv2.flip(img, 0) # Flip for correct north/south
 
-def plot_cell(cell: Cell, scale=1024, use_rgb=False):
-    img = np.zeros((scale, scale, 3), dtype=np.uint8)
+def plot_cell(cell: Cell, scale=1024, use_rgb=False, use_instances=False, point_size=6):
+    img = np.ones((scale, scale, 3), dtype=np.uint8) * 255
     # Draw points of each object
     for obj in cell.objects:
         if obj.label == 'pad':
             continue
-        c = CLASS_TO_COLOR[obj.label]
+        c = np.random.randint(256, size=3) if use_instances else CLASS_TO_COLOR[obj.label]
         for i_point, point in enumerate(obj.xyz*scale):
             if use_rgb:
                 c = tuple(np.uint8(obj.rgb[i_point] * 255))
             point = np.int0(point[0:2])
-            cv2.circle(img, tuple(point), 1, (int(c[2]),int(c[1]),int(c[0])))
+            cv2.circle(img, tuple(point), point_size, (int(c[2]),int(c[1]),int(c[0])), thickness=-1)
     return cv2.flip(img, 0) # Flip for correct north/south
+
+def plot_matches_in_best_cell(cell: Cell, pose: Pose, true_matches=[], false_positives=[], false_negatives=[], scale=1024, point_size=6):
+    assert cell.id == pose.cell_id
+    img = np.ones((scale, scale, 3), dtype=np.uint8) * 255
+    # Draw points of each object
+    for i_obj, obj in enumerate(cell.objects):
+        if obj.label == 'pad':
+            continue
+        if i_obj in true_matches:
+            c = (0, 255, 0)
+        elif i_obj in false_positives:
+            c = (255, 255, 0)
+        elif i_obj in false_negatives:
+            c = (255, 0, 0)
+        else:
+            c = (128, 128, 128)
+        for i_point, point in enumerate(obj.xyz*scale):
+            point = np.int0(point[0:2])
+            cv2.circle(img, tuple(point), point_size, (int(c[2]),int(c[1]),int(c[0])), thickness=-1)
+    # Draw pose
+    point = np.int0(pose.pose[0:2]*scale)
+    cv2.circle(img, tuple(point), 20, (0,0,255), thickness=7)
+    # Draw arrows
+    for i_obj, obj in enumerate(cell.objects):
+        if i_obj in true_matches:
+            target = np.int0(obj.get_closest_point(pose.pose) * scale)[0:2]
+            cv2.arrowedLine(img, tuple(point), tuple(target), (0,0,255), thickness=6)    
+    return cv2.flip(img, 0)  
 
 def plot_pose_in_best_cell(cell: Cell, pose: Pose, scale=1024, use_rgb=False, show_unmatched=False):
     img = np.zeros((scale, scale, 3), dtype=np.uint8)

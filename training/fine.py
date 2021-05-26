@@ -189,7 +189,8 @@ if __name__ == "__main__":
     dataset_name = dataset_name.split('/')[-1]
     print(f'Directory: {dataset_name}')
 
-    plot_path = f'./plots/{dataset_name}/Fine-bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}.png'
+    cont = 'Y' if bool(args.continue_path) else 'N'
+    plot_path = f'./plots/{dataset_name}/Fine_cont{cont}-bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}.png'
     print('Plot:', plot_path, '\n')
 
     '''
@@ -247,7 +248,10 @@ if __name__ == "__main__":
     val_stats_pose_offsets = {lr: [] for lr in learning_rates}
     
     for lr in learning_rates:
-        model = SuperGlueMatch(dataset_train.get_known_classes(), COLOR_NAMES_K360, dataset_train.get_known_words(), args)
+        if bool(args.continue_path):
+            model = torch.load(args.continue_path)
+        else:
+            model = SuperGlueMatch(dataset_train.get_known_classes(), COLOR_NAMES_K360, dataset_train.get_known_words(), args)
         model.to(DEVICE)
 
         criterion_matching = MatchingLoss()
@@ -298,7 +302,7 @@ if __name__ == "__main__":
 
         acc = np.mean((val_out.recall, val_out.precision))
         if acc > best_val_recallPrecision:
-            model_path = f"./checkpoints/{dataset_name}/fine_acc{acc:0.2f}_lr{args.lr_idx}_obj-{args.num_mentioned}-{args.pad_size}_p{args.pointnet_numpoints}.pth"
+            model_path = f"./checkpoints/{dataset_name}/fine_cont{cont}_acc{acc:0.2f}_lr{args.lr_idx}_obj-{args.num_mentioned}-{args.pad_size}_p{args.pointnet_numpoints}.pth"
             if not osp.isdir(osp.dirname(model_path)):
                 os.mkdir(osp.dirname(model_path))
 

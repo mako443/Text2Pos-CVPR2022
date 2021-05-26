@@ -23,6 +23,8 @@ def parse_arguments():
     parser.add_argument('--variation', type=int, default=0)
     parser.add_argument('--lr_idx', type=int)
 
+    parser.add_argument('--continue_path', type=str, help="Set to continue from a previous checkpoint")
+
     # SuperGlue
     parser.add_argument('--sinkhorn_iters', type=int, default=50)
     parser.add_argument('--num_mentioned', type=int, default=6)
@@ -72,6 +74,9 @@ def parse_arguments():
         args.max_batches = int(args.max_batches)
     except:
         pass    
+
+    if bool(args.continue_path):
+        assert osp.isfile(args.continue_path)
 
     assert args.regressor_cell in ('pose', 'best')
     assert args.regressor_learn in ('center', 'closest')

@@ -92,8 +92,7 @@ class Kitti360CoarseDatasetMulti(Dataset):
         
         self.all_cells = [cell for dataset in self.datasets for cell in dataset.cells] # For cell-only dataset
         self.all_poses = [pose for dataset in self.datasets for pose in dataset.poses] # For eval
-
-
+        
         cell_ids = [cell.id for cell in self.all_cells]
         assert len(np.unique(cell_ids)) == len(self.all_cells) # IDs should not repeat
 

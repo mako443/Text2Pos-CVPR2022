@@ -252,7 +252,7 @@ def create_cells(objects, locations, scene_name, cell_size, args) -> List[Cell]:
             cell_locations[i_location] = location
     
     print(f'None cells: {len(none_indices)} / {len(locations)}')
-    if len(none_indices) > len(locations)/2:
+    if len(none_indices) > len(locations) * 3/4:
         return False, none_indices
     else:
         return True, cells

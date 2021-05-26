@@ -33,6 +33,8 @@ class Kitti360TopKDataset(Dataset):
         self.transform = transform
         self.args = args
 
+        print(f'Kitti360TopKDataset: {len(self.poses)} poses, {len(cells)} cells, pad {args.pad_size}')
+
     def load_pose_and_cell(self, pose: Pose, cell: Cell):
         objects = cell.objects
 

@@ -15,9 +15,10 @@ from evaluation.utils import calc_sample_accuracies, print_accuracies
 from dataloading.kitti360.cells import Kitti360CoarseDataset, Kitti360CoarseDatasetMulti
 from dataloading.kitti360.eval import Kitti360TopKDataset
 
-from datapreparation.kitti360.utils import SCENE_NAMES_TEST
+from datapreparation.kitti360.utils import SCENE_NAMES_TEST, SCENE_NAMES_VAL
 
 from training.coarse import eval_epoch as eval_epoch_retrieval
+from training.utils import plot_retrievals
 from models.superglue_matcher import get_pos_in_cell
 
 import torch_geometric.transforms as T 
@@ -209,8 +210,11 @@ if __name__ == '__main__':
     # Load datasets
     transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
 
-    dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, shuffle_hints=False, flip_poses=False)
-    # dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], transform, shuffle_hints=False, flip_poses=False)
+    if args.use_validation:
+        dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_VAL, transform, shuffle_hints=False, flip_poses=False)    
+    else:
+        dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, shuffle_hints=False, flip_poses=False)
+        # dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], transform, shuffle_hints=False, flip_poses=False)
     dataloader_retrieval = DataLoader(dataset_retrieval, batch_size = args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn)
 
     # dataset_cell_only = dataset_retrieval.get_cell_dataset()
@@ -226,6 +230,11 @@ if __name__ == '__main__':
     retrievals, coarse_accuracies = run_coarse(model_retrieval, dataloader_retrieval, args)
     print_accuracies(coarse_accuracies, "Coarse")
 
+    if args.plot_retrievals:
+        plot_retrievals(retrievals, dataset_retrieval)
+    if args.plot_retrievals or args.coarse_only:
+        quit()
+
     # Run fine
     if args.fine_oracle:
         accuracies = run_fine_oracle(retrievals, dataloader_retrieval, args)
@@ -237,10 +246,6 @@ if __name__ == '__main__':
         print_accuracies(accuracies_mean_conf, "Fine (mean-conf)")
     
 '''
-- Re-run cd10 w/ new models (cd20 egal) -> Running
-- Re-run cd15 w/ Pad24 and Pad32 -> Running
 - Re-train cd5 (more memory ;) ) -> Running
 - Build cd03, hope that doesn't help anymore -> Prepare running
-
-- Implement continue training for these other cell-dists (if helpful)
 '''

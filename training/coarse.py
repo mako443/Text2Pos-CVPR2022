@@ -202,7 +202,8 @@ if __name__ == "__main__":
     dataset_name = dataset_name.split('/')[-1]
     print(f'Directory: {dataset_name}')
 
-    plot_path = f'./plots/{dataset_name}/Coarse_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_em{int(args.pointnet_embed)}_p{args.pointnet_numpoints}_frz{int(args.pointnet_freeze)}_m{args.margin:0.2f}_s{int(args.shuffle)}_g{args.lr_gamma}.png'
+    cont = 'Y' if bool(args.continue_path) else 'N'
+    plot_path = f'./plots/{dataset_name}/Coarse_cont{cont}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_em{int(args.pointnet_embed)}_p{args.pointnet_numpoints}_frz{int(args.pointnet_freeze)}_m{args.margin:0.2f}_s{int(args.shuffle)}_g{args.lr_gamma}.png'
     print('Plot:', plot_path, '\n')
 
     '''
@@ -242,7 +243,10 @@ if __name__ == "__main__":
     best_val_accuracy = -1
 
     for lr in learning_rates:
-        model = CellRetrievalNetwork(dataset_train.get_known_classes(), COLOR_NAMES_K360, dataset_train.get_known_words(), args)
+        if args.continue_path:
+            model = torch.load(args.continue_path)
+        else:
+            model = CellRetrievalNetwork(dataset_train.get_known_classes(), COLOR_NAMES_K360, dataset_train.get_known_words(), args)
         model.to(device) 
 
         optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -258,7 +262,7 @@ if __name__ == "__main__":
 
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)
 
-        for epoch in range(args.epochs):
+        for epoch in range(1, args.epochs + 1):
             # dataset_train.reset_seed() #OPTION: re-setting seed leads to equal data at every epoch
 
             loss, train_batches = train_epoch(model, dataloader_train, args)
@@ -285,21 +289,20 @@ if __name__ == "__main__":
                 print(f'{k}-{v:0.2f} ', end="") 
             print("\n", flush=True)
 
-        # Saving best model (w/o early stopping)
-        acc = val_acc[max(args.top_k)]
-        if acc > best_val_accuracy:
-            model_path = f"./checkpoints/{dataset_name}/coarse_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"
-            if not osp.isdir(osp.dirname(model_path)):
-                os.mkdir(osp.dirname(model_path))
+            # Saving best model (w/ early stopping)
+            if epoch >= args.epochs // 2:
+                acc = val_acc[max(args.top_k)]
+                if acc > best_val_accuracy:
+                    model_path = f"./checkpoints/{dataset_name}/coarse_cont{cont}_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"
+                    if not osp.isdir(osp.dirname(model_path)):
+                        os.mkdir(osp.dirname(model_path))
 
-            print(f'Saving model at {acc:0.2f} to {model_path}')
-            try:
-                torch.save(model, model_path)
-            except Exception as e:
-                print(f'Error saving model!', str(e))
-            best_val_accuracy = acc
-
-        # plot_retrievals(val_retrievals, dataset_val)
+                    print(f'Saving model at {acc:0.2f} to {model_path}')
+                    try:
+                        torch.save(model, model_path)
+                    except Exception as e:
+                        print(f'Error saving model!', str(e))
+                    best_val_accuracy = acc
 
     '''
     Save plots
