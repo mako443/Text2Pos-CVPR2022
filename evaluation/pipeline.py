@@ -56,6 +56,9 @@ def run_coarse(model, dataloader, args):
         max_k = max(args.top_k)
         for pose in dataloader.dataset.all_poses:
             retrievals.append([pose.cell_id for i in range(max_k)])
+
+        print('Retrievals:')
+        print(retrievals[0 : 10])
     else:
         # Run retrieval model to obtain top-cells
         retrieval_accuracies, retrieval_accuracies_close, retrievals = eval_epoch_retrieval(model, dataloader, args)
@@ -70,11 +73,17 @@ def run_coarse(model, dataloader, args):
 
     # Gather the accuracies for each sample
     accuracies = {k: {t: [] for t in args.threshs} for k in args.top_k}
+    printed=False
     for i_sample in range(len(retrievals)):
         pose = dataloader.dataset.all_poses[i_sample]
         top_cells = [all_cells_dict[cell_id] for cell_id in retrievals[i_sample]]
         pos_in_cells = 0.5 * np.ones((len(top_cells), 2)) # Predict cell-centers
         accs = calc_sample_accuracies(pose, top_cells, pos_in_cells, args.top_k, args.threshs)
+        
+        if args.coarse_oracle and not printed:
+            print('pos_in_cells:')
+            print(pos_in_cells)
+            printed=True
 
         for k in args.top_k:
             for t in args.threshs:
@@ -128,6 +137,7 @@ def run_fine(model, retrievals, dataloader, args):
     confidences = []
     cell_ids = []
     poses_w = []
+
     for i_sample, sample in enumerate(dataset_topk):
         output = model(sample['objects'], sample['hint_descriptions'], sample['object_points'])
         matches.append(output.matches0.detach().cpu().numpy())
@@ -142,6 +152,10 @@ def run_fine(model, retrievals, dataloader, args):
         
         cell_ids.append([cell.id for cell in sample['cells']])
         poses_w.append(sample['poses'][0].pose_w)
+
+        if i_sample == 0:
+            print('cell_ids:')
+            print(cell_ids)
 
     assert len(matches) == len(offsets) == len(retrievals)
     cell_ids = np.array(cell_ids)
@@ -162,6 +176,10 @@ def run_fine(model, retrievals, dataloader, args):
         sample_offsets = offsets[i_sample]
         sample_confidences = confidences[i_sample]
 
+        if i_sample == 0:
+            print('cell ids:')
+            print([cell.id for cell in top_cells])
+
         if not np.all(np.array([cell.id for cell in top_cells]) == cell_ids[i_sample]):
             print()
             print([cell.id for cell in top_cells])
@@ -181,6 +199,14 @@ def run_fine(model, retrievals, dataloader, args):
             pos_in_cells_offsets.append(get_pos_in_cell(cell.objects, cell_matches, cell_offsets))
         pos_in_cells_mean = np.array(pos_in_cells_mean)
         pos_in_cells_offsets = np.array(pos_in_cells_offsets)
+
+        if i_sample == 0:
+            print('Pos:')
+            print(pos_in_cells_mean)
+            print(pos_in_cells_offsets)
+
+        if args.coarse_oracle:
+            quit()
 
         accs_mean = calc_sample_accuracies(pose, top_cells, pos_in_cells_mean, args.top_k, args.threshs)
         accs_offsets = calc_sample_accuracies(pose, top_cells, pos_in_cells_offsets, args.top_k, args.threshs)
@@ -218,7 +244,7 @@ if __name__ == '__main__':
     else:
         dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, shuffle_hints=False, flip_poses=False)
         # dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], transform, shuffle_hints=False, flip_poses=False)
-    dataloader_retrieval = DataLoader(dataset_retrieval, batch_size = args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn)
+    dataloader_retrieval = DataLoader(dataset_retrieval, batch_size = args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=False)
 
     # dataset_cell_only = dataset_retrieval.get_cell_dataset()
 

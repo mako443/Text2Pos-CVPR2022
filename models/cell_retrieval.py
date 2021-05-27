@@ -79,7 +79,7 @@ class CellRetrievalNetwork(torch.nn.Module):
         '''
         self.language_encoder = LanguageEncoder(known_words, embed_dim, bi_dir=True)                   
 
-        print(f'CellRetrievalNetwork embedding: {args.pointnet_embed}, variation: {self.variation}, dim: {embed_dim}, features: {self.use_features}')
+        print(f'CellRetrievalNetwork, class embed {args.class_embed}, color embed {args.color_embed}, variation: {self.variation}, dim: {embed_dim}, features: {self.use_features}')
 
         self.printed = False
 

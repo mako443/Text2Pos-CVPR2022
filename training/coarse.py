@@ -203,7 +203,8 @@ if __name__ == "__main__":
     print(f'Directory: {dataset_name}')
 
     cont = 'Y' if bool(args.continue_path) else 'N'
-    plot_path = f'./plots/{dataset_name}/Coarse_cont{cont}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_em{int(args.pointnet_embed)}_p{args.pointnet_numpoints}_m{args.margin:0.2f}_s{int(args.shuffle)}_g{args.lr_gamma}_npa{int(args.no_pc_augment)}_nca{int(args.no_cell_augment)}.png'
+    feats = 'all' if len(args.use_features) == 3 else '-'.join(args.use_features)
+    plot_path = f'./plots/{dataset_name}/Coarse_cont{cont}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_ecl{int(args.class_embed)}_eco{int(args.color_embed)}_p{args.pointnet_numpoints}_m{args.margin:0.2f}_s{int(args.shuffle)}_g{args.lr_gamma}_npa{int(args.no_pc_augment)}_nca{int(args.no_cell_augment)}_f-{feats}.png'
     print('Plot:', plot_path, '\n')
 
     '''
@@ -250,6 +251,7 @@ if __name__ == "__main__":
     dict_acc_val_close = {k: {lr: [] for lr in learning_rates} for k in args.top_k}
     
     best_val_accuracy = -1
+    last_model_save_path = None
 
     for lr in learning_rates:
         if args.continue_path:
@@ -302,13 +304,17 @@ if __name__ == "__main__":
             if epoch >= args.epochs // 2:
                 acc = val_acc[max(args.top_k)]
                 if acc > best_val_accuracy:
-                    model_path = f"./checkpoints/{dataset_name}/coarse_cont{cont}_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}_npa{int(args.no_pc_augment)}_nca{int(args.no_cell_augment)}.pth"
+                    model_path = f"./checkpoints/{dataset_name}/coarse_cont{cont}_acc{acc:0.2f}_lr{args.lr_idx}_ecl{int(args.class_embed)}_eco{int(args.color_embed)}_p{args.pointnet_numpoints}_npa{int(args.no_pc_augment)}_nca{int(args.no_cell_augment)}_f-{feats}.pth"
                     if not osp.isdir(osp.dirname(model_path)):
                         os.mkdir(osp.dirname(model_path))
 
                     print(f'Saving model at {acc:0.2f} to {model_path}')
                     try:
                         torch.save(model, model_path)
+                        if last_model_save_path is not None:
+                            print('Removing', last_model_save_path)
+                            os.remove(last_model_save_path)
+                        last_model_save_path = model_path
                     except Exception as e:
                         print(f'Error saving model!', str(e))
                     best_val_accuracy = acc

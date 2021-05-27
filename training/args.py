@@ -45,8 +45,10 @@ def parse_arguments():
     parser.add_argument('--pointnet_numpoints', type=int, default=256)
     parser.add_argument('--pointnet_path', type=str, default='./checkpoints/pointnet_acc0.86_lr1_p256.pth')
     parser.add_argument('--pointnet_freeze', action='store_true')
-    parser.add_argument('--pointnet_embed', action='store_true')    
     parser.add_argument('--pointnet_features', type=int, default=2)
+    
+    parser.add_argument('--class_embed', action='store_true')
+    parser.add_argument('--color_embed', action='store_true')
 
     # Offset regressor
     parser.add_argument('--regressor_dim', type=int, default=128)

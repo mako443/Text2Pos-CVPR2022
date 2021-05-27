@@ -190,7 +190,8 @@ if __name__ == "__main__":
     print(f'Directory: {dataset_name}')
 
     cont = 'Y' if bool(args.continue_path) else 'N'
-    plot_path = f'./plots/{dataset_name}/Fine_cont{cont}-bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}_npa{int(args.no_pc_augment)}_nca{int(args.no_cell_augment)}.png'
+    feats = 'all' if len(args.use_features) == 3 else '-'.join(args.use_features)
+    plot_path = f'./plots/{dataset_name}/Fine_cont{cont}-bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_ecl{int(args.class_embed)}_eco{int(args.color_embed)}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}_npa{int(args.no_pc_augment)}_nca{int(args.no_cell_augment)}_f-{feats}.png'
     print('Plot:', plot_path, '\n')
 
     '''
@@ -231,6 +232,7 @@ if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)    
 
     best_val_recallPrecision = -1 # Measured by mean of recall and precision
+    last_model_save_path = None
 
     '''
     Start training
@@ -306,13 +308,17 @@ if __name__ == "__main__":
 
         acc = np.mean((val_out.recall, val_out.precision))
         if acc > best_val_recallPrecision:
-            model_path = f"./checkpoints/{dataset_name}/fine_cont{cont}_acc{acc:0.2f}_lr{args.lr_idx}_obj-{args.num_mentioned}-{args.pad_size}_p{args.pointnet_numpoints}_npa{int(args.no_pc_augment)}_nca{int(args.no_cell_augment)}.pth"
+            model_path = f"./checkpoints/{dataset_name}/fine_cont{cont}_acc{acc:0.2f}_lr{args.lr_idx}_obj-{args.num_mentioned}-{args.pad_size}_ecl{int(args.class_embed)}_eco{int(args.color_embed)}_p{args.pointnet_numpoints}_npa{int(args.no_pc_augment)}_nca{int(args.no_cell_augment)}_f-{feats}.pth"
             if not osp.isdir(osp.dirname(model_path)):
                 os.mkdir(osp.dirname(model_path))
 
             print('Saving model to', model_path)
             try:
                 torch.save(model, model_path)
+                if last_model_save_path is not None:
+                    print('Removing', last_model_save_path)
+                    os.remove(last_model_save_path)
+                last_model_save_path = model_path
             except Exception as e:
                 print('Error saving model!', str(e))
             best_val_recallPrecision = acc
