@@ -203,7 +203,7 @@ if __name__ == "__main__":
     print(f'Directory: {dataset_name}')
 
     cont = 'Y' if bool(args.continue_path) else 'N'
-    plot_path = f'./plots/{dataset_name}/Coarse_cont{cont}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_em{int(args.pointnet_embed)}_p{args.pointnet_numpoints}_frz{int(args.pointnet_freeze)}_m{args.margin:0.2f}_s{int(args.shuffle)}_g{args.lr_gamma}.png'
+    plot_path = f'./plots/{dataset_name}/Coarse_cont{cont}_bs{args.batch_size}_lr{args.lr_idx}_e{args.embed_dim}_em{int(args.pointnet_embed)}_p{args.pointnet_numpoints}_m{args.margin:0.2f}_s{int(args.shuffle)}_g{args.lr_gamma}_npa{int(args.no_pc_augment)}_nca{int(args.no_cell_augment)}.png'
     print('Plot:', plot_path, '\n')
 
     '''
@@ -211,11 +211,19 @@ if __name__ == "__main__":
     '''
     if args.dataset == 'K360':
         # ['2013_05_28_drive_0003_sync', ]
-        train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
-        dataset_train = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, shuffle_hints=True, sample_close_cell=False, flip_poses=True)
+        if args.no_pc_augment:
+            train_transform = T.FixedPoints(args.pointnet_numpoints)
+            val_transform = T.FixedPoints(args.pointnet_numpoints)
+        else:
+            train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
+            val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
+
+        if args.no_cell_augment:
+            dataset_train = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, shuffle_hints=False, flip_poses=False)
+        else:
+            dataset_train = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, shuffle_hints=True, flip_poses=True)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=args.shuffle)
 
-        val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
         dataset_val = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_VAL, val_transform)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=False)    
         
@@ -227,6 +235,7 @@ if __name__ == "__main__":
     assert sorted(dataset_train.get_known_classes()) == sorted(dataset_val.get_known_classes())
 
     data = dataset_train[0]        
+    assert len(data['debug_hint_descriptions']) == args.num_mentioned
     batch = next(iter(dataloader_train))
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -293,7 +302,7 @@ if __name__ == "__main__":
             if epoch >= args.epochs // 2:
                 acc = val_acc[max(args.top_k)]
                 if acc > best_val_accuracy:
-                    model_path = f"./checkpoints/{dataset_name}/coarse_cont{cont}_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"
+                    model_path = f"./checkpoints/{dataset_name}/coarse_cont{cont}_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}_npa{int(args.no_pc_augment)}_nca{int(args.no_cell_augment)}.pth"
                     if not osp.isdir(osp.dirname(model_path)):
                         os.mkdir(osp.dirname(model_path))
 

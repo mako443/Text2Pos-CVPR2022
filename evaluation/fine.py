@@ -150,28 +150,17 @@ if __name__ == '__main__':
     args = parse_arguments()
     print(str(args).replace(',','\n'), '\n')
 
-    transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
+    if args.no_pc_augment:
+        transform = T.FixedPoints(args.pointnet_numpoints)
+    else:
+        transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])  
+
     dataset_fine = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, args, flip_pose=False)
     # dataset_fine = Kitti360FineDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], transform, args, flip_pose=False)
     dataloader_fine = DataLoader(dataset_fine, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn)
 
     model_matching = torch.load(args.path_fine)
 
-    # stats = eval_epoch_fine(model_matching, dataloader_fine, None)
     stats = run_fine(model_matching, dataloader_fine)
     for key in stats:
         print(f'{key}: {stats[key]:0.3}')
-    quit()
-
-    stats = run_fine(model_matching, dataloader_fine, args)
-    print(f'Recall: {stats.recall:0.2f}')
-    print(f'Precision: {stats.precision:0.2f}')
-    print()
-    
-    print(f'acc_mid: \t\t\t\t {stats.acc_mid:0.2f}')
-    print(f'acc_mean: \t\t\t\t {stats.acc_mean:0.2f}')
-    print(f'acc_offsets: \t\t\t {stats.acc_offsets:0.2f}')
-    print(f'acc_matching_oracle: \t {stats.acc_matching_oracle:0.2f}')
-    print(f'acc_offsets_oracle: \t {stats.acc_offsets_oracle:0.2f}')
-    print(f'acc_all_oracle: \t {stats.acc_all_oracle:0.2f}')
-        

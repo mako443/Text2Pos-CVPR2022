@@ -208,7 +208,10 @@ if __name__ == '__main__':
     print(str(args).replace(',','\n'), '\n')
 
     # Load datasets
-    transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
+    if args.no_pc_augment:
+        transform = T.FixedPoints(args.pointnet_numpoints)
+    else:
+        transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])    
 
     if args.use_validation:
         dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_VAL, transform, shuffle_hints=False, flip_poses=False)    

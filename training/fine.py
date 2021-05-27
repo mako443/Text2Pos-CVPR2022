@@ -190,19 +190,23 @@ if __name__ == "__main__":
     print(f'Directory: {dataset_name}')
 
     cont = 'Y' if bool(args.continue_path) else 'N'
-    plot_path = f'./plots/{dataset_name}/Fine_cont{cont}-bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}.png'
+    plot_path = f'./plots/{dataset_name}/Fine_cont{cont}-bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}_npa{int(args.no_pc_augment)}_nca{int(args.no_cell_augment)}.png'
     print('Plot:', plot_path, '\n')
 
     '''
     Create data loaders
     '''    
     if args.dataset == 'K360':
-        train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])
-        # dataset_train = Kitti360FineSyntheticDataset(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, length=1024, fixed_seed=False)
-        dataset_train = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, flip_pose=False)
+        if args.no_pc_augment:
+            train_transform = T.FixedPoints(args.pointnet_numpoints)
+            val_transform = T.FixedPoints(args.pointnet_numpoints)
+        else:
+            train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
+            val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
+                    
+        dataset_train = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, flip_pose=False) # No cell-augment for fine
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn, shuffle=args.shuffle)
 
-        val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
         dataset_val = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_VAL, val_transform, args)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn)  
 
@@ -302,7 +306,7 @@ if __name__ == "__main__":
 
         acc = np.mean((val_out.recall, val_out.precision))
         if acc > best_val_recallPrecision:
-            model_path = f"./checkpoints/{dataset_name}/fine_cont{cont}_acc{acc:0.2f}_lr{args.lr_idx}_obj-{args.num_mentioned}-{args.pad_size}_p{args.pointnet_numpoints}.pth"
+            model_path = f"./checkpoints/{dataset_name}/fine_cont{cont}_acc{acc:0.2f}_lr{args.lr_idx}_obj-{args.num_mentioned}-{args.pad_size}_p{args.pointnet_numpoints}_npa{int(args.no_pc_augment)}_nca{int(args.no_cell_augment)}.pth"
             if not osp.isdir(osp.dirname(model_path)):
                 os.mkdir(osp.dirname(model_path))
 

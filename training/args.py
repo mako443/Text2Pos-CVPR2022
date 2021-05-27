@@ -24,7 +24,9 @@ def parse_arguments():
     parser.add_argument('--lr_idx', type=int)
 
     parser.add_argument('--continue_path', type=str, help="Set to continue from a previous checkpoint")
-    parser.add_argument('--augmentation', type=int, default=6)
+    
+    parser.add_argument('--no_pc_augment', action='store_true')
+    parser.add_argument('--no_cell_augment', action='store_true')
 
     # SuperGlue
     parser.add_argument('--sinkhorn_iters', type=int, default=50)
@@ -71,7 +73,6 @@ def parse_arguments():
 
     if bool(args.continue_path):
         assert osp.isfile(args.continue_path)
-    assert args.augmentation in range(7)
 
     assert args.regressor_cell in ('pose', 'best')
     assert args.regressor_learn in ('center', 'closest')
