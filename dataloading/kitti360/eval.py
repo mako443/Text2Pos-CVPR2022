@@ -41,11 +41,11 @@ class Kitti360TopKDataset(Dataset):
         objects = cell.objects
 
         # Cut-off objects
-        # TODO: Matching possible if best-cell, otherwise just ignore. Pad_size 16 or 32 ok?
         if len(objects) > self.args.pad_size:
             # print('Objects overflow: ', len(objects))
             objects = objects[0 : self.args.pad_size]
 
+        # Pad objects
         while len(objects) < self.args.pad_size:
             objects.append(Object3d.create_padding())
 

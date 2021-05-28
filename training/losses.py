@@ -66,7 +66,7 @@ def calc_pose_error_intersect(objects, matches0, poses: List[Pose], directions):
     return np.mean(errors)
 
 # Verified against old function ✓
-def calc_pose_error(objects, matches0, poses: List[Pose], offsets=None, use_mid_pred=False):
+def calc_pose_error(objects, matches0, poses: List[Pose], offsets=None, use_mid_pred=False, return_samples=False):
     """Calculates the mean error of a batch by averaging the positions of all matches objects plus corresp. offsets.
     All calculations are in x-y-plane.
 
@@ -98,7 +98,11 @@ def calc_pose_error(objects, matches0, poses: List[Pose], offsets=None, use_mid_
         else:
             pose_prediction = get_pos_in_cell(objects[i_sample], matches0[i_sample], offsets[i_sample])
         errors.append(np.linalg.norm(poses[i_sample] - pose_prediction))
-    return np.mean(errors)
+
+    if return_samples:
+        return errors
+    else:
+        return np.mean(errors)
         
 
 def deprecated_calc_pose_error(objects, matches0, poses, args, offsets=None, use_mid_pred=False):

@@ -256,8 +256,3 @@ if __name__ == '__main__':
         print_accuracies(accuracies_mean, "Fine (mean)")
         print_accuracies(accuracies_offsets, "Fine (offsets)")
         print_accuracies(accuracies_mean_conf, "Fine (mean-conf)")
-    
-'''
-- Re-train cd5 (more memory ;) ) -> Running
-- Build cd03, hope that doesn't help anymore -> Prepare running
-'''
