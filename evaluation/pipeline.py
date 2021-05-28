@@ -1,8 +1,10 @@
+from datapreparation.kitti360.imports import Object3d
 import numpy as np
 import os
 import os.path as osp
 import cv2
 from easydict import EasyDict
+from copy import deepcopy
 
 import torch
 from torch.utils.data import DataLoader
@@ -57,8 +59,6 @@ def run_coarse(model, dataloader, args):
         for pose in dataloader.dataset.all_poses:
             retrievals.append([pose.cell_id for i in range(max_k)])
 
-        print('Retrievals:')
-        print(retrievals[0 : 10])
     else:
         # Run retrieval model to obtain top-cells
         retrieval_accuracies, retrieval_accuracies_close, retrievals = eval_epoch_retrieval(model, dataloader, args)
@@ -73,17 +73,11 @@ def run_coarse(model, dataloader, args):
 
     # Gather the accuracies for each sample
     accuracies = {k: {t: [] for t in args.threshs} for k in args.top_k}
-    printed=False
     for i_sample in range(len(retrievals)):
         pose = dataloader.dataset.all_poses[i_sample]
         top_cells = [all_cells_dict[cell_id] for cell_id in retrievals[i_sample]]
         pos_in_cells = 0.5 * np.ones((len(top_cells), 2)) # Predict cell-centers
         accs = calc_sample_accuracies(pose, top_cells, pos_in_cells, args.top_k, args.threshs)
-        
-        if args.coarse_oracle and not printed:
-            print('pos_in_cells:')
-            print(pos_in_cells)
-            printed=True
 
         for k in args.top_k:
             for t in args.threshs:
@@ -140,6 +134,7 @@ def run_fine(model, retrievals, dataloader, args):
 
     for i_sample, sample in enumerate(dataset_topk):
         output = model(sample['objects'], sample['hint_descriptions'], sample['object_points'])
+
         matches.append(output.matches0.detach().cpu().numpy())
         offsets.append(output.offsets.detach().cpu().numpy())
         # confs = get_confidences(output.P.detach().cpu().numpy())
@@ -152,10 +147,6 @@ def run_fine(model, retrievals, dataloader, args):
         
         cell_ids.append([cell.id for cell in sample['cells']])
         poses_w.append(sample['poses'][0].pose_w)
-
-        if i_sample == 0:
-            print('cell_ids:')
-            print(cell_ids)
 
     assert len(matches) == len(offsets) == len(retrievals)
     cell_ids = np.array(cell_ids)
@@ -176,10 +167,6 @@ def run_fine(model, retrievals, dataloader, args):
         sample_offsets = offsets[i_sample]
         sample_confidences = confidences[i_sample]
 
-        if i_sample == 0:
-            print('cell ids:')
-            print([cell.id for cell in top_cells])
-
         if not np.all(np.array([cell.id for cell in top_cells]) == cell_ids[i_sample]):
             print()
             print([cell.id for cell in top_cells])
@@ -192,21 +179,17 @@ def run_fine(model, retrievals, dataloader, args):
         pos_in_cells_mean = []
         pos_in_cells_offsets = []
         for i_cell in range(len(top_cells)):
-            cell = top_cells[i_cell]
+            # Copy the cell and pad it again, as the fine model might have matched a padding-object
+            cell = deepcopy(top_cells[i_cell])
+            while len(cell.objects) < args.pad_size:
+                cell.objects.append(Object3d.create_padding())
+
             cell_matches = sample_matches[i_cell]
             cell_offsets = sample_offsets[i_cell]
             pos_in_cells_mean.append(get_pos_in_cell(cell.objects, cell_matches, np.zeros_like(cell_offsets)))
             pos_in_cells_offsets.append(get_pos_in_cell(cell.objects, cell_matches, cell_offsets))
         pos_in_cells_mean = np.array(pos_in_cells_mean)
         pos_in_cells_offsets = np.array(pos_in_cells_offsets)
-
-        if i_sample == 0:
-            print('Pos:')
-            print(pos_in_cells_mean)
-            print(pos_in_cells_offsets)
-
-        if args.coarse_oracle:
-            quit()
 
         accs_mean = calc_sample_accuracies(pose, top_cells, pos_in_cells_mean, args.top_k, args.threshs)
         accs_offsets = calc_sample_accuracies(pose, top_cells, pos_in_cells_offsets, args.top_k, args.threshs)

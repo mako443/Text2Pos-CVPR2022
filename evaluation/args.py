@@ -16,6 +16,7 @@ def parse_arguments():
     parser.add_argument('--path_fine', type=str, help="The path to the Hints-to-Objects matching model")
 
     parser.add_argument('--no_pc_augment', action='store_true')
+    parser.add_argument('--num_mentioned', type=int, default=6)
 
     # Options
     parser.add_argument('--top_k', type=int, nargs='+', default=[1, 5, 10])

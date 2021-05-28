@@ -59,11 +59,14 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args,
                 offsets.append(descr.offset_center[0:2])
 
     offsets = np.array(offsets)
-    # if len(offsets) != 6:
-    #     print()
-    #     print(len(offsets), len(descriptions), len(hints), args.regressor_cell, args.regressor_learn)
-    # assert len(descriptions) == 6
-    # assert len(offsets) == 6
+
+    # Build best-center offsets for oracle
+    offsets_best_center = []
+    for i_descr, descr in enumerate(descriptions):
+        if descr.is_matched:
+            offsets_best_center.append(descr.best_offset_center[0:2])
+        else:
+            offsets_best_center.append(descr.offset_center[0:2])
 
 
     # print()
@@ -172,6 +175,7 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args,
         'matches': matches,
         'all_matches': all_matches,
         'offsets': np.array(offsets),
+        'offsets_best_center': np.array(offsets_best_center),
         # 'offsets_valid': offsets_valid,
         'object_class_indices': object_class_indices,
         'object_color_indices': object_color_indices

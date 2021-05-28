@@ -304,24 +304,26 @@ if __name__ == "__main__":
                 f't-recall {train_out.recall:0.2f} t-precision {train_out.precision:0.2f} t-mean {train_out.pose_mean:0.2f} t-offset {train_out.pose_offsets:0.2f} '
                 f'v-recall {val_out.recall:0.2f} v-precision {val_out.precision:0.2f} v-mean {val_out.pose_mean:0.2f} v-offset {val_out.pose_offsets:0.2f} '
                 ), flush=True)
+
+            if epoch >= args.epochs//2:
+                acc = np.mean((val_out.recall, val_out.precision))
+                if acc > best_val_recallPrecision:
+                    model_path = f"./checkpoints/{dataset_name}/fine_cont{cont}_acc{acc:0.2f}_lr{args.lr_idx}_obj-{args.num_mentioned}-{args.pad_size}_ecl{int(args.class_embed)}_eco{int(args.color_embed)}_p{args.pointnet_numpoints}_npa{int(args.no_pc_augment)}_nca{int(args.no_cell_augment)}_f-{feats}.pth"
+                    if not osp.isdir(osp.dirname(model_path)):
+                        os.mkdir(osp.dirname(model_path))
+
+                    print('Saving model to', model_path)
+                    try:
+                        torch.save(model, model_path)
+                        if last_model_save_path is not None:
+                            print('Removing', last_model_save_path)
+                            os.remove(last_model_save_path)
+                        last_model_save_path = model_path
+                    except Exception as e:
+                        print('Error saving model!', str(e))
+                    best_val_recallPrecision = acc
+
         print()
-
-        acc = np.mean((val_out.recall, val_out.precision))
-        if acc > best_val_recallPrecision:
-            model_path = f"./checkpoints/{dataset_name}/fine_cont{cont}_acc{acc:0.2f}_lr{args.lr_idx}_obj-{args.num_mentioned}-{args.pad_size}_ecl{int(args.class_embed)}_eco{int(args.color_embed)}_p{args.pointnet_numpoints}_npa{int(args.no_pc_augment)}_nca{int(args.no_cell_augment)}_f-{feats}.pth"
-            if not osp.isdir(osp.dirname(model_path)):
-                os.mkdir(osp.dirname(model_path))
-
-            print('Saving model to', model_path)
-            try:
-                torch.save(model, model_path)
-                if last_model_save_path is not None:
-                    print('Removing', last_model_save_path)
-                    os.remove(last_model_save_path)
-                last_model_save_path = model_path
-            except Exception as e:
-                print('Error saving model!', str(e))
-            best_val_recallPrecision = acc
 
     '''
     Save plots

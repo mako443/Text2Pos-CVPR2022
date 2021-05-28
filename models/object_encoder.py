@@ -61,7 +61,7 @@ class ObjectEncoder(torch.nn.Module):
 
         if not hasattr(self, 'color_encoder'):
             self.color_encoder = self.color_embedding
-        if not hasattr(self, 'pos_enocder'):
+        if not hasattr(self, 'pos_encoder'):
             self.pos_encoder = self.pos_embedding
 
         if ('class_embed' in self.args and self.args.class_embed) or ('color_embed' in self.args and self.args.color_embed):

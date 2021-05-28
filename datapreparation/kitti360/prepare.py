@@ -284,6 +284,7 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
 
     unmatched_counts = []
     num_duplicates = 0
+    num_rejected = 0 # Pose that were rejected because the cell was None
     for i_location, location in enumerate(locations):
         # Shift the poses randomly to de-correlate database-side cells and query-side poses.
         if args.shift_poses:
@@ -302,6 +303,7 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
         pose_cell = create_cell(-1, "pose", pose_cell_bbox, objects, num_mentioned=args.num_mentioned)
         if pose_cell is None: # Pose can be too far from objects to describe it
             none_indices.append(i_location)
+            num_rejected += 1
             continue
 
         # Select description strategy / strategies
@@ -346,7 +348,7 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
                 mentioned_object_ids.append(mentioned_ids)
 
     print(f'Num duplicates: {num_duplicates} / {len(poses)}')
-    print(f'None poses: {len(none_indices)} / {len(locations)}, avg. unmatched: {np.mean(unmatched_counts):0.1f}')
+    print(f'None poses: {len(none_indices)} / {len(locations)}, avg. unmatched: {np.mean(unmatched_counts):0.1f}, num_rejected: {num_rejected}')
     if len(none_indices) > len(locations) * 2/3:
         return False, none_indices
     else:

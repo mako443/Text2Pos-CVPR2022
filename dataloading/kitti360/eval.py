@@ -36,6 +36,8 @@ class Kitti360TopKDataset(Dataset):
         print(f'Kitti360TopKDataset: {len(self.poses)} poses, {len(cells)} cells, pad {args.pad_size}')
 
     def load_pose_and_cell(self, pose: Pose, cell: Cell):
+        cell = deepcopy(cell)
+
         objects = cell.objects
 
         # Cut-off objects

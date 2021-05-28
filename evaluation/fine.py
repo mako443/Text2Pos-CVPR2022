@@ -12,7 +12,7 @@ from evaluation.args import parse_arguments
 from evaluation.utils import calc_sample_accuracies, print_accuracies
 
 from dataloading.kitti360.poses import Kitti360FineDataset, Kitti360FineDatasetMulti
-from datapreparation.kitti360.utils import SCENE_NAMES_TEST
+from datapreparation.kitti360.utils import SCENE_NAMES_TEST, SCENE_NAMES_VAL
 # from training.fine import eval_epoch as eval_epoch_fine
 from training.losses import calc_pose_error
 
@@ -59,9 +59,9 @@ def run_fine(model, dataloader):
         stats.matching_oracle.append(calc_pose_error(batch['objects'], gt_matches, batch['poses'], output.offsets))
 
         # Use gt-offsets
-        stats.offset_oracle.append(calc_pose_error(batch['objects'], output.matches0, batch['poses'], batch['offsets']))
+        stats.offset_oracle.append(calc_pose_error(batch['objects'], output.matches0, batch['poses'], batch['offsets_best_center'])) # Now using best_center
 
-        stats.both_oracle.append(calc_pose_error(batch['objects'], gt_matches, batch['poses'], batch['offsets']))
+        stats.both_oracle.append(calc_pose_error(batch['objects'], gt_matches, batch['poses'], batch['offsets_best_center'])) # # Now using best_center
     
     for key in stats:
         stats[key] = np.mean(stats[key])
@@ -155,7 +155,10 @@ if __name__ == '__main__':
     else:
         transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])  
 
-    dataset_fine = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, args, flip_pose=False)
+    if args.use_validation:
+        dataset_fine = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_VAL, transform, args, flip_pose=False)
+    else:
+        dataset_fine = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, args, flip_pose=False)
     # dataset_fine = Kitti360FineDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], transform, args, flip_pose=False)
     dataloader_fine = DataLoader(dataset_fine, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn)
 
