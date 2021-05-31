@@ -6,6 +6,7 @@ import pickle
 import numpy as np
 import cv2
 from easydict import EasyDict
+from numpy.lib.function_base import flip
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -14,233 +15,204 @@ from torch_geometric.data import Data, Batch
 import torch_geometric.transforms as T 
 
 from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, CLASS_TO_INDEX, COLORS, COLOR_NAMES, SCENE_NAMES
-from datapreparation.kitti360.imports import Object3d, Cell
+from datapreparation.kitti360.imports import Object3d, Cell, Pose
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
+from dataloading.kitti360.utils import batch_object_points, flip_pose_in_cell
 
-# TODO: remove
-class Kitti360PoseReferenceMockDataset(Dataset):
-    def __init__(self, args, length=1024, fixed_seed=False):
+def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args, flip_pose=False):
+    assert pose.cell_id == cell.id
+
+    descriptions = pose.descriptions
+    cell_objects_dict = {obj.id: obj for obj in cell.objects}
+    matched_ids = [descr.object_id for descr in descriptions if descr.is_matched]
+    matched_objects = [cell_objects_dict[matched_id] for matched_id in matched_ids]
+
+    assert len(pose.descriptions) == args.num_mentioned
+    assert len(pose.descriptions) - pose.get_number_unmatched() == len(matched_objects)
+
+    # Hints and descriptions have to be in same order
+    for descr, hint in zip(descriptions, hints):
+        assert descr.object_label in hint
+
+    # Gather offsets
+    # CARE: Currently on trains on best-offsets if available (matched)!
+    if args.regressor_cell == 'pose' and args.regressor_learn == 'closest':
+        offsets = np.array([descr.offset_closest for descr in descriptions])[:, 0:2]
+    if args.regressor_cell == 'pose' and args.regressor_learn == 'center':
+        offsets = np.array([descr.offset_center for descr in descriptions])[:, 0:2]            
+    if args.regressor_cell == 'best' and args.regressor_learn == 'closest':
+        # offsets = np.array([descr.best_offset_closest for descr in descriptions])[:, 0:2]
+        offsets = []
+        for i_descr, descr in enumerate(descriptions):
+            if descr.is_matched: 
+                offsets.append(descr.best_offset_closest[0:2])
+            else:
+                offsets.append(descr.offset_closest[0:2])
+    if args.regressor_cell == 'best' and args.regressor_learn == 'center':
+        # offsets = np.array([descr.best_offset_center for descr in descriptions])[:, 0:2]                
+        offsets = []
+        for i_descr, descr in enumerate(descriptions):
+            if descr.is_matched: 
+                offsets.append(descr.best_offset_center[0:2])
+            else:
+                offsets.append(descr.offset_center[0:2])
+
+    offsets = np.array(offsets)
+
+    # Build best-center offsets for oracle
+    offsets_best_center = []
+    for i_descr, descr in enumerate(descriptions):
+        if descr.is_matched:
+            offsets_best_center.append(descr.best_offset_center[0:2])
+        else:
+            offsets_best_center.append(descr.offset_center[0:2])
+
+
+    # print()
+    # print(offsets.dtype)
+    # print(offsets)
+    offsets_valid = np.sum(np.isnan(offsets)) == 0
+
+    # offsets = np.array([descr.offset_center for descr in descriptions])[:, 0:2]  
+
+    # Gather matched objects
+    objects, matches = [], [] # Matches as [(obj_idx, hint_idx)]
+    for i_descr, descr in enumerate(descriptions):
+        if descr.is_matched:
+            hint_obj = cell_objects_dict[descr.object_id]
+            assert hint_obj.instance_id == descr.object_instance_id
+            objects.append(hint_obj)
+            
+            obj_idx = len(objects) - 1
+            hint_idx = i_descr
+            matches.append((obj_idx, hint_idx))
+            
+    # Gather distractors, i.e. remaining objects
+    for obj in cell.objects:
+        if obj.id not in matched_ids:
+            objects.append(obj)
+    if len(objects) != len(cell.objects):
+        print([obj.id for obj in objects])
+        print([obj.id for obj in cell.objects])
+        print(matched_ids)
+    assert len(objects) == len(cell.objects), f"Not all cell-objects have been gathered! {len(objects)}, {len(cell.objects)}, {cell.id}"
+
+    # # Gather mentioned objects, matches and offsets
+    # objects, matches, offsets = [], [], []
+    # for i_descr, descr in enumerate(descriptions):
+    #     hint_obj = cell_objects_dict[descr.object_id]
+    #     objects.append(hint_obj)
+    #     matches.append((i_descr, i_descr))
+    #     # offsets.append(pose.pose - descr.object_closest_point)
+    #     offsets.append(pose.pose - hint_obj.get_center())
+    # offsets = np.array(offsets)[:, 0:2]
+
+    # # Gather distractors
+    # for obj in cell.objects:
+    #     if obj.id not in mentioned_ids:
+    #         objects.append(obj)
+
+    # Pad or cut-off distractors (CARE: the latter would use ground-truth data!)
+    if len(objects) > pad_size:
+        objects = objects[0 : pad_size]
+
+    while len(objects) < pad_size:
+        obj = Object3d.create_padding()
+        objects.append(obj)
+
+    # Build matches and all_matches
+    # The matched objects are always put in first, however, our geometric models have no knowledge of these indices as they are permutation invariant.
+    all_matches = matches.copy()
+
+    # Add unmatched hints
+    for i_descr, descr in enumerate(descriptions):
+        if not descr.is_matched:
+            obj_idx = len(objects) # Match to objects-side bin
+            hint_idx = i_descr
+            all_matches.append((obj_idx, hint_idx))
+
+    # Add unmatched objects
+    for obj_idx, obj in enumerate(objects):
+        if obj.id not in matched_ids:
+            hint_idx = len(descriptions) # Match to hints-side bin
+            all_matches.append((obj_idx, hint_idx))
+
+    matches, all_matches = np.array(matches), np.array(all_matches)
+    assert len(matches) == len(matched_ids)
+    assert len(all_matches) == len(objects) + len(descriptions) - len(matches)
+    assert np.sum(all_matches[:, 1] == len(descriptions)) == len(objects) - len(matched_ids) # Binned objects
+    assert np.sum(all_matches[:, 0] == len(objects)) == len(descriptions) - len(matched_ids) # Binned hints
+
+    # for i in range(len(objects)):
+    #     if objects[i].id not in mentioned_ids:
+    #         all_matches.append((i, len(descriptions))) # Match all distractors or pads to hints-side-bin
+    # matches, all_matches = np.array(matches), np.array(all_matches)
+    # assert np.sum(all_matches[:, 1] == len(descriptions)) == len(objects) - len(descriptions)
+
+    text = ' '.join(hints)
+
+    # TODO: flip here. This does not affect the the order and matches.
+    # Flip objects, hint_descriptions, object_points, offsets, pose
+    if flip_pose:
+        if np.random.choice((True,False)):
+            pose, cell, text, hints, offsets = flip_pose_in_cell(pose, cell, text, 1, hints, offsets) # Horizontal
+        if np.random.choice((True,False)):
+            pose, cell, text, hints, offsets = flip_pose_in_cell(pose, cell, text, -1, hints, offsets) # Vertical
+
+    object_points = batch_object_points(objects, transform)
+
+    object_class_indices = [CLASS_TO_INDEX[obj.label] for obj in objects]
+    object_color_indices = [COLOR_NAMES.index(obj.get_color_text()) for obj in objects]        
+
+    return {
+        'poses': pose,
+        'cells': cell,
+        'objects': objects,
+        'object_points': object_points,
+        'hint_descriptions': hints,
+        'texts': text,
+        'matches': matches,
+        'all_matches': all_matches,
+        'offsets': np.array(offsets),
+        'offsets_best_center': np.array(offsets_best_center),
+        # 'offsets_valid': offsets_valid,
+        'object_class_indices': object_class_indices,
+        'object_color_indices': object_color_indices
+    }            
+
+class Kitti360FineDataset(Kitti360BaseDataset):
+    def __init__(self, base_path, scene_name, transform, args, flip_pose=False):
+        super().__init__(base_path, scene_name)
         self.pad_size = args.pad_size
-        self.num_mentioned = args.num_mentioned
-        self.length = length
-        self.fixed_seed = fixed_seed
-
-        self.classes = [c for c in CLASS_TO_INDEX if c!='pad']
-        self.colors = COLORS
-        self.color_names = COLOR_NAMES
-
-        # self.reset_seed()
-
-    # def reset_seed(self):
-    #     """Resets the np random seed for re-producible results.
-    #     Done initially and can be done before every epoch for consistent data.
-    #     """
-    #     np.random.seed(4096)
-
-    def __len__(self):
-        return self.length
+        self.transform = transform
+        self.flip_pose = flip_pose
+        self.args = args
 
     def __getitem__(self, idx):
-        if self.fixed_seed:
-            np.random.seed(idx)
+        pose = self.poses[idx]
+        cell = self.cells_dict[pose.cell_id]
+        hints = self.hint_descriptions[idx]
+        
+        return load_pose_and_cell(pose, cell, hints, self.pad_size, self.transform, self.args, flip_pose=self.flip_pose)
 
-        # Create random objects in the cell
-        # num_distractors = self.num_distractors #np.random.randint(self.pad_size - self.num_mentioned) if self.pad_size > self.num_mentioned else 0
-        num_distractors = np.random.randint(self.pad_size - self.num_mentioned) if self.pad_size > self.num_mentioned else 0
-        objects = []
-        for i in range(self.pad_size):
-            if i >= self.num_mentioned + num_distractors:
-                xyz = np.zeros((1, 3))
-                label = 'pad'
-                rgb = np.zeros((1, 3))
-            else:
-                xyz = np.random.rand(1, 3) # Center is inferred from this
-                rgb = np.random.rand(1, 3)
-                label = np.random.choice(self.classes)
-            objects.append(Object3d(xyz, rgb, label, None))
-
-        # create the pose somewhere in the cell
-        pose = np.random.rand(3)
-
-        # Random shift an object close to the pose for on-top
-        if np.random.choice((True, False)):
-            idx = np.random.randint(self.num_mentioned + num_distractors)
-            objects[idx].xyz = np.array(pose + np.random.randn(3)*0.01).reshape((1,3))
-
-        # Give hints for the <num_mentioned> closest objects
-        hints = []
-        matches = [] # (i,j) entry means obj-i matches hint-j
-        distances = np.linalg.norm(pose[0:2] - np.array([obj.get_closest_point(pose) for obj in objects])[:, 0:2], axis=1) # Distance only x&y
-
-        distances[self.num_mentioned + num_distractors : ] = np.inf # Remove the padding objects
-        sorted_indices = np.argsort(distances)
-
-        offset_vectors = []
-
-        for hint_idx, obj_idx in enumerate(sorted_indices[0 : self.num_mentioned]):
-            obj = objects[obj_idx]
-            # color_dists = np.linalg.norm(obj.color - COLORS, axis=1)
-            # color_text = COLOR_NAMES[np.argmin(color_dists)]
-            color_dists = np.linalg.norm(obj.get_color_rgb() - self.colors, axis=1)
-            color_text = self.color_names[np.argmin(color_dists)]            
-
-            obj2pose = pose - obj.closest_point
-            offset_vectors.append(obj2pose[0:2])
-            if np.linalg.norm(obj2pose[0:2]) < 0.015: # Say 'on-top' if the object is very close (e.g. road), only calculated in x-y-plane!
-                direction = 'on-top'
-            else:
-                if abs(obj2pose[0])>=abs(obj2pose[1]) and obj2pose[0]>=0: direction='east'
-                if abs(obj2pose[0])>=abs(obj2pose[1]) and obj2pose[0]<=0: direction='west'
-                if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]>=0: direction='north'
-                if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]<=0: direction='south' 
-
-            hints.append(f'The pose is {direction} of a {color_text} {obj.label}')
-            matches.append((obj_idx, hint_idx))
-
-        # offset_vectors = np.array(offset_vectors) / np.linalg.norm(offset_vectors, axis=1).reshape((-1,1)) # Norm to have offset directions (for now)
-
-        # Create <matches> and <all_matches>
-        all_matches = matches.copy()
-        matches = np.array(matches)
-        for obj_idx in range(len(objects)):
-            if obj_idx not in matches[:, 0]: # If the object is not mentioned, i.e. in matches
-                all_matches.append((obj_idx, self.num_mentioned)) # Then match it to the hints-side bin
-        all_matches = np.array(all_matches)
-        assert len(matches) == self.num_mentioned and np.sum(all_matches[:, 1] == self.num_mentioned) == self.pad_size - self.num_mentioned
-        # assert len(all_matches) == self.num_mentioned + self.num_distractors and np.sum(all_matches[:, 1]==self.num_mentioned) == self.num_distractors
-      
-        return {
-            'objects': objects,
-            'hint_descriptions': hints,
-            'texts': ' '.join(hints),
-            'num_mentioned': self.num_mentioned,
-            'num_distractors': num_distractors,
-            'matches': matches,
-            'all_matches': all_matches,
-            'poses': pose,
-            'offsets': np.array(offset_vectors)
-        }
+    def __len__(self):
+        return len(self.poses)
 
     def collate_fn(data):
         batch = {}
         for key in data[0].keys():
             batch[key] = [data[i][key] for i in range(len(data))]
-        return batch                 
+        return batch         
 
-    def get_known_classes(self):
-        return self.classes + ['pad', ]   
-
-    def get_known_words(self):
-        known_words = []
-        for i in range(50):
-            data = self[i]
-            for hint in data['hint_descriptions']:
-                known_words.extend(hint.replace('.','').replace(',','').lower().split())
-        return list(np.unique(known_words))  
-
-def batch_object_points(objects: List[Object3d], transform):
-    """Generates a PyG-Batch for the objects of a single cell.
-    Note: Aggregating an entire batch of cells into a single PyG-Batch would exceed the limit of 256 sub-graphs.
-    Note: The objects can be transformed / augmented freely, as their center-points are encoded separately.
-
-    Args:
-        objects (List[Object3d]): Cell objects
-        transform: PyG-Transform
-    """
-    # CARE: Transforms not working with batches?! Doing it object-by-object here!
-    data_list = [Data(x=torch.tensor(obj.rgb, dtype=torch.float), pos=torch.tensor(obj.xyz, dtype=torch.float)) for obj in objects]
-    for i in range(len(data_list)):
-        data_list[i] = transform(data_list[i])
-
-    batch = Batch.from_data_list(data_list)
-    return batch
-
-
-def load_cell_data(cell, hints, pad_size, transform):
-        descriptions = cell.descriptions
-        cell_objects_dict = {obj.id: obj for obj in cell.objects}
-        mentioned_ids = [descr.object_id for descr in descriptions]
-
-        # Gather mentioned objects, matches and offsets
-        objects, matches, offsets = [], [], []
-        for i_descr, descr in enumerate(descriptions):
-            hint_obj = cell_objects_dict[descr.object_id]
-            objects.append(hint_obj)
-            matches.append((i_descr, i_descr))
-            offsets.append(cell.pose - hint_obj.closest_point)
-        offsets = np.array(offsets)[:, 0:2]
-
-        # Gather distractors
-        for obj in cell.objects:
-            if obj.id not in mentioned_ids:
-                objects.append(obj)
-
-        # Pad or cut-off distractors (CARE: the latter would use ground-truth data!)
-        if len(objects) > pad_size:
-            objects = objects[0 : pad_size]
-
-        # '''
-        # CARE: Padding turned off!
-        # '''
-        # if False:
-        while len(objects) < pad_size:
-            # obj = Object3d(np.zeros((1,3)), np.zeros((1,3)), 'pad', -1)
-            # _ = obj.get_closest_point(cell.pose) # run to set the point
-            obj = Object3d.create_padding()
-            objects.append(obj)
-
-        # Build matches and all_matches
-        # The mentioned objects are always put in first, however, our geometric models have no knowledge of these indices
-        matches = [(i, i) for i in range(len(descriptions))]
-        all_matches = matches.copy()
-        for i in range(len(objects)):
-            if objects[i].id not in mentioned_ids:
-                all_matches.append((i, len(descriptions))) # Match all distractors or pads to hints-side-bin
-        matches, all_matches = np.array(matches), np.array(all_matches)
-        assert np.sum(all_matches[:, 1] == len(descriptions)) == len(objects) - len(descriptions)
-
-        object_points = batch_object_points(objects, transform)
-
-        object_class_indices = [CLASS_TO_INDEX[obj.label] for obj in objects]
-        object_color_indices = [COLOR_NAMES.index(obj.get_color_text()) for obj in objects]        
-
-        text = ' '.join(hints)
-
-        return {
-            'cells': cell,
-            'objects': objects,
-            'object_points': object_points,
-            'hint_descriptions': hints,
-            'texts': text,
-            'matches': matches,
-            'all_matches': all_matches,
-            'poses': cell.pose,
-            'offsets': np.array(offsets),
-            'object_class_indices': object_class_indices,
-            'object_color_indices': object_color_indices
-        }            
-
-class Kitti360PoseReferenceDataset(Kitti360BaseDataset):
-    def __init__(self, base_path, scene_name, transform, args, split=None):
-        super().__init__(base_path, scene_name, split)
-        self.pad_size = args.pad_size
-        self.transform = transform
-
-    def __getitem__(self, idx):
-        cell = self.cells[idx]
-        hints = self.hint_descriptions[idx]
-        
-        return load_cell_data(cell, hints, self.pad_size, self.transform)
-
-    def __len__(self):
-        return len(self.cells)
-
-class Kitti360PoseReferenceDatasetMulti(Dataset):
-    def __init__(self, base_path, scene_names, transform, args, split=None):
+class Kitti360FineDatasetMulti(Dataset):
+    def __init__(self, base_path, scene_names, transform, args, flip_pose=False):
         self.scene_names = scene_names
-        self.split = split
-        self.datasets = [Kitti360PoseReferenceDataset(base_path, scene_name, transform, args, split) for scene_name in scene_names]
+        self.flip_pose = flip_pose
+        self.datasets = [Kitti360FineDataset(base_path, scene_name, transform, args, flip_pose) for scene_name in scene_names]
+        
+        self.all_poses = [pose for dataset in self.datasets for pose in dataset.poses] # For stats
+        self.all_cells = [cell for dataset in self.datasets for cell in dataset.cells] # For eval stats
 
         print(str(self))
 
@@ -255,7 +227,9 @@ class Kitti360PoseReferenceDatasetMulti(Dataset):
         assert False
 
     def __repr__(self):
-        return f'Kitti360PoseReferenceDatasetMulti: {len(self)} poses/cells from {len(self.scene_names)} scenes, split: {self.split}'
+        poses = np.array([pose.pose_w for pose in self.all_poses])
+        num_poses = len(np.unique(poses, axis=0)) # CARE: Might be possible that is is slightly inaccurate if there are actually overlaps        
+        return f'Kitti360FineDatasetMulti: {len(self)} descriptions for {num_poses} unique poses from {len(self.datasets)} scenes, {len(self.all_cells)} cells, flip: {self.flip_pose}.'
 
     def __len__(self):
         return np.sum([len(ds) for ds in self.datasets])
@@ -273,12 +247,11 @@ class Kitti360PoseReferenceDatasetMulti(Dataset):
         return list(np.unique(known_classes))          
         
 if __name__ == '__main__':
-    base_path = './data/kitti360'
-    folder_name = '2013_05_28_drive_0000_sync'    
+    base_path = './data/k360_cs30_cd30_pd30_shTrue'
+    folder_name = '2013_05_28_drive_0003_sync'    
     
     args = EasyDict(pad_size=8, num_mentioned=6)    
     transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale()])
-    dataset = Kitti360PoseReferenceDataset(base_path, folder_name, transform, args)
-    dataloader = DataLoader(dataset, batch_size=2, collate_fn=Kitti360PoseReferenceDataset.collate_fn)
+
+    dataset = Kitti360FineDatasetMulti(base_path, [folder_name, ], transform, args)
     data = dataset[0]
-    batch = next(iter(dataloader))

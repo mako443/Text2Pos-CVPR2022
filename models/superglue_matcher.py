@@ -179,6 +179,9 @@ class SuperGlueMatch(torch.nn.Module):
         outputs.matches0 = matcher_output['matches0']
         outputs.matches1 = matcher_output['matches1']
         outputs.offsets = offsets
+
+        outputs.matching_scores0 = matcher_output['matching_scores0']
+        outputs.matching_scores1 = matcher_output['matching_scores1']
         # outputs.class_preds = object_class_preds
         # outputs.color_preds = object_color_preds
 
@@ -210,8 +213,31 @@ def get_pos_in_cell(objects: List[Object3d_K360], matches0, offsets):
     for obj_idx, hint_idx in enumerate(matches0):
         if obj_idx == -1 or hint_idx == -1:
             continue
-        pose_preds.append(objects[obj_idx].closest_point[0:2] + offsets[hint_idx]) # Object location plus offset of corresponding hint
+        # pose_preds.append(objects[obj_idx].closest_point[0:2] + offsets[hint_idx]) # Object location plus offset of corresponding hint
+        pose_preds.append(objects[obj_idx].get_center()[0:2] + offsets[hint_idx]) # Object location plus offset of corresponding hint
     return np.mean(pose_preds, axis=0) if len(pose_preds) > 0 else np.array((0.5,0.5)) # Guess the middle if no matches
+
+def intersect(P0,P1):
+    n = (P1-P0)/np.linalg.norm(P1-P0,axis=1)[:,np.newaxis] # normalized
+    projs = np.eye(n.shape[1]) - n[:,:,np.newaxis]*n[:,np.newaxis]  # I - n*n.T
+    R = projs.sum(axis=0)
+    q = (projs @ P0[:,:,np.newaxis]).sum(axis=0)
+    p = np.linalg.lstsq(R,q,rcond=None)[0]
+    return p
+
+def get_pos_in_cell_intersect(objects: List[Object3d_K360], matches0, directions):
+    directions /= np.linalg.norm(directions, axis=1)[:, np.newaxis]
+    points0 = []
+    points1 = []
+    for obj_idx, hint_idx in enumerate(matches0):
+        if obj_idx == -1 or hint_idx == -1:
+            continue
+        points0.append(objects[obj_idx].get_center()[0:2])
+        points1.append(objects[obj_idx].get_center()[0:2] + directions[hint_idx])
+    if len(points0) < 2:
+        return np.array((0.5, 0.5))
+    else:
+        return intersect(np.array(points0), np.array(points1))
 
 if __name__ == "__main__":
     args = EasyDict()

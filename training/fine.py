@@ -9,39 +9,48 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 from easydict import EasyDict
+import os
 import os.path as osp
 
 from models.superglue_matcher import SuperGlueMatch
-from models.tf_matcher import TransformerMatch
 
-from dataloading.semantic3d.semantic3d import Semantic3dPoseReferenceMockDataset, Semantic3dPoseReferenceDataset, Semantic3dPoseReferenceDatasetMulti
-from dataloading.kitti360.poses import Kitti360PoseReferenceDataset, Kitti360PoseReferenceDatasetMulti, Kitti360PoseReferenceMockDataset
-from dataloading.kitti360.synthetic import Kitti360PoseReferenceMockDatasetPoints
+from dataloading.kitti360.poses import Kitti360FineDataset, Kitti360FineDatasetMulti
+# from dataloading.kitti360.synthetic import Kitti360FineSyntheticDataset
 
 from datapreparation.semantic3d.imports import COLORS as COLORS_S3D, COLOR_NAMES as COLOR_NAMES_S3D
-from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360
-from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_TEST
+from datapreparation.kitti360.utils import COLORS as COLORS_K360, COLOR_NAMES as COLOR_NAMES_K360, SCENE_NAMES_TEST
+from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_VAL
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
 from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
 
 '''
-TODO:
-- Aux. train color + class helpful?
-- Which augmentation: RandomFlips, RandomRotate, Nothing? -> Not much difference?
-- 512 points ok? -> 1024 maye slightly better but seems ok. Possibly re-check w/ aux-loss
-- Merge differently / variations?
-- Pre-train helpful?
-- Re-formulate forward() as in CellRetrieval regarding features/embedding
+RESULTS:
+- train-offset always at 0.2, 0.15 before center-offset?
+- val-offset and val-mean always at 0.2, 0.1 before center-offset?
+- train recall + precision > 0.8
+- val recall + precision 0.6 - 0.7
+- best-cell: cell-shift is same, maybe even a little better
+- pose-cell w/o shift: recall + precision slightly lower, accuracies ~ same
+- pose-cell w/  shift: recall, precision and accs back at best+shift, 0.6-0.7
+- See if improves on smaller threshold -> Yes!
+- compare mean/offset accuracies with closest/center in offset-pred and pos_in_cell -> Not much difference in any case, all 0.11 with perfect matching
 
-- Refactoring: train (on-top, classes, center/closest point, color rgb/text, )
+TODO:
+- Try regress and match only direction (do not say "on-top", learn on centers)
+
+- Handle or discuss objects gt-selection / overflow. 32 would be enough for most
+- Merge differently / variations?
+
 - feature ablation
 - regress offsets: is error more in direction or magnitude? optimize?
 - Pad at (0.5,0.5) for less harmfull miss-matches?
-- Variable num_mentioned? (Care also at other places, potentially use lists there)
 
 NOTES:
+- Pre-train helpful? -> Apparently safer
+- 512 points ok? -> 1024 maye slightly better but seems ok. Possibly re-check w/ aux-loss
+- Prevent opposite-direction matches! -> Done with offset_closest comparison
 - Random number of pads/distractors: acc. improved ✓
 - Keep PN frozen? -> Bad
 '''
@@ -76,8 +85,14 @@ def train_epoch(model, dataloader, args):
             print(f'Losses: {loss_matching.item():0.3f} {loss_offsets.item():0.3f}')
             printed = True
 
-        loss.backward()
-        optimizer.step()
+        try:
+            loss.backward()
+            optimizer.step()
+        except Exception as e:
+            print()
+            print(str(e))
+            print()
+            print(batch['all_matches'])
 
         recall, precision = calc_recall_precision(batch['matches'], output.matches0.cpu().detach().numpy(), output.matches1.cpu().detach().numpy())
 
@@ -105,13 +120,13 @@ def eval_epoch(model, dataloader, args):
         pose_mean = [],
         pose_offsets = [],
     )
-    offset_vectors = []
-    matches0_vectors = []
+    # offset_vectors = []
+    # matches0_vectors = []
 
     for i_batch, batch in enumerate(dataloader):
         output = model(batch['objects'], batch['hint_descriptions'], batch['object_points'])
-        offset_vectors.append(output.offsets.detach().cpu().numpy())
-        matches0_vectors.append(output.matches0.detach().cpu().numpy())
+        # offset_vectors.append(output.offsets.detach().cpu().numpy())
+        # matches0_vectors.append(output.matches0.detach().cpu().numpy())
 
         recall, precision = calc_recall_precision(batch['matches'], output.matches0.cpu().detach().numpy(), output.matches1.cpu().detach().numpy())
         stats.recall.append(recall)
@@ -125,34 +140,77 @@ def eval_epoch(model, dataloader, args):
         stats[key] = np.mean(stats[key])
     return stats
 
+def get_conf1(P):
+    return np.sum(P[:, 0:-1, 0:-1])
+
+def get_conf2(output):
+    matches = output.matches0
+    matching_scores = output.matching_scores0
+    return matching_scores[matches>=0].sum().item()
+    # if len(matching_scores) == 0:
+    #     return 0.0
+    # else:
+    #     return matching_scores.sum().item()
+
+@torch.no_grad()
+def eval_conf(model, dataset, args):
+    accs = []
+    accs_old = []
+    for i_sample in range(100):
+        confs = []
+
+        idx = np.random.randint(len(dataset))
+        data = Kitti360FineDataset.collate_fn([dataset[idx], ])
+        hints = data['hint_descriptions']
+        output = model(data['objects'], hints, data['object_points'])
+        
+        matches = output.matches0.detach().cpu().numpy()
+        confs.append(np.sum(matches >= 0))
+         
+        for _ in range(4):
+            idx = np.random.randint(len(dataset))
+            data = Kitti360FineDataset.collate_fn([dataset[idx], ])
+            hints = data['hint_descriptions']
+            output = model(data['objects'], hints, data['object_points'])
+            matches = output.matches0.detach().cpu().numpy()
+            confs.append(np.sum(matches >= 0))
+
+        accs.append(np.argmax(confs) == 0)
+        accs.append(np.argmax(np.flip(confs)) == len(confs)-1)
+        accs_old.append(np.argmax(confs) == 0)
+
+    print('Conf score:', np.mean(accs), np.mean(accs_old))   
+
 if __name__ == "__main__":
     args = parse_arguments()
-    print(args, "\n")
+    print(str(args).replace(',','\n'), '\n')
 
-    dataset_name = osp.dirname(args.base_path).split('/')[-1]
-    print(f'Directory: {dataset_name}')    
+    dataset_name = args.base_path[:-1] if args.base_path.endswith('/') else args.base_path
+    dataset_name = dataset_name.split('/')[-1]
+    print(f'Directory: {dataset_name}')
+
+    cont = 'Y' if bool(args.continue_path) else 'N'
+    feats = 'all' if len(args.use_features) == 3 else '-'.join(args.use_features)
+    plot_path = f'./plots/{dataset_name}/Fine_cont{cont}-bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_ecl{int(args.class_embed)}_eco{int(args.color_embed)}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}_npa{int(args.no_pc_augment)}_nca{int(args.no_cell_augment)}_f-{feats}.png'
+    print('Plot:', plot_path, '\n')
 
     '''
     Create data loaders
     '''    
-    if args.dataset == 'S3D':
-        scene_names = ('bildstein_station1_xyz_intensity_rgb','domfountain_station1_xyz_intensity_rgb','neugasse_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb','untermaederbrunnen_station1_xyz_intensity_rgb')
-        dataset_val = Semantic3dPoseReferenceDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, args.pad_size, split=None)
-        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceDataset.collate_fn)  
-        
-        dataset_train = Semantic3dPoseReferenceMockDataset(args, dataset_val.get_known_classes(), COLORS_S3D, COLOR_NAMES_S3D)
-        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Semantic3dPoseReferenceMockDataset.collate_fn)
-
     if args.dataset == 'K360':
-        # train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(180, axis=2), T.NormalizeScale()])
-        train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])
-        dataset_train = Kitti360PoseReferenceMockDatasetPoints(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, length=1024)
-        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceMockDatasetPoints.collate_fn)
+        if args.no_pc_augment:
+            train_transform = T.FixedPoints(args.pointnet_numpoints)
+            val_transform = T.FixedPoints(args.pointnet_numpoints)
+        else:
+            train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
+            val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
+                    
+        dataset_train = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, train_transform, args, flip_pose=False) # No cell-augment for fine
+        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn, shuffle=args.shuffle)
 
-        print('CARE: Re-set scenes')
-        val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        dataset_val = Kitti360PoseReferenceDatasetMulti(args.base_path, SCENE_NAMES_TEST, val_transform, args, split=None)
-        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360PoseReferenceDataset.collate_fn)  
+        dataset_val = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_VAL, val_transform, args)
+        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn)  
+
         
     # print(sorted(dataset_train.get_known_classes()))
     # print(sorted(dataset_val.get_known_classes()))
@@ -174,11 +232,12 @@ if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)    
 
     best_val_recallPrecision = -1 # Measured by mean of recall and precision
+    last_model_save_path = None
 
     '''
     Start training
     '''
-    learning_rates = np.logspace(-3.0, -4.0 ,3) #[args.lr_idx : args.lr_idx + 1] # Larger than -3 throws error (even with warm-up)
+    learning_rates = np.logspace(-3.0, -4.0 ,3)[args.lr_idx : args.lr_idx + 1] # Larger than -3 throws error (even with warm-up)
 
     train_stats_loss = {lr: [] for lr in learning_rates}
     train_stats_loss_offsets = {lr: [] for lr in learning_rates}
@@ -195,7 +254,10 @@ if __name__ == "__main__":
     val_stats_pose_offsets = {lr: [] for lr in learning_rates}
     
     for lr in learning_rates:
-        model = SuperGlueMatch(dataset_train.get_known_classes(), COLOR_NAMES_K360, dataset_train.get_known_words(), args)
+        if bool(args.continue_path):
+            model = torch.load(args.continue_path)
+        else:
+            model = SuperGlueMatch(dataset_train.get_known_classes(), COLOR_NAMES_K360, dataset_train.get_known_words(), args)
         model.to(DEVICE)
 
         criterion_matching = MatchingLoss()
@@ -210,7 +272,7 @@ if __name__ == "__main__":
         for epoch in range(args.epochs):
             if epoch==3:
                 optimizer = optim.Adam(model.parameters(), lr=lr)
-                scheduler = optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)            
+                scheduler = optim.lr_scheduler.ExponentialLR(optimizer,args.lr_gamma)     
 
             # loss, train_recall, train_precision, epoch_time = train_epoch(model, dataloader_train, args)
             train_out = train_epoch(model, dataloader_train, args)
@@ -228,7 +290,11 @@ if __name__ == "__main__":
             val_stats_precision[lr].append(val_out.precision)     
             val_stats_pose_mid[lr].append(val_out.pose_mid)
             val_stats_pose_mean[lr].append(val_out.pose_mean)
-            val_stats_pose_offsets[lr].append(val_out.pose_offsets)                   
+            val_stats_pose_offsets[lr].append(val_out.pose_offsets)   
+
+            print()
+            eval_conf(model, dataset_val, args)
+            print()
 
             if scheduler: 
                 scheduler.step()
@@ -237,23 +303,31 @@ if __name__ == "__main__":
                 f'\t lr {lr:0.6} epoch {epoch} loss {train_out.loss:0.3f} '
                 f't-recall {train_out.recall:0.2f} t-precision {train_out.precision:0.2f} t-mean {train_out.pose_mean:0.2f} t-offset {train_out.pose_offsets:0.2f} '
                 f'v-recall {val_out.recall:0.2f} v-precision {val_out.precision:0.2f} v-mean {val_out.pose_mean:0.2f} v-offset {val_out.pose_offsets:0.2f} '
-                ))
-        print()
+                ), flush=True)
 
-        acc = np.mean((val_out.recall, val_out.precision))
-        if acc > best_val_recallPrecision:
-            model_path = f"./checkpoints/fine_{dataset_name}_acc{acc:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"
-            print('Saving model to', model_path)
-            try:
-                torch.save(model, model_path)
-            except Exception as e:
-                print('Error saving model!', str(e))
-            best_val_recallPrecision = acc
+            if epoch >= args.epochs//2:
+                acc = np.mean((val_out.recall, val_out.precision))
+                if acc > best_val_recallPrecision:
+                    model_path = f"./checkpoints/{dataset_name}/fine_cont{cont}_acc{acc:0.2f}_lr{args.lr_idx}_obj-{args.num_mentioned}-{args.pad_size}_ecl{int(args.class_embed)}_eco{int(args.color_embed)}_p{args.pointnet_numpoints}_npa{int(args.no_pc_augment)}_nca{int(args.no_cell_augment)}_f-{feats}.pth"
+                    if not osp.isdir(osp.dirname(model_path)):
+                        os.mkdir(osp.dirname(model_path))
+
+                    print('Saving model to', model_path)
+                    try:
+                        torch.save(model, model_path)
+                        if last_model_save_path is not None:
+                            print('Removing', last_model_save_path)
+                            os.remove(last_model_save_path)
+                        last_model_save_path = model_path
+                    except Exception as e:
+                        print('Error saving model!', str(e))
+                    best_val_recallPrecision = acc
+
+        print()
 
     '''
     Save plots
     '''
-    plot_name = f'Fine-{dataset_name}_bs{args.batch_size}_obj-{args.num_mentioned}-{args.pad_size}_e{args.embed_dim}_lr{args.lr_idx}_l{args.num_layers}_i{args.sinkhorn_iters}_v{args.variation}_p{args.pointnet_numpoints}_g{args.lr_gamma}.png'
     metrics = {
         'train-loss': train_stats_loss,
         'train-loss_offsets': train_stats_loss_offsets,
@@ -266,8 +340,11 @@ if __name__ == "__main__":
         'val-precision': val_stats_precision,
         'val-pose_mid': val_stats_pose_mid,
         'val-pose_mean': val_stats_pose_mean,
-        'val-pose_offsets': val_stats_pose_offsets,      
+        'val-pose_offsets': val_stats_pose_offsets          
     }
-    plot_metrics(metrics, './plots/'+plot_name)        
+    if not osp.isdir(osp.dirname(plot_path)):
+        os.mkdir(osp.dirname(plot_path))
+    plot_metrics(metrics, plot_path)        
 
     
+ 

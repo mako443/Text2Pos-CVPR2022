@@ -21,14 +21,14 @@ class Kitti360ObjectsDataset(Kitti360BaseDataset):
     CARE: should be shuffled so that objects aren't ordered by class
     Objects will often have less than 2k points, T.FixedPoints() will sample w/ replace by default
     """    
-    def __init__(self, base_path, scene_name, split=None, transform=T.Compose([T.FixedPoints(1024), T.NormalizeScale()])):
-        super().__init__(base_path, scene_name, split)
+    def __init__(self, base_path, scene_name, transform=T.Compose([T.FixedPoints(1024), T.NormalizeScale()])):
+        super().__init__(base_path, scene_name)
         self.transform = transform
 
         # Note: objects are retrieved from cells, not the (un-clustered) scene-objects
         self.objects = [obj for cell in self.cells for obj in cell.objects]
         
-        print(self)
+        # print(self)
 
     def __getitem__(self, idx):
         obj = self.objects[idx]
@@ -49,11 +49,10 @@ class Kitti360ObjectsDataset(Kitti360BaseDataset):
         return f'Kitti360ObjectsDataset: {len(self)} objects from {len(self.class_to_index)} classes'
 
 class Kitti360ObjectsDatasetMulti(Dataset):
-    def __init__(self, base_path, scene_names, split=None, transform=T.Compose([T.FixedPoints(1024), T.NormalizeScale()])):
+    def __init__(self, base_path, scene_names, transform=T.Compose([T.FixedPoints(1024), T.NormalizeScale()])):
         self.scene_names = scene_names
-        self.split = split
         self.transform = transform
-        self.datasets = [Kitti360ObjectsDataset(base_path, scene_name, split, transform) for scene_name in scene_names]
+        self.datasets = [Kitti360ObjectsDataset(base_path, scene_name, transform) for scene_name in scene_names]
 
         self.objects = [obj for dataset in self.datasets for obj in dataset.objects]
         self.class_to_index = self.datasets[0].class_to_index
@@ -76,21 +75,14 @@ class Kitti360ObjectsDatasetMulti(Dataset):
         return len(self.objects)
 
     def __repr__(self):
-        return f'Kitti360ObjectsDatasetMulti: {len(self.scene_names)} scenes, {len(self)} objects from {len(self.get_known_classes())} classes, split {self.split}'
+        return f'Kitti360ObjectsDatasetMulti: {len(self.scene_names)} scenes, {len(self)} objects from {len(self.get_known_classes())} classes'
 
     def get_known_classes(self):
         return list(self.class_to_index.keys())
 
 if __name__ == '__main__':
-    base_path = './data/kitti360'
-    folder_name = '2013_05_28_drive_0000_sync'    
+    base_path = './data/k360_decouple'
+    folder_name = '2013_05_28_drive_0003_sync'    
 
-    datasets = [Kitti360ObjectsDataset(base_path, sn) for sn in SCENE_NAMES]
-    objects = [obj for ds in datasets for obj in ds.objects]
-    
-    # dataset = Kitti360ObjectsDataset(base_path, folder_name)          
-    # data = dataset[0]
-
-    # dataloader = DataLoader(dataset, batch_size=2)
-    # batch = next(iter(dataloader))
-    unique,counts=np.unique([obj.get_color() for obj in objects if obj.label=='road'],return_counts=True)
+    dataset = Kitti360ObjectsDatasetMulti(base_path, [folder_name, ])
+    data = dataset[0]

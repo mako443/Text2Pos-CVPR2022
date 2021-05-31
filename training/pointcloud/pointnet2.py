@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from models.pointcloud.pointnet2 import PointNet2
 from dataloading.semantic3d.semantic3d_pointcloud import Semantic3dObjectDataset, Semantic3dObjectDatasetMulti
 from dataloading.kitti360.objects import Kitti360ObjectsDataset, Kitti360ObjectsDatasetMulti
-from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_TEST
+from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_VAL, SCENE_NAMES_TRAIN
 from datapreparation.kitti360.utils import COLOR_NAMES as COLOR_NAMES_K360
 
 from training.args import parse_arguments
@@ -76,32 +76,25 @@ if __name__ == "__main__":
     args = parse_arguments()
     print(args, "\n")
 
-    print('CARE: TRAINING ORACLE MODEL!')
+    dataset_name = args.base_path[:-1] if args.base_path.endswith('/') else args.base_path
+    dataset_name = dataset_name.split('/')[-1]
+    print(f'Directory: {dataset_name}')    
 
     '''
     Create data loaders
     '''    
-    transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale(), T.RandomFlip(0), T.RandomFlip(1), T.RandomFlip(2), T.NormalizeScale()])
+    if args.dataset == 'K360':
+        if args.no_pc_augment:
+            train_transform = T.FixedPoints(args.pointnet_numpoints)
+            val_transform = T.FixedPoints(args.pointnet_numpoints)
+        else:
+            train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
+            val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
 
-    if args.dataset == 'S3D':
-        scene_names = ['bildstein_station1_xyz_intensity_rgb','domfountain_station1_xyz_intensity_rgb','neugasse_station1_xyz_intensity_rgb','sg27_station1_intensity_rgb','sg27_station2_intensity_rgb','sg27_station4_intensity_rgb','sg27_station5_intensity_rgb','sg27_station9_intensity_rgb','sg28_station4_intensity_rgb','untermaederbrunnen_station1_xyz_intensity_rgb']
-        # dataset_train = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='train')
-        dataset_train = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='train', transform=transform)
-        dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)
-        # dataset_val = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d', split='test')
-        dataset_val = Semantic3dObjectDatasetMulti('./data/numpy_merged/', './data/semantic3d', scene_names, split='test')
-        dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=args.shuffle, drop_last=False)    
-
-    if args.dataset == 'K360':     
-        # train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(180, axis=2), T.NormalizeScale()]) # This proved best
-        # train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.RandomRotate(120, axis=2), T.NormalizeScale()])                                    
-        train_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-
-        dataset_train = Kitti360ObjectsDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, split=None, transform=train_transform)
+        dataset_train = Kitti360ObjectsDatasetMulti(args.base_path, SCENE_NAMES_TRAIN, transform=train_transform)
         dataloader_train = DataLoader(dataset_train, batch_size=args.batch_size, shuffle=args.shuffle)
         
-        val_transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
-        dataset_val = Kitti360ObjectsDatasetMulti(args.base_path, SCENE_NAMES_TEST, split=None, transform=val_transform)
+        dataset_val = Kitti360ObjectsDatasetMulti(args.base_path, SCENE_NAMES_VAL, transform=val_transform)
         dataloader_val = DataLoader(dataset_val, batch_size=args.batch_size, shuffle=False)
 
     assert sorted(dataset_train.get_known_classes()) == sorted(dataset_val.get_known_classes())
@@ -142,13 +135,14 @@ if __name__ == "__main__":
 
             scheduler.step()
 
-            print(f'\t lr {lr:0.6f} epoch {epoch} loss {loss:0.3f} acc-train {acc_train:0.2f} acc-val {acc_val:0.2f}')
+            print(f'\t lr {lr:0.6f} epoch {epoch} loss {loss:0.3f} acc-train {acc_train:0.2f} acc-val {acc_val:0.2f}', flush=True)
 
-        if acc_val > best_val_accuracy:
-            model_path = f"./checkpoints/pointnet_acc{acc_val:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}.pth"    
-            print(f'Saving model to {model_path}')
-            torch.save(model.state_dict(), model_path)
-            best_val_accuracy = acc_val
+            if epoch >= args.epochs//2:
+                if acc_val > best_val_accuracy:
+                    model_path = f"./checkpoints/pointnet_{dataset_name}_acc{acc_val:0.2f}_lr{args.lr_idx}_p{args.pointnet_numpoints}_npa{int(args.no_pc_augment)}.pth"    
+                    print(f'Saving model to {model_path}')
+                    torch.save(model.state_dict(), model_path)
+                    best_val_accuracy = acc_val
 
         print()
 
@@ -156,7 +150,7 @@ if __name__ == "__main__":
     Save plots
     '''
     # plot_name = f'PN2_len{len(dataset_train)}_bs{args.batch_size}_mb{args.max_batches}_l{args.num_layers}_v{args.variation}_s{args.shuffle}_g{args.lr_gamma}.png'
-    plot_name = f'PN2-Shift-9-{args.dataset}_bs{args.batch_size}_mb{args.max_batches}_lr{args.lr_idx}_pl{args.pointnet_layers}_pv{args.pointnet_variation}_t{args.pointnet_transform}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}.png'
+    plot_name = f'PN2-{dataset_name}_bs{args.batch_size}_lr{args.lr_idx}_pl{args.pointnet_layers}_pv{args.pointnet_variation}_p{args.pointnet_numpoints}_s{args.shuffle}_g{args.lr_gamma}_npa{int(args.no_pc_augment)}.png'
     metrics = {
         'train-loss': dict_loss,
         'train-acc': dict_acc,

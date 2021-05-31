@@ -1,13 +1,24 @@
 import numpy as np
 
-# CARE: scene-names incomplete because some where corrupted ?
-# SCENE_NAMES = ('2013_05_28_drive_0000_sync','2013_05_28_drive_0003_sync','2013_05_28_drive_0005_sync','2013_05_28_drive_0006_sync','2013_05_28_drive_0009_sync','2013_05_28_drive_0010_sync')
-# SCENE_NAMES_TRAIN = ('2013_05_28_drive_0000_sync','2013_05_28_drive_0003_sync','2013_05_28_drive_0006_sync','2013_05_28_drive_0009_sync')
-# SCENE_NAMES_TEST = ('2013_05_28_drive_0005_sync','2013_05_28_drive_0010_sync')
+SCENE_NAMES = ['2013_05_28_drive_0000_sync','2013_05_28_drive_0002_sync','2013_05_28_drive_0003_sync','2013_05_28_drive_0004_sync','2013_05_28_drive_0005_sync','2013_05_28_drive_0006_sync','2013_05_28_drive_0007_sync','2013_05_28_drive_0009_sync','2013_05_28_drive_0010_sync']
+SCENE_NAMES_TRAIN = ['2013_05_28_drive_0000_sync','2013_05_28_drive_0002_sync','2013_05_28_drive_0004_sync','2013_05_28_drive_0006_sync','2013_05_28_drive_0007_sync']
+SCENE_NAMES_VAL = ['2013_05_28_drive_0010_sync',]
+SCENE_NAMES_TEST = ['2013_05_28_drive_0003_sync', '2013_05_28_drive_0005_sync', '2013_05_28_drive_0009_sync']
 
-SCENE_NAMES = ('2013_05_28_drive_0000_sync','2013_05_28_drive_0002_sync','2013_05_28_drive_0003_sync','2013_05_28_drive_0004_sync','2013_05_28_drive_0005_sync','2013_05_28_drive_0006_sync','2013_05_28_drive_0007_sync','2013_05_28_drive_0009_sync','2013_05_28_drive_0010_sync')
-SCENE_NAMES_TRAIN = ('2013_05_28_drive_0000_sync','2013_05_28_drive_0002_sync','2013_05_28_drive_0004_sync','2013_05_28_drive_0006_sync','2013_05_28_drive_0007_sync','2013_05_28_drive_0010_sync')
-SCENE_NAMES_TEST = ('2013_05_28_drive_0003_sync', '2013_05_28_drive_0005_sync', '2013_05_28_drive_0009_sync')
+assert len(SCENE_NAMES_TRAIN + SCENE_NAMES_VAL + SCENE_NAMES_TEST) == 9
+assert len(np.unique(SCENE_NAMES_TRAIN + SCENE_NAMES_VAL + SCENE_NAMES_TEST)) == 9
+
+SCENE_SIZES = {
+    '2013_05_28_drive_0000_sync': [ 735, 1061,   30],
+    '2013_05_28_drive_0002_sync': [ 952, 1313,   89],
+    '2013_05_28_drive_0003_sync': [ 713,  922,   34],
+    '2013_05_28_drive_0004_sync': [1302, 2003,   60],
+    '2013_05_28_drive_0005_sync': [ 801,  999,   51],
+    '2013_05_28_drive_0006_sync': [ 881, 1004,   80],
+    '2013_05_28_drive_0007_sync': [3049, 1989,   52],
+    '2013_05_28_drive_0009_sync': [ 615, 1113,   26],
+    '2013_05_28_drive_0010_sync': [1560, 1445,   29],
+}
 
 CLASS_TO_INDEX = {
     'building':0,
@@ -171,9 +182,12 @@ COLORS = np.array([
        [171.00852191, 170.05737735, 155.00130334]
     ]) / 255.0
 
-COLOR_NAMES = ['color-0', 'color-1', 'color-2', 'color-3', 'color-4', 'color-5', 'color-6', 'color-7']
+# COLOR_NAMES = ['color-0', 'color-1', 'color-2', 'color-3', 'color-4', 'color-5', 'color-6', 'color-7']
+'''
+Note that these names are not completely precise as the fitted colors are mostly gray-scale.
+However, the models just learn them as words without deeper meaning, so they don't have a more complex effect.
+'''
+COLOR_NAMES = ['dark-green', 'gray', 'gray-green', 'bright-gray', 'gray', 'black', 'green', 'beige'] 
 
-# def get_color_histogram():
-    # dists = cdist(colors, anchors)
-    # indices = np.argmin(dists, axis=1)
-    # unique, counts = np.unique(indices, return_counts=True)
+from scipy.spatial.distance import cdist
+dists = cdist(COLORS, COLORS)
