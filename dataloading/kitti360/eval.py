@@ -18,6 +18,84 @@ from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell,
 from dataloading.kitti360.poses import batch_object_points
 from dataloading.kitti360.base import Kitti360BaseDataset
 
+class Kitti360FineEvalDataset(Dataset):
+    def __init__(self, poses: List[Pose], cells: List[Cell], transform, args):
+        super().__init__()
+        self.poses = poses
+        self.transform = transform
+        self.args = args
+
+        self.cells_dict = {cell.id: cell for cell in cells}
+
+        print(f'Kitti360FineEvalDataset: {len(self)} poses, {len(cells)} cells, pad {args.pad_size}')
+
+    def load_pose_and_cell(self, pose: Pose, cell: Cell):
+        assert pose.cell_id == cell.id
+        assert len(pose.descriptions) == self.args.num_mentioned
+
+        # Padded version here
+        matched_ids = []
+        for descr in pose.descriptions:
+            matched_ids.append(descr.object_id if descr.is_matched else None)
+
+        cell_objects_dict = {obj.id: obj for obj in cell.objects}
+
+        # Gather offsets for oracle
+        pose_in_cell = (pose.pose_w - cell.bbox_w[0:3])[0:2] / cell.cell_size
+        oracle_offsets = []
+        for descr in pose.descriptions:
+            if descr.is_matched:
+                # oracle_offsets.append(descr.best_offset_center[0:2])
+                obj = cell_objects_dict[descr.object_id]
+                oracle_offsets.append(pose_in_cell - obj.get_center()[0:2])
+            else:
+                oracle_offsets.append(descr.offset_center)
+        
+        # Gather the objects and matches
+        objects = []
+        matches = []
+        for obj_idx, obj in enumerate(cell.objects):
+            objects.append(obj)
+            if obj.id in matched_ids:
+                hint_idx = matched_ids.index(obj.id)
+                matches.append((obj_idx, hint_idx))
+
+            if len(objects) >= self.args.pad_size:
+                break
+
+        # Pad if needed
+        while len(objects) < self.args.pad_size:
+            objects.append(Object3d.create_padding())
+        assert len(objects) == self.args.pad_size
+
+        matches = np.array(matches)
+        assert len(matches) <= len(matched_ids) # Some matched objects can be cut-off
+
+        return {
+            'poses': pose,
+            'cells': cell,
+            'objects': objects,
+            'object_points': batch_object_points(objects, self.transform),
+            'matches': matches,
+            'hint_descriptions': Kitti360BaseDataset.create_hint_description(pose, None),
+            'offsets_best_center': np.array(oracle_offsets)
+        }
+
+    def __getitem__(self, idx: int):
+        pose = self.poses[idx]
+        cell = self.cells_dict[pose.cell_id]
+
+        return self.load_pose_and_cell(pose, cell)
+
+    def __len__(self):
+        return len(self.poses)
+
+    def collate_fn(data):
+        batch = {}
+        for key in data[0].keys():
+            batch[key] = [data[i][key] for i in range(len(data))]
+        return batch
+
 class Kitti360TopKDataset(Dataset):
     def __init__(self, poses: List[Pose], cells: List[Cell], retrievals, transform, args):
         super().__init__()
@@ -81,14 +159,14 @@ class Kitti360TopKDataset(Dataset):
             batch[key] = [data[i][key] for i in range(len(data))]
         return batch    
 
-    def collate_extend(data):
-        batch = {}
-        for key in data[0].keys():
-            batch[key] = []
-            for i in range(len(data)):
-                assert isinstance(data[i][key], list)
-                batch[key].extend(data[i][key])
-        return batch
+    # def collate_extend(data):
+    #     batch = {}
+    #     for key in data[0].keys():
+    #         batch[key] = []
+    #         for i in range(len(data)):
+    #             assert isinstance(data[i][key], list)
+    #             batch[key].extend(data[i][key])
+    #     return batch
 
 if __name__ == '__main__':
     from dataloading.kitti360.cells import Kitti360CoarseDatasetMulti

@@ -12,6 +12,7 @@ from evaluation.args import parse_arguments
 from evaluation.utils import calc_sample_accuracies, print_accuracies
 
 from dataloading.kitti360.poses import Kitti360FineDataset, Kitti360FineDatasetMulti
+from dataloading.kitti360.eval import Kitti360FineEvalDataset
 from datapreparation.kitti360.utils import SCENE_NAMES_TEST, SCENE_NAMES_VAL
 # from training.fine import eval_epoch as eval_epoch_fine
 from training.losses import calc_pose_error
@@ -102,16 +103,22 @@ if __name__ == '__main__':
     else:
         transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])  
 
+    # Load original dataset to load the poses and cells
     if args.use_validation:
         dataset_fine = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_VAL, transform, args, flip_pose=False)
     else:
         dataset_fine = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, args, flip_pose=False)
+
+    # Load the eval dataset
+    dataset_eval = Kitti360FineEvalDataset(dataset_fine.all_poses, dataset_fine.all_cells, transform, args)
+    dataloader_eval = DataLoader(dataset_eval, batch_size=args.batch_size, collate_fn=Kitti360FineEvalDataset.collate_fn)
     # dataset_fine = Kitti360FineDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], transform, args, flip_pose=False)
-    dataloader_fine = DataLoader(dataset_fine, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn)
+    # dataloader_fine = DataLoader(dataset_fine, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn)
 
     model_matching = torch.load(args.path_fine)
 
-    stats, stats_thresh = run_fine(model_matching, dataloader_fine)
+    # stats, stats_thresh = run_fine(model_matching, dataloader_fine)
+    stats, stats_thresh = run_fine(model_matching, dataloader_eval)
     for key in stats:
         print(f'{key}: {stats[key]:0.3}')
     print()
