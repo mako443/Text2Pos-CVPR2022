@@ -4,9 +4,8 @@ import numpy as np
 import random
 from datapreparation.kitti360.imports import Object3d
 
-# TODO: after debug, activate shuffling in direction and class
-
 def get_direction(obj, pose):
+    raise Exception('Not usable with orientation.')
     closest_point = obj.get_closest_point(pose)
     obj2pose = pose - closest_point
     if np.linalg.norm(obj2pose[0:2]) < 0.05: # Before: 0.015
@@ -18,13 +17,12 @@ def get_direction(obj, pose):
         if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]<=0: direction='south'  
     return direction
 
-def get_direction_noOntop(obj, pose):
-    obj2pose = pose[0:2] - obj.get_center()[0:2]
-    if abs(obj2pose[0])>=abs(obj2pose[1]) and obj2pose[0]>=0: direction='east'
-    if abs(obj2pose[0])>=abs(obj2pose[1]) and obj2pose[0]<=0: direction='west'
-    if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]>=0: direction='north'
-    if abs(obj2pose[0])<=abs(obj2pose[1]) and obj2pose[1]<=0: direction='south'  
-    return direction
+# TODO
+def get_direction_orientation(obj, pose):
+    """
+    Does not use on-top, all based on center. Better idea?
+    """
+    pass
 
 def select_objects_closest(objects: List[Object3d], pose, num_mentioned):
     distances = np.linalg.norm([obj.get_closest_point(pose) - pose for obj in objects], axis=1)

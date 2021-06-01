@@ -4,7 +4,7 @@ from sklearn.cluster import DBSCAN
 
 from datapreparation.kitti360.imports import Object3d, Cell, Pose, DescriptionPoseCell, DescriptionBestCell
 from datapreparation.kitti360.utils import STUFF_CLASSES
-from datapreparation.kitti360.select import get_direction, get_direction_noOntop, select_objects_closest, select_objects_direction, select_objects_class, select_objects_random
+from datapreparation.kitti360.select import get_direction, get_direction_noOntop, get_direction_orientation, select_objects_closest, select_objects_direction, select_objects_class, select_objects_random
 
 from copy import deepcopy
 
@@ -97,7 +97,7 @@ def create_cell(cell_idx, scene_name, bbox_w, scene_objects: List[Object3d], num
 
     return Cell(cell_idx, scene_name, cell_objects, cell_size, bbox_w)
 
-def describe_pose_in_pose_cell(pose_w, cell: Cell, select_by, num_mentioned, max_dist=0.5, no_ontop=False) -> List[DescriptionPoseCell]:
+def describe_pose_in_pose_cell(pose_w, phi, cell: Cell, select_by, num_mentioned, max_dist=0.5) -> List[DescriptionPoseCell]:
     # Assert pose is close to cell_center
     # assert np.allclose(pose_w, cell.get_center())
     assert len(cell.objects) >= num_mentioned, f'Only {len(cell.objects)} objects, expected at least {num_mentioned}'
@@ -123,20 +123,21 @@ def describe_pose_in_pose_cell(pose_w, cell: Cell, select_by, num_mentioned, max
 
     descriptions = []
     for obj in selected_objects:
-        if no_ontop:
-            direction = get_direction_noOntop(obj, pose)
-        else:
-            direction = get_direction(obj, pose)
+        # direction = get_direction(obj, pose)
+        direction, direction_phi = get_direction_orientation(obj, pose, phi)
+
         closest_point = obj.get_closest_point(pose)
 
         offset_center = pose - obj.get_center()
         offset_closest = pose - closest_point
         # descriptions.append(DescriptionPoseCell(obj.id, obj.instance_id, obj.label, obj.get_color_rgb(), obj.get_color_text(), direction, offset_center, offset_closest, closest_point))
-        descriptions.append(DescriptionPoseCell(obj, direction, offset_center, offset_closest, closest_point))
+        descriptions.append(DescriptionPoseCell(obj, direction, offset_center, offset_closest, closest_point, phi, direction_phi))
 
     return descriptions
 
 def ground_pose_to_best_cell(pose_w: np.ndarray, pose_cell_descriptions: List[DescriptionPoseCell], cell: Cell) -> List[DescriptionBestCell]:
+    HIER WEITER, dann plotten!
+
     # Assert cell is valid for this pose
     assert np.all(pose_w >= cell.bbox_w[0:3]) and np.all(pose_w <= cell.bbox_w[3:6]), f'{pose_w}, {cell.bbox_w}'
     assert len(cell.objects) >= len(pose_cell_descriptions), f'Only {len(cell.objects)} objects'    

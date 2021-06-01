@@ -69,26 +69,42 @@ class Object3d:
         obj.get_closest_point([-1, -1, -1])
         return obj
 
+# Angles: 0 <-> north, pi/2 <-> west | NOTE: mathematical direction / counter-clockwise
+# Directions: (0,1) <-> north, (-1, 0) <-> west
+def get_R(phi):
+    return np.array([
+        [np.cos(phi), -np.sin(phi)],
+        [np.sin(phi), np.cos(phi)]
+    ])
+
 class DescriptionPoseCell:
     # def __init__(self, object_id, object_instance_id, object_label, object_color_rgb, object_color_text, direction, offset_center, offset_closest, closest_point):
-    def __init__(self, object: Object3d, direction, offset_center, offset_closest, closest_point):
+    def __init__(self, object: Object3d, direction, offset_center, offset_closest, closest_point, phi, direction_phi):
         self.object_id = object.id
         self.object_instance_id = object.instance_id
         self.object_label = object.label
         self.object_color_rgb = object.get_color_rgb()
         self.object_color_text = object.get_color_text()
+
+        # All of those are still in compass-direction!
         self.direction = direction # Text might not match offset later in best-cell!
         self.offset_center = offset_center[0:2] # Offset to center of object
         self.offset_closest = offset_closest[0:2] # Offset to closest-point of object
         self.closest_point = closest_point[0:2] # Only in pose-cell!
 
+        # Orientations, NOTE: we use only offset-center here
+        self.phi = phi
+        self.R = get_R(phi)
+        self.offset_center_phi = self.R @ offset_center
+        self.direction_phi = direction_phi
+
     def __repr__(self):
-        return f'Pose is {self.direction} of a {self.object_color_text} {self.object_label}'
+        return f'Pose is {self.direction_phi} ({self.direction}) of a {self.object_color_text} {self.object_label}'
 
 # TODO/CARE: Match on offset_closest (less likely to change) but train on offset_center (relevant in evaluation)
 class DescriptionBestCell:
     '''
-    Current offset policy: all taken from pose_cell and passed through. Training on center_offsets
+    Current offset policy: all taken from pose_cell and passed through. Training on center-offsets
     '''
     @classmethod
     def from_matched(cls, descr: DescriptionPoseCell, object_id, best_closest_point, best_offset_center, best_offset_closest):
@@ -103,12 +119,18 @@ class DescriptionBestCell:
         d.offset_closest = descr.offset_closest # Retained from pose-cell
 
         # Updated attributes matched in best-cell
+        # All of these still in compass direction!
         d.object_id = object_id
-        # d.offset_center = offset_center[0:2]
-        # d.offset_closest = offset_closest[0:2]
         d.closest_point = best_closest_point[0:2] # Updated to best-cell
         d.best_offset_center = best_offset_center[0:2] # Updated to best-cell
         d.best_offset_closest = best_offset_closest[0:2] # Updated to best-cell
+
+        # With orientation
+        d.phi = descr.phi
+        d.R = descr.R
+        d.offset_center_phi = descr.offset_center_phi # Retained from pose-cell
+        d.direction_phi = descr.direction_phi
+
         d.is_matched = True
         return d
 
@@ -126,6 +148,12 @@ class DescriptionBestCell:
         
         d.closest_point = descr.closest_point # Only for debug!
 
+        # With orientation
+        d.phi = descr.phi
+        d.R = descr.R
+        d.offset_center_phi = descr.offset_center_phi
+        d.direction_phi = descr.direction_phi
+
         d.is_matched = False
         return d
 
@@ -133,17 +161,21 @@ class DescriptionBestCell:
         return f'Pose is {self.direction} of a {self.object_color_text} {self.object_label}' + (' (✓)' if self.is_matched else ' (☓)')
 
 class Pose:
-    def __init__(self, pose_in_cell, pose_w, cell_id, scene_name, descriptions: List[DescriptionBestCell], described_by:str=None):
+    def __init__(self, pose_in_cell, phi, pose_w, cell_id, scene_name, descriptions: List[DescriptionBestCell], described_by:str=None):
         assert isinstance(descriptions[0], DescriptionBestCell)
         self.pose = pose_in_cell # The pose in the best cell (specified by cell_id), normed to ∈ [0, 1]
+        self.phi = phi
         self.pose_w = pose_w
         self.cell_id = cell_id # ID of the best cell in the database
         self.descriptions = descriptions
         self.scene_name = scene_name
         self.described_by = described_by
 
+        self.R = get_R(phi)
+        assert -np.pi <= phi <= np.pi
+
     def __repr__(self) -> str:
-        return f'Pose at {self.pose_w} in {self.cell_id}'
+        return f'Pose at {self.pose_w} / {np.rad2deg(self.phi):0.0f} in {self.cell_id}'
 
     def get_text(self):
         text = ""
@@ -180,33 +212,3 @@ class Cell:
 
     def get_center(self):
         return 1/2 * (self.bbox_w[0:3] + self.bbox_w[3:6])
-
-class DeprDescription:
-    def __init__(self, object_id, object_instance_id, direction, offset, object_label, object_color_text, object_color_rgb, object_closest_point):
-        assert (object_id is None) == (object_instance_id is None) == (object_closest_point is None) == (offset is None) 
-        self.object_id = object_id # None if unmatched
-        self.object_instance_id = object_instance_id # None if unmatched
-        self.direction = direction # Direction from pose_cell
-        self.offset = offset # Offset from pose_cell or best_cell
-        self.object_label = object_label
-        self.object_color_rgb = object_color_rgb # Color from pose_cell
-        self.object_color_text = object_color_text # Color from pose_cell
-        self.object_closest_point = object_closest_point # Closest point from pose_cell or best_cell, none if unmatched
-        assert object_color_text is not None and object_color_rgb is not None
-
-        self.is_matched = None # Set when described in best-cell
-
-    def match_to_object(self):
-        pass
-
-    def set_unmatched(self):
-        pass
-
-    def __repr__(self):
-        return f'Pose is {self.direction} of a {self.object_color_text} {self.object_label}'
-
-    def is_unmatched(self):
-        """Returns whether the description is unmatched in the best-cell
-        """
-        assert (self.object_id is None) == (self.object_instance_id is None)
-        return self.object_id is None        

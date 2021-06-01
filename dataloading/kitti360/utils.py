@@ -26,6 +26,8 @@ def flip_pose_in_cell(pose: Pose, cell: Cell, text, direction, hints=None, offse
         Cell: flipped cell
         str: flipped text
     """
+    raise Exception("Not implemented with orientation.")
+
     assert direction in (-1, 1)
     assert sum([hints is None, offsets is None]) != 1 # Either both or none
 

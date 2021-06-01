@@ -48,7 +48,10 @@ class Kitti360BaseDataset(Dataset):
         for hints in self.hint_descriptions:
             for hint in hints:
                 words.extend(hint.replace('.','').replace(',','').lower().split())
-        return list(np.unique(words))        
+        words = list(np.unique(words))
+        for dir in ('north', 'west', 'south', 'east'): 
+            assert dir not in words
+        return words
 
     def __len__(self):
         raise Exception('Not implemented: abstract class.')
