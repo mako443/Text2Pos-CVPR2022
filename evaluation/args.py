@@ -22,7 +22,7 @@ def parse_arguments():
     parser.add_argument('--top_k', type=int, nargs='+', default=[1, 5, 10])
     parser.add_argument('--threshs', type=int, nargs='+', default=[5, 10, 15]) # Possibly over-write here when it becomes a list of tuples
     parser.add_argument('--pad_size', type=int, default=16)
-    parser.add_argument('--use_validation', action='store_true', help="Run on the validation instead of the test-set")
+    parser.add_argument('--use_test_set', action='store_true', help="Run test-set instead of the validation set.")
 
     parser.add_argument('--plot_retrievals', action='store_true', help="Plot 3 success and fail examples, then quit.")
     parser.add_argument('--coarse_only', action='store_true')
@@ -45,6 +45,8 @@ def parse_arguments():
 
     assert osp.isfile(args.path_coarse)
     assert osp.isfile(args.path_fine)
+    if args.coarse_oracle:
+        assert max(args.top_k) == 1, "Coarse oracle can only retrieved one best cell."
 
     return args
 

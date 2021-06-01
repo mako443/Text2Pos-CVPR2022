@@ -26,16 +26,8 @@ from models.superglue_matcher import get_pos_in_cell
 import torch_geometric.transforms as T 
 
 '''
-RESULTS
-- Check top-3 conf -> Not better
-
 TODO:
-- Fine: which objects to cut-off? Just pad_size=32 not different, try to select perfectly?
-- Fine: select by cluster (2*cell-size) + conf
 - Try to add num_matches*10 + sum(match_scores[correctly_matched])
-- Care to deactive transform for no-augmentation studies ;)
-
-- How to handle orientation predictions?
 '''
 
 @torch.no_grad()
@@ -58,7 +50,6 @@ def run_coarse(model, dataloader, args):
         max_k = max(args.top_k)
         for pose in dataloader.dataset.all_poses:
             retrievals.append([pose.cell_id for i in range(max_k)])
-
     else:
         # Run retrieval model to obtain top-cells
         retrieval_accuracies, retrieval_accuracies_close, retrievals = eval_epoch_retrieval(model, dataloader, args)
@@ -222,11 +213,10 @@ if __name__ == '__main__':
     else:
         transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])    
 
-    if args.use_validation:
-        dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_VAL, transform, shuffle_hints=False, flip_poses=False)    
-    else:
+    if args.use_test_set:
         dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, shuffle_hints=False, flip_poses=False)
-        # dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], transform, shuffle_hints=False, flip_poses=False)
+    else:
+        dataset_retrieval = Kitti360CoarseDatasetMulti(args.base_path, SCENE_NAMES_VAL, transform, shuffle_hints=False, flip_poses=False)    
     dataloader_retrieval = DataLoader(dataset_retrieval, batch_size = args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=False)
 
     # dataset_cell_only = dataset_retrieval.get_cell_dataset()

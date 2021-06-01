@@ -19,12 +19,6 @@ from training.losses import calc_pose_error
 
 from training.losses import calc_recall_precision
 
-
-'''
-- Load fine dataset
-- Run gather all 5 metrics at once for best cell
-'''
-
 @torch.no_grad()
 def run_fine(model, dataloader):
     stats = EasyDict(
@@ -104,10 +98,10 @@ if __name__ == '__main__':
         transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])  
 
     # Load original dataset to load the poses and cells
-    if args.use_validation:
-        dataset_fine = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_VAL, transform, args, flip_pose=False)
-    else:
+    if args.use_test_set:
         dataset_fine = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, args, flip_pose=False)
+    else:
+        dataset_fine = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_VAL, transform, args, flip_pose=False)
 
     # Load the eval dataset
     dataset_eval = Kitti360FineEvalDataset(dataset_fine.all_poses, dataset_fine.all_cells, transform, args)

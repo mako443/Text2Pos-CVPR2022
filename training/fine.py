@@ -315,7 +315,7 @@ if __name__ == "__main__":
                     print('Saving model to', model_path)
                     try:
                         torch.save(model, model_path)
-                        if last_model_save_path is not None:
+                        if last_model_save_path is not None and last_model_save_path != model_path and osp.isfile(last_model_save_path):
                             print('Removing', last_model_save_path)
                             os.remove(last_model_save_path)
                         last_model_save_path = model_path

@@ -252,7 +252,7 @@ def create_cells(objects, locations, scene_name, cell_size, args) -> List[Cell]:
             cell_locations[i_location] = location
     
     print(f'None cells: {len(none_indices)} / {len(locations)}')
-    if len(none_indices) > len(locations) * 3/4:
+    if len(none_indices) > len(locations):
         return False, none_indices
     else:
         return True, cells
@@ -349,7 +349,7 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
 
     print(f'Num duplicates: {num_duplicates} / {len(poses)}')
     print(f'None poses: {len(none_indices)} / {len(locations)}, avg. unmatched: {np.mean(unmatched_counts):0.1f}, num_rejected: {num_rejected}')
-    if len(none_indices) > len(locations) * 2/3:
+    if len(none_indices) > len(locations):
         return False, none_indices
     else:
         return True, poses          

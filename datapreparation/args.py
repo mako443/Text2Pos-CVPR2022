@@ -10,7 +10,7 @@ def parse_arguments():
     parser.add_argument('--path_out', type=str, default='./data/k360')
     parser.add_argument('--scene_name', type=str)
     parser.add_argument('--num_mentioned', type=int, default=6)
-    parser.add_argument('--describe_by', type=str, default='closest')
+    parser.add_argument('--describe_by', type=str, default='all')
 
     parser.add_argument('--cell_size', type=int, default=30)
     parser.add_argument('--cell_dist', type=int, default=30, help="The minimum distance between two cells")
