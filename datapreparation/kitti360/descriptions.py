@@ -4,7 +4,7 @@ from sklearn.cluster import DBSCAN
 
 from datapreparation.kitti360.imports import Object3d, Cell, Pose, DescriptionPoseCell, DescriptionBestCell
 from datapreparation.kitti360.utils import STUFF_CLASSES
-from datapreparation.kitti360.select import get_direction, get_direction_noOntop, get_direction_orientation, select_objects_closest, select_objects_direction, select_objects_class, select_objects_random
+from datapreparation.kitti360.select import get_direction, get_direction_phi, select_objects_closest, select_objects_direction, select_objects_class, select_objects_random
 
 from copy import deepcopy
 
@@ -115,7 +115,7 @@ def describe_pose_in_pose_cell(pose_w, phi, cell: Cell, select_by, num_mentioned
     if select_by == 'closest':
         selected_objects = select_objects_closest(candidates, pose, num_mentioned)
     elif select_by == 'direction':
-        selected_objects = select_objects_direction(candidates, pose, num_mentioned)  
+        selected_objects = select_objects_direction(candidates, pose, num_mentioned, phi)  
     elif select_by == 'class':
         selected_objects = select_objects_class(candidates, pose, num_mentioned)            
     elif select_by == 'random':
@@ -124,7 +124,7 @@ def describe_pose_in_pose_cell(pose_w, phi, cell: Cell, select_by, num_mentioned
     descriptions = []
     for obj in selected_objects:
         # direction = get_direction(obj, pose)
-        direction, direction_phi = get_direction_orientation(obj, pose, phi)
+        direction, direction_phi = get_direction_phi(obj, pose, phi)
 
         closest_point = obj.get_closest_point(pose)
 
@@ -136,8 +136,6 @@ def describe_pose_in_pose_cell(pose_w, phi, cell: Cell, select_by, num_mentioned
     return descriptions
 
 def ground_pose_to_best_cell(pose_w: np.ndarray, pose_cell_descriptions: List[DescriptionPoseCell], cell: Cell) -> List[DescriptionBestCell]:
-    HIER WEITER, dann plotten!
-
     # Assert cell is valid for this pose
     assert np.all(pose_w >= cell.bbox_w[0:3]) and np.all(pose_w <= cell.bbox_w[3:6]), f'{pose_w}, {cell.bbox_w}'
     assert len(cell.objects) >= len(pose_cell_descriptions), f'Only {len(cell.objects)} objects'    

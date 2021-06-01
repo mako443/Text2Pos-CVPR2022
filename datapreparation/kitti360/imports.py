@@ -95,11 +95,11 @@ class DescriptionPoseCell:
         # Orientations, NOTE: we use only offset-center here
         self.phi = phi
         self.R = get_R(phi)
-        self.offset_center_phi = self.R @ offset_center
+        self.offset_center_phi = self.R @ self.offset_center
         self.direction_phi = direction_phi
 
     def __repr__(self):
-        return f'Pose is {self.direction_phi} ({self.direction}) of a {self.object_color_text} {self.object_label}'
+        return f'There is a {self.object_color_text} {self.object_label} {self.direction_phi} ({self.direction}) of the pose.'
 
 # TODO/CARE: Match on offset_closest (less likely to change) but train on offset_center (relevant in evaluation)
 class DescriptionBestCell:
@@ -158,7 +158,7 @@ class DescriptionBestCell:
         return d
 
     def __repr__(self):
-        return f'Pose is {self.direction} of a {self.object_color_text} {self.object_label}' + (' (✓)' if self.is_matched else ' (☓)')
+        return f'There is a {self.object_color_text} {self.object_label} {self.direction_phi} ({self.direction}) of the pose.' + (' (✓)' if self.is_matched else ' (☓)')
 
 class Pose:
     def __init__(self, pose_in_cell, phi, pose_w, cell_id, scene_name, descriptions: List[DescriptionBestCell], described_by:str=None):

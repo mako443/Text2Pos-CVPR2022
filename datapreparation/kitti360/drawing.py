@@ -121,6 +121,11 @@ def plot_pose_in_best_cell(cell: Cell, pose: Pose, scale=1024, use_rgb=False, sh
         target = np.int0(descr.closest_point[0:2]*scale)
         cv2.arrowedLine(img, tuple(point), tuple(target), (0,0,255), thickness=2)
 
+    # Draw orientation
+    target = np.int0(scale / 10 * pose.R @ (0,1)) + point
+    cv2.line(img, tuple(point), tuple(target), (255, 0, 0), thickness=3)
+
+    # Flip and show unmatched
     img = cv2.flip(img, 0)
     if not show_unmatched:
         num_unmatched = len([d for d in pose.descriptions if not d.is_matched])

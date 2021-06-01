@@ -7,7 +7,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='K360 data preparation')
 
     parser.add_argument('--path_in', type=str, default='./data/kitti360')
-    parser.add_argument('--path_out', type=str, default='./data/k360')
+    parser.add_argument('--path_out', type=str, default='./data/k360_ori')
     parser.add_argument('--scene_name', type=str)
     parser.add_argument('--num_mentioned', type=int, default=6)
     parser.add_argument('--describe_by', type=str, default='all')

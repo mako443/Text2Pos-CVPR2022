@@ -314,14 +314,17 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
 
         mentioned_object_ids = []
         do_break = False
+
+        phi = np.pi/2 # Currently all descriptions get the same phi
+
         for description_method in description_methods:
             if do_break:
                 break
 
             if args.describe_best_cell: # Ablation: use ground-truth best cell to describe the pose
-                descriptions = describe_pose_in_pose_cell(location, best_cell, description_method, args.num_mentioned)
+                descriptions = describe_pose_in_pose_cell(location, phi, best_cell, description_method, args.num_mentioned)
             else: # Obtain the descriptions based on the pose-cell
-                descriptions = describe_pose_in_pose_cell(location, pose_cell, description_method, args.num_mentioned)
+                descriptions = describe_pose_in_pose_cell(location, phi, pose_cell, description_method, args.num_mentioned)
 
             if descriptions is None or len(descriptions)<args.num_mentioned:
                 none_indices.append(i_location)
@@ -343,7 +346,7 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
             if mentioned_ids in mentioned_object_ids:
                 num_duplicates += 1
             else:
-                pose = Pose(pose_in_cell, location, best_cell.id, best_cell.scene_name, descriptions, described_by=description_method)
+                pose = Pose(pose_in_cell, phi, location, best_cell.id, best_cell.scene_name, descriptions, described_by=description_method)
                 poses.append(pose)
                 mentioned_object_ids.append(mentioned_ids)
 
@@ -433,6 +436,9 @@ if __name__ == '__main__':
     cell = cells_dict[pose.cell_id]
     print('IDX:', idx)
     print(pose.get_text())
+
+    for descr in pose.descriptions:
+        print(f'Descr: {descr.phi}, {descr.direction} / {descr.direction_phi}, {list(descr.offset_center)} / {list(descr.offset_center_phi)}')
 
     img = plot_pose_in_best_cell(cell, pose)
     cv2.imwrite(f'cell_{args.describe_by}_idx{idx}.png', img)

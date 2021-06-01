@@ -35,9 +35,8 @@ class Kitti360BaseDataset(Dataset):
         hints = []
         # cell_objects_dict = {obj.id: obj for obj in cell.objects}
         for descr in pose.descriptions:
-            # obj = cell_objects_dict[descr.object_id]
-            # hints.append(f'The pose is {descr.direction} of a {obj.get_color_text()} {obj.label}.')
-            hints.append(f'The pose is {descr.direction} of a {descr.object_color_text} {descr.object_label}.')
+            # hints.append(f'The pose is {descr.direction} of a {descr.object_color_text} {descr.object_label}.')
+            hints.append(f'There is a {descr.object_color_text} {descr.object_label} {descr.direction_phi} of the pose.')
         return hints
 
     def get_known_classes(self):
