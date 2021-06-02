@@ -15,14 +15,16 @@ def parse_arguments():
     parser.add_argument('--path_coarse', type=str, help="The path to the Cell-Retrieval model")
     parser.add_argument('--path_fine', type=str, help="The path to the Hints-to-Objects matching model")
 
-    parser.add_argument('--no_pc_augment', action='store_true')
-    parser.add_argument('--num_mentioned', type=int, default=6)
 
     # Options
     parser.add_argument('--top_k', type=int, nargs='+', default=[1, 5, 10])
     parser.add_argument('--threshs', type=int, nargs='+', default=[5, 10, 15]) # Possibly over-write here when it becomes a list of tuples
     parser.add_argument('--pad_size', type=int, default=16)
+
     parser.add_argument('--use_test_set', action='store_true', help="Run test-set instead of the validation set.")
+    
+    parser.add_argument('--no_pc_augment', action='store_true')
+    parser.add_argument('--num_mentioned', type=int, default=6)
 
     parser.add_argument('--plot_retrievals', action='store_true', help="Plot 3 success and fail examples, then quit.")
     parser.add_argument('--coarse_only', action='store_true')

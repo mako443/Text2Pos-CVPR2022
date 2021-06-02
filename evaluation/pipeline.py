@@ -207,6 +207,9 @@ if __name__ == '__main__':
     args = parse_arguments()
     print(str(args).replace(',','\n'), '\n')
 
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    print('device:', device, torch.cuda.get_device_name(0))    
+
     # Load datasets
     if args.no_pc_augment:
         transform = T.FixedPoints(args.pointnet_numpoints)
@@ -220,10 +223,12 @@ if __name__ == '__main__':
     dataloader_retrieval = DataLoader(dataset_retrieval, batch_size = args.batch_size, collate_fn=Kitti360CoarseDataset.collate_fn, shuffle=False)
 
     # dataset_cell_only = dataset_retrieval.get_cell_dataset()
-
+    
     # Load models
-    model_retrieval = torch.load(args.path_coarse)
-    model_matching = torch.load(args.path_fine)
+    model_retrieval = torch.load(args.path_coarse, map_location=torch.device('cpu'))
+    model_matching = torch.load(args.path_fine, map_location=torch.device('cpu'))
+    model_retrieval.to(device)
+    model_matching.to(device)
 
     # eval_conf(model_matching, dataset_retrieval)
     # quit()
