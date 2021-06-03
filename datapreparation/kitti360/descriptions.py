@@ -61,7 +61,7 @@ def create_synthetic_cell(bbox_w, area_objects: List[Object3d], min_objects=6, i
 
     return Cell(-1, "mock", cell_objects, cell_size, bbox_w)
 
-def create_cell(cell_idx, scene_name, bbox_w, scene_objects: List[Object3d], num_mentioned=6, inside_fraction=1/3, stuff_min=250): # Before: 500
+def create_cell(cell_idx, scene_name, bbox_w, scene_objects: List[Object3d], num_mentioned=6, inside_fraction=1/3, stuff_min=250, all_cells=False): # Before: 500
     cell_objects = []
     for obj in scene_objects:
         assert obj.id < 1e7
@@ -88,8 +88,12 @@ def create_cell(cell_idx, scene_name, bbox_w, scene_objects: List[Object3d], num
     #     cell_objects = scene_objects
     #     cell_size = np.max(bbox_w[3:6] - bbox_w[0:3])
 
-    if len(cell_objects) < num_mentioned:
-        return None        
+    if len(cell_objects) < num_mentioned and not all_cells:
+        return None  
+    if len(cell_objects) < 1:
+        return None
+
+    assert len(cell_objects) >= 1
 
     # Reset all ids
     for id, obj in enumerate(cell_objects):
@@ -136,10 +140,14 @@ def describe_pose_in_pose_cell(pose_w, cell: Cell, select_by, num_mentioned, max
 
     return descriptions
 
-def ground_pose_to_best_cell(pose_w: np.ndarray, pose_cell_descriptions: List[DescriptionPoseCell], cell: Cell) -> List[DescriptionBestCell]:
+def ground_pose_to_best_cell(pose_w: np.ndarray, pose_cell_descriptions: List[DescriptionPoseCell], cell: Cell, all_cells=False) -> List[DescriptionBestCell]:
     # Assert cell is valid for this pose
     assert np.all(pose_w >= cell.bbox_w[0:3]) and np.all(pose_w <= cell.bbox_w[3:6]), f'{pose_w}, {cell.bbox_w}'
-    assert len(cell.objects) >= len(pose_cell_descriptions), f'Only {len(cell.objects)} objects'    
+    
+    if all_cells:
+        assert len(cell.objects) >= 1, f'Only {len(cell.objects)} objects'    
+    else: # Might not be true anymore if all cells are retained
+        assert len(cell.objects) >= len(pose_cell_descriptions), f'Only {len(cell.objects)} objects'            
 
     # Norm pose
     pose = (pose_w - cell.bbox_w[0:3]) / cell.cell_size

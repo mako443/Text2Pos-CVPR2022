@@ -241,8 +241,13 @@ def create_cells(objects, locations, scene_name, cell_size, args) -> List[Cell]:
         # print(f'\r \t locations {i_location} / {len(locations)}', end='')
         bbox = np.hstack((location - cell_size/2, location + cell_size/2)) # [x0, y0, z0, x1, y1, z1]
 
-        cell = create_cell(i_location, scene_name_short, bbox, objects, num_mentioned=args.num_mentioned)
+        if args.all_cells:
+            cell = create_cell(i_location, scene_name_short, bbox, objects, num_mentioned=args.num_mentioned, all_cells=True)
+        else:
+            cell = create_cell(i_location, scene_name_short, bbox, objects, num_mentioned=args.num_mentioned)
+            
         if cell is not None:
+            assert len(cell.objects) >= 1
             cells.append(cell)
         else:
             none_indices.append(i_location)
@@ -331,7 +336,10 @@ def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) ->
             assert len(descriptions) == args.num_mentioned
 
             # Convert the descriptions to the best-matching database cell for training. Some descriptions might not be matched anymore.
-            descriptions, pose_in_cell, num_unmatched = ground_pose_to_best_cell(location, descriptions, best_cell)
+            if args.all_cells:
+                descriptions, pose_in_cell, num_unmatched = ground_pose_to_best_cell(location, descriptions, best_cell, all_cells=True)
+            else:
+                descriptions, pose_in_cell, num_unmatched = ground_pose_to_best_cell(location, descriptions, best_cell)
             assert len(descriptions) == args.num_mentioned
             unmatched_counts.append(num_unmatched)
 
@@ -388,8 +396,11 @@ if __name__ == '__main__':
     t_close_locations = time.time()
 
     # [45:46]
+    t0 = time.time()
     res, cells = create_cells(objects, cell_locations, args.scene_name, args.cell_size, args)
     assert res is True, "Too many cell nones, quitting."
+    t1 = time.time()
+    print('Ela cells:', t1-t0, 'Num cells', len(cells))
 
     t_cells_created = time.time()
 

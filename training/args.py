@@ -32,7 +32,7 @@ def parse_arguments():
     parser.add_argument('--sinkhorn_iters', type=int, default=50)
     parser.add_argument('--num_mentioned', type=int, default=6)
     parser.add_argument('--pad_size', type=int, default=16)
-    parser.add_argument('--describe_by', type=str, default='closest')
+    parser.add_argument('--describe_by', type=str, default='all')
 
     # Cell retrieval
     parser.add_argument('--margin', type=float, default=0.35) # Before: 0.5
@@ -92,7 +92,7 @@ def parse_arguments():
 
     assert osp.isdir(args.base_path)
 
-    assert args.describe_by in ('closest', 'class', 'direction', 'random')
+    assert args.describe_by in ('closest', 'class', 'direction', 'random', 'all')
 
     return args
 

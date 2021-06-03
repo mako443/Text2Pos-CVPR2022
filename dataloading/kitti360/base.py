@@ -65,13 +65,4 @@ if __name__ == '__main__':
     
     dataset = Kitti360BaseDataset(base_path, folder_name)
 
-    # color_indices = []
-    # for obj in dataset.objects:
-    #     rgb = np.mean(obj.rgb, axis=0)
-    #     hsv = cv2.cvtColor(rgb.reshape((1,1,3)).astype(np.uint8), cv2.COLOR_RGB2HSV)
-    #     dists = np.linalg.norm(COLORS_HSV - hsv.flatten(), axis=1)
-    #     color_indices.append(np.argmin(dists))
-
-    # unique, counts = np.unique(color_indices, return_counts=True)
-
 

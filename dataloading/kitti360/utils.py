@@ -81,5 +81,6 @@ def batch_object_points(objects: List[Object3d], transform):
     for i in range(len(data_list)):
         data_list[i] = transform(data_list[i])
 
+    assert len(data_list) >= 1
     batch = Batch.from_data_list(data_list)
     return batch        

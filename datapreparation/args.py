@@ -24,28 +24,46 @@ def parse_arguments():
     parser.add_argument('--describe_best_cell', action='store_true') 
     parser.add_argument('--no_ontop', action='store_true')
 
+    parser.add_argument('--all_cells', action='store_true', help="Do not reject cells with too few objects.")
+
     args = parser.parse_args()
     
     assert osp.isdir(args.path_in)
     assert osp.isdir(osp.join(args.path_in, 'data_3d_semantics', args.scene_name)), f'Input folder not found {osp.join(args.path_in, "data_3d_semantics", args.scene_name)}'
-    
-    if args.shift_cells:
-        cells_text = 'Y'
-    elif args.grid_cells:
-        cells_text = 'G'
-    else:
-        cells_text = 'N'
 
-    args.path_out = f'{args.path_out}_{args.cell_size}-{args.cell_dist}_sc{cells_text}_pd{args.pose_dist}_pc{args.pose_count}_sp{"Y" if args.shift_poses else "N"}_{args.describe_by}_nm{args.num_mentioned}'
-    if args.describe_best_cell:
-        args.path_out += '_bestCell'
-    if args.no_ontop:
-        args.path_out += '_noOntop'
+    attribs = [
+        args.path_out,
+        'allCells' if args.all_cells else None,
+        f'{args.cell_size}-{args.cell_dist}',
+        'gridCells' if args.grid_cells else ('shiftCells' if args.shift_cells else 'noCellShift'),
+        f'pd{args.pose_dist}',
+        f'pc{args.pose_count}',
+        'shiftPoses' if args.shift_poses else None,
+        args.describe_by,
+        f'nm-{args.num_mentioned}',
+        'bestCell' if args.describe_best_cell else None,
+        'noOntop' if args.no_ontop else None,
+    ]
+    args.path_out = '_'.join([a for a in attribs if a!=None])
+
+    # if args.shift_cells:
+    #     cells_text = 'Y'
+    # elif args.grid_cells:
+    #     cells_text = 'G'
+    # else:
+    #     cells_text = 'N'
+
+    # args.path_out = f'{args.path_out}_{args.cell_size}-{args.cell_dist}_sc{cells_text}_pd{args.pose_dist}_pc{args.pose_count}_sp{"Y" if args.shift_poses else "N"}_{args.describe_by}_nm{args.num_mentioned}'
+    # if args.describe_best_cell:
+    #     args.path_out += '_bestCell'
+    # if args.no_ontop:
+    #     args.path_out += '_noOntop'
 
     print(f'Folders: {args.path_in} -> {args.path_out}')
 
     assert args.describe_by in ('closest', 'class', 'direction', 'random', 'all')
-    assert args.shift_cells + args.grid_cells < 2 # Only of of them
+    assert args.shift_cells + args.grid_cells < 2 # Only one of them
+    assert args.shift_poses == True, "Not shifting poses should not be used anymore"
 
     # Create dirs
     try:
