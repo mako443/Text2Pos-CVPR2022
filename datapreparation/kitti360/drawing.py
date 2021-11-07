@@ -56,7 +56,7 @@ def plot_objects(objects, pose=None, scale=1024):
 
     return cv2.flip(img, 0) # Flip for correct north/south
 
-def plot_cell(cell: Cell, scale=1024, use_rgb=False, use_instances=False, point_size=6):
+def plot_cell(cell: Cell, scale=1024, use_rgb=False, use_instances=False, point_size=6, pose: np.ndarray = None):
     img = np.ones((scale, scale, 3), dtype=np.uint8) * 255
     # Draw points of each object
     for obj in cell.objects:
@@ -68,9 +68,58 @@ def plot_cell(cell: Cell, scale=1024, use_rgb=False, use_instances=False, point_
                 c = tuple(np.uint8(obj.rgb[i_point] * 255))
             point = np.int0(point[0:2])
             cv2.circle(img, tuple(point), point_size, (int(c[2]),int(c[1]),int(c[0])), thickness=-1)
+
+    if pose is not None:
+        point = np.int0(pose[0:2] * scale)
+        cv2.circle(img, tuple(point), 40, (0,0,255), thickness=-1)
+
     return cv2.flip(img, 0) # Flip for correct north/south
 
-def plot_matches_in_best_cell(cell: Cell, pose: Pose, true_matches=[], false_positives=[], false_negatives=[], scale=1024, point_size=6):
+def plot_matches_in_best_cell(cell: Cell, pose: Pose, pred_matches, gt_matches, scale=1024, point_size=6):
+    """ pred_matches as [hint_idx, hint_idx, hint_idx...], gt_matches as [(obj_idx, hint_idx), (...)]
+    """
+    assert cell.id == pose.cell_id
+    img = np.ones((scale, scale, 3), dtype=np.uint8) * 255
+    cell_objects = cell.objects[0 : len(pred_matches)] # Cut-off after pad_size
+    
+    # Draw instances
+    for i_obj, obj in enumerate(cell_objects):
+        if obj.label == 'pad':
+            continue
+        color = (128, 128, 128) if pred_matches[i_obj] < 0 else CLASS_TO_COLOR[obj.label] # Color gray if not matched
+        for i_point, point in enumerate(obj.xyz*scale):
+            point = np.int0(point[0:2])
+            cv2.circle(img, tuple(point), point_size, (int(color[2]),int(color[1]),int(color[0])), thickness=-1)
+
+    # Draw pose
+    point = np.int0(pose.pose[0:2]*scale)
+    cv2.circle(img, tuple(point), 30, (0,0,255), thickness=-1)    
+
+    # Draw arrows from predictions
+    for i_obj, obj in enumerate(cell_objects):
+        # Skip unmatched objects (based on prediction)
+        if pred_matches[i_obj] < 0:
+            continue
+
+        obj_idx = i_obj
+        hint_idx = pred_matches[i_obj]
+        color = (0, 255, 0) if (obj_idx, hint_idx) in gt_matches else (255, 0, 0) # Green if correct match, red otherwise
+        target = np.int0(obj.get_closest_point(pose.pose) * scale)[0:2]
+        cv2.arrowedLine(img, tuple(point), tuple(target), (int(color[2]),int(color[1]),int(color[0])), thickness=7)
+
+    # Draw arrows from missed predictions
+    gt_matches_dict = {obj_idx: hint_idx for obj_idx, hint_idx in gt_matches}
+    for obj_idx, obj in enumerate(cell_objects):
+        if obj_idx not in gt_matches_dict:
+            continue
+        hint_idx = gt_matches_dict[obj_idx]
+        if pred_matches[obj_idx] != hint_idx:
+            target = np.int0(obj.get_closest_point(pose.pose) * scale)[0:2]
+            cv2.arrowedLine(img, tuple(point), tuple(target), (0, 255, 255), thickness=6)
+
+    return cv2.flip(img, 0) 
+
+def depr_plot_matches_in_best_cell(cell: Cell, pose: Pose, true_matches=[], false_positives=[], false_negatives=[], scale=1024, point_size=6):
     assert cell.id == pose.cell_id
     img = np.ones((scale, scale, 3), dtype=np.uint8) * 255
     # Draw points of each object

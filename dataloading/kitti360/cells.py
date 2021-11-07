@@ -12,7 +12,7 @@ from torch.utils.data import Dataset, DataLoader
 
 import torch_geometric.transforms as T 
 
-from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, SCENE_NAMES, SCENE_NAMES_VAL
+from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, SCENE_NAMES, SCENE_NAMES_TEST, SCENE_NAMES_TRAIN, SCENE_NAMES_VAL
 from datapreparation.kitti360.utils import CLASS_TO_INDEX, COLOR_NAMES
 from datapreparation.kitti360.imports import Object3d, Cell, Pose
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell, plot_pose_in_best_cell
@@ -159,24 +159,26 @@ class Kitti360CoarseCellOnlyDataset(Dataset):
         return len(self.cells)        
 
 if __name__ == '__main__':
-    base_path = './data/k360_30-10_scG_pd10_pc4_spY_all/'
+    base_path = './data/k360_30-10_scG_pd10_pc8_spY_all_nm6/'
 
     transform = T.FixedPoints(256)
 
-    dataset = Kitti360CoarseDatasetMulti(base_path, SCENE_NAMES_VAL, transform, shuffle_hints=False, flip_poses=False)
-    # data = dataset[0]
-    # pose, cell, text = data['poses'], data['cells'], data['texts']
-    # offsets = np.array([descr.offset_closest for descr in pose.descriptions])
-    # hints = text.split('.')
-    # pose_f, cell_f, text_f, hints_f, offsets_f = flip_pose_in_cell(pose, cell, text, 1, hints=hints, offsets=offsets)
+    for scene_names in (SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_VAL, SCENE_NAMES_TEST):
+        dataset = Kitti360CoarseDatasetMulti(base_path, scene_names, transform, shuffle_hints=False, flip_poses=False)
+        # data = dataset[0]
+        # pose, cell, text = data['poses'], data['cells'], data['texts']
+        # offsets = np.array([descr.offset_closest for descr in pose.descriptions])
+        # hints = text.split('.')
+        # pose_f, cell_f, text_f, hints_f, offsets_f = flip_pose_in_cell(pose, cell, text, 1, hints=hints, offsets=offsets)
 
-    # Gather information about duplicate descriptions
-    descriptors = []
-    for pose in dataset.all_poses:
-        mentioned = sorted([f'{d.object_label}_{d.object_color_text}_{d.direction}' for d in pose.descriptions])
-        descriptors.append(mentioned)
+        # Gather information about duplicate descriptions
+        descriptors = []
+        for pose in dataset.all_poses:
+            mentioned = sorted([f'{d.object_label}_{d.object_color_text}_{d.direction}' for d in pose.descriptions])
+            descriptors.append(mentioned)
 
-    unique, counts = np.unique(descriptors, return_counts=True)
-    for d in descriptors[0:10]:
-        print('\t',d)
-    print(f'{len(descriptors)} poses, {len(unique)} uniques, {np.max(counts)} max duplicates, {np.mean(counts):0.2f} mean duplicates')    
+        unique, counts = np.unique(descriptors, return_counts=True)
+        # for d in descriptors[0:10]:
+        #     print('\t',d)
+        print(f'{len(descriptors)} poses, {len(unique)} uniques, {np.max(counts)} max duplicates, {np.mean(counts):0.2f} mean duplicates')    
+        print('---- \n\n')

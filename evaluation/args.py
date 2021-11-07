@@ -27,6 +27,7 @@ def parse_arguments():
     parser.add_argument('--num_mentioned', type=int, default=6)
 
     parser.add_argument('--plot_retrievals', action='store_true', help="Plot 3 success and fail examples, then quit.")
+    parser.add_argument('--plot_matches', action='store_true')
     parser.add_argument('--coarse_only', action='store_true')
 
     # Oracles

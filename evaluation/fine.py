@@ -16,8 +16,9 @@ from dataloading.kitti360.eval import Kitti360FineEvalDataset
 from datapreparation.kitti360.utils import SCENE_NAMES_TEST, SCENE_NAMES_VAL
 # from training.fine import eval_epoch as eval_epoch_fine
 from training.losses import calc_pose_error
-
 from training.losses import calc_recall_precision
+from training.utils import plot_matches
+
 
 @torch.no_grad()
 def run_fine(model, dataloader):
@@ -40,11 +41,15 @@ def run_fine(model, dataloader):
         'both_oracle': {t: [] for t in args.threshs},
     }
 
+    pred_matches = []
     for i_batch, batch in enumerate(dataloader):
         output = model(batch['objects'], batch['hint_descriptions'], batch['object_points'])
         
         for key in output:
             output[key] = output[key].cpu().detach().numpy()
+
+        for matches in output.matches0:
+            pred_matches.append(matches)
 
         recall, precision = calc_recall_precision(batch['matches'], output.matches0, output.matches1)
         stats.recall.append(recall)
@@ -78,6 +83,9 @@ def run_fine(model, dataloader):
         for stat_name, errors in batch_errors.items():
             for t in args.threshs:
                 stats_thresh[stat_name][t].extend([err*cell_size <= t for err in errors])
+
+    if args.plot_matches:
+        plot_matches(pred_matches, dataloader.dataset)
     
     for key in stats:
         stats[key] = np.mean(stats[key])
