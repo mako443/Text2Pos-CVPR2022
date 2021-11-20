@@ -63,7 +63,7 @@ def create_poses_and_images(path_poses, path_images, path_out, db_dist=20, query
     for idx in range(0, len(poses), step):
         pose, image_name = poses[idx], image_names[idx]
 
-        dists = np.linalg.norm(pose - sampled_db_poses, axis=1)
+        dists = np.linalg.norm(pose - sampled_db_poses, axis=1) # Distance to already sampled DB poses
         if np.min(dists) >= db_dist:
             sampled_db_poses.append(pose)
             copyfile(osp.join(path_images, f'{image_name:010.0f}.png'), osp.join(path_db, f'{len(sampled_db_poses) - 1:04.0f}.png'))
