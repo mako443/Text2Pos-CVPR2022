@@ -58,9 +58,61 @@ def set_angle(idx, offset=np.pi):
     angle = np.arctan2(forward[1], forward[0]) + offset
     v.set(phi=angle, lookat=poses[idx])    
 
+def create_cube(position, color, count=10, size=10):
+    #xyz = np.random.rand(count, 3) - 0.5
+    l = np.linspace(-0.5, 0.5, count)
+    x, y, z = np.meshgrid(l, l, l)
+    xyz = np.vstack((x.flatten(), y.flatten(), z.flatten())).T
 
+    xyz *= size
+    xyz += position
+    rgb = np.ones_like(xyz) * color
+    return xyz, rgb
+
+def show_street_centers(objects, centers, cells, cell_points=5):
+    centers = np.array(centers)
+    xyz, rgb = concat_objects(objects)
+
+    xyz_cells = np.zeros((len(cells) * cell_points**3, 3))
+    rgb_cells = np.zeros_like(xyz_cells)
+
+    colors = np.random.rand(len(centers), 3)
+
+    for i_cell, cell in enumerate(cells):
+        dists = np.linalg.norm(centers - cell.get_center(), axis=1)
+        color = colors[np.argmin(dists)]
+
+        xyz_cell, rgb_cell = create_cube(cell.get_center() + (0, 0, 10), color, count=cell_points, size=5)
+        xyz_cells[i_cell * cell_points**3 : (i_cell + 1) * cell_points**3, : ] = xyz_cell
+        rgb_cells[i_cell * cell_points**3 : (i_cell + 1) * cell_points**3, : ] = rgb_cell
+
+    xyz = np.vstack((xyz, xyz_cells))
+    rgb = np.vstack((rgb, rgb_cells))
+
+    viewer = pptk.viewer(xyz)
+    viewer.attributes(rgb)
+    viewer.set(point_size=0.1)
+    return viewer    
 
 if __name__ == '__main__':
+    if True: # Set street centers
+        folder_name = '2013_05_28_drive_0010_sync'
+        with open(osp.join('./data', 'kitti360', 'objects', f'{folder_name}.pkl'), 'rb') as f:
+            objects = pickle.load(f)
+        with open(osp.join('./data', 'k360_30-10_scG_pd10_pc4_spY_all', 'cells', f'{folder_name}.pkl'), 'rb') as f:
+            cells = pickle.load(f)
+
+        with open(osp.join('./data', 'k360_30-10_scG_pd10_pc4_spY_all', 'street_centers', f'{folder_name}.pkl'), 'rb') as f:
+            centers = pickle.load(f)     
+
+        show_street_centers(objects, centers, cells)
+
+        # v = create_viewer(objects)
+        # centers = []
+        # centers.append(v.get('lookat'))
+
+        quit()
+
     folder_name = '2013_05_28_drive_0010_sync'
     with open(osp.join('./data', 'kitti360', 'objects', f'{folder_name}.pkl'), 'rb') as f:
         objects = pickle.load(f)
