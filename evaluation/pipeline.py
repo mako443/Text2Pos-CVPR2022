@@ -5,10 +5,13 @@ import os.path as osp
 import cv2
 from easydict import EasyDict
 from copy import deepcopy
+import pickle
 
 import torch
 from torch.utils.data import DataLoader
 import time
+
+from scipy.spatial.distance import cdist
 
 # from training.losses import calc_pose_error # This cannot be used here anymore!!
 from evaluation.args import parse_arguments
@@ -45,11 +48,49 @@ def run_coarse(model, dataloader, args):
     """
     model.eval()
 
+    all_cells_dict = {cell.id: cell for cell in dataloader.dataset.all_cells}
+
     if args.coarse_oracle: # Build retrievals as [[best_cell, best_cell, ...], [best_cell, best_cell, ...]]
         retrievals = []
         max_k = max(args.top_k)
         for pose in dataloader.dataset.all_poses:
             retrievals.append([pose.cell_id for i in range(max_k)])
+    elif args.street_oracle: 
+        # Calculate scores here, remove retrieved cells from incorrect streets
+        # TODO: Verify this leads to same results
+        assert args.use_test_set == False
+
+        _, _, _, cell_encodings, text_encodings = eval_epoch_retrieval(model, dataloader, args, return_encodings=True)
+
+        with open(osp.join(args.base_path, 'street_centers', '2013_05_28_drive_0010_sync.pkl'), 'rb') as f:
+            street_centers = pickle.load(f)
+
+        cells = dataloader.dataset.all_cells
+        poses = dataloader.dataset.all_poses
+        assert len(cells) == len(cell_encodings) and len(poses) == len(text_encodings)
+
+        cell_centers = np.array([cell.get_center() for cell in cells])
+        cell_street_dists = cdist(cell_centers, street_centers) # [num_cells, num_streets]
+        cell_street_indices = np.argmin(cell_street_dists, axis=1)
+        assert len(cell_street_indices) == len(cell_centers)
+        cell_ids = np.array([cell.id for cell in cells])
+
+        retrievals = [] # [[cell_ids0], [cell_ids1], ...]
+        for query_idx in range(len(text_encodings)):
+            pose = poses[query_idx]
+            scores = cell_encodings[:] @ text_encodings[query_idx] # NOTE: Always uses cosine-similarity here, not correct for other losses
+
+            # Remove retrievals from incorrect streets
+            pose_street_dist = np.linalg.norm(street_centers - pose.pose_w, axis=1)
+            pose_street_idx = np.argmin(pose_street_dist)
+            scores[cell_street_indices != pose_street_idx] = -np.inf
+
+            sorted_indices = np.argsort(-1.0 * scores) # High -> low
+            sorted_indices = sorted_indices[0 : np.max(args.top_k)]
+
+            retrieved_cell_ids = cell_ids[sorted_indices]
+            retrievals.append(retrieved_cell_ids)
+
     else:
         # Run retrieval model to obtain top-cells
         retrieval_accuracies, retrieval_accuracies_close, retrievals = eval_epoch_retrieval(model, dataloader, args)
@@ -59,8 +100,6 @@ def run_coarse(model, dataloader, args):
         print('Retrieval Accs Close:')
         print(retrieval_accuracies_close)    
         assert len(retrievals) == len(dataloader.dataset.all_poses)
-
-    all_cells_dict = {cell.id: cell for cell in dataloader.dataset.all_cells}
 
     # Gather the accuracies for each sample
     accuracies = {k: {t: [] for t in args.threshs} for k in args.top_k}

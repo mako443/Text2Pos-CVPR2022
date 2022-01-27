@@ -110,7 +110,7 @@ def train_epoch(model, dataloader, args):
 printed = False
 
 @torch.no_grad()
-def eval_epoch(model, dataloader, args):
+def eval_epoch(model, dataloader, args, return_encodings=False):
     """Top-k retrieval for each pose against all cells in the dataset.
 
     Args:
@@ -192,7 +192,10 @@ def eval_epoch(model, dataloader, args):
         accuracies[k] = np.mean(accuracies[k])
         accuracies_close[k] = np.mean(accuracies_close[k])
 
-    return accuracies, accuracies_close, top_retrievals
+    if return_encodings:
+        return accuracies, accuracies_close, top_retrievals, cell_encodings, text_encodings
+    else:
+        return accuracies, accuracies_close, top_retrievals
 
 if __name__ == "__main__":
     args = parse_arguments()

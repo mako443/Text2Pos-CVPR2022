@@ -33,6 +33,7 @@ def parse_arguments():
     # Oracles
     parser.add_argument('--coarse_oracle', action='store_true', help="Use gt-retrievals")
     parser.add_argument('--fine_oracle', action='store_true', help="Use perfect in-cell locations")
+    parser.add_argument('--street_oracle', action='store_true', help="Use street-based coarse semi-oralce")
 
     # Object-encoder / PointNet
     parser.add_argument('--pointnet_numpoints', type=int, default=256)
