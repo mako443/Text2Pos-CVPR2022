@@ -144,6 +144,7 @@ def eval_epoch(model, dataloader, args, return_encodings=False):
     query_poses_w = np.array([pose.pose_w[0:2] for pose in dataloader.dataset.all_poses])
 
     # Encode the query side
+    t0 = time.time()
     index_offset = 0
     for batch in dataloader:
         text_enc = model.encode_text(batch['texts'])
@@ -152,6 +153,7 @@ def eval_epoch(model, dataloader, args, return_encodings=False):
         text_encodings[index_offset : index_offset + batch_size, :] = text_enc.cpu().detach().numpy()
         query_cell_ids[index_offset : index_offset + batch_size] = np.array(batch['cell_ids'])
         index_offset += batch_size
+    print(f"Encoded {len(text_encodings)} query texts in {time.time() - t0:0.2f}.")
 
     # Encode the database side
     index_offset = 0

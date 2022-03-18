@@ -44,6 +44,15 @@ def run_fine(model, dataloader):
     pred_matches = []
     for i_batch, batch in enumerate(dataloader):
         output = model(batch['objects'], batch['hint_descriptions'], batch['object_points'])
+        # for i in range(len(batch['objects'])):
+            # print(f"Running pose {batch['poses'][i].pose_w} vs {batch['cells'][i].id}")
+
+        print(f"Running pose {batch['poses'][0].pose_w} vs {batch['cells'][0].id}")
+        print(output.matches0[0])
+        print(output.offsets[0])
+        print(batch['objects'][0])
+        print()
+        quit()
         
         for key in output:
             output[key] = output[key].cpu().detach().numpy()

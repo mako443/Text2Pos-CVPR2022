@@ -55,6 +55,13 @@ def run_coarse(model, dataloader, args):
         max_k = max(args.top_k)
         for pose in dataloader.dataset.all_poses:
             retrievals.append([pose.cell_id for i in range(max_k)])
+    elif args.coarse_random:
+        retrievals = []
+        max_k = max(args.top_k)
+        all_cell_ids = list(all_cells_dict.keys())
+        num_poses = len(dataloader.dataset.all_poses)
+        retrievals = np.random.choice(all_cell_ids, size=(num_poses, max_k))
+        retrievals = retrievals.tolist()
     elif args.street_oracle: 
         # Calculate scores here, remove retrieved cells from incorrect streets
         # TODO: Verify this leads to same results
@@ -90,7 +97,6 @@ def run_coarse(model, dataloader, args):
 
             retrieved_cell_ids = cell_ids[sorted_indices]
             retrievals.append(retrieved_cell_ids)
-
     else:
         # Run retrieval model to obtain top-cells
         retrieval_accuracies, retrieval_accuracies_close, retrievals = eval_epoch_retrieval(model, dataloader, args)
@@ -119,7 +125,7 @@ def run_coarse(model, dataloader, args):
 
     return retrievals, accuracies
 
-def run_fine_oracle(retrievals, dataloader, args):
+def run_fine_oracle(retrievals, dataloader, args, random_oracle=False):
     assert len(retrievals) == len(dataloader.dataset) == len(dataloader.dataset.all_poses)
     all_cells_dict = {cell.id: cell for cell in dataloader.dataset.all_cells}
 
@@ -128,12 +134,15 @@ def run_fine_oracle(retrievals, dataloader, args):
         top_cells = [all_cells_dict[cell_id] for cell_id in retrievals[i_pose]]
         
         # Get the ideal in-cell location for each retrieval
-        pos_in_cells = []
-        for cell in top_cells:
-            loc = (pose.pose_w[0:2] - cell.bbox_w[0:2]) / cell.cell_size
-            loc = np.clip(loc, 0, 1)
-            pos_in_cells.append(loc)
-        pos_in_cells = np.array(pos_in_cells)
+        if not random_oracle:
+            pos_in_cells = []
+            for cell in top_cells:
+                loc = (pose.pose_w[0:2] - cell.bbox_w[0:2]) / cell.cell_size
+                loc = np.clip(loc, 0, 1)
+                pos_in_cells.append(loc)
+            pos_in_cells = np.array(pos_in_cells)
+        else:
+            pos_in_cells = np.random.rand(len(top_cells), 2)
 
         accs = calc_sample_accuracies(pose, top_cells, pos_in_cells, args.top_k, args.threshs)
 
@@ -162,9 +171,9 @@ def run_fine(model, retrievals, dataloader, args):
     cell_ids = []
     poses_w = []
 
+    t0 = time.time()
     for i_sample, sample in enumerate(dataset_topk):
         output = model(sample['objects'], sample['hint_descriptions'], sample['object_points'])
-
         matches.append(output.matches0.detach().cpu().numpy())
         offsets.append(output.offsets.detach().cpu().numpy())
         # confs = get_confidences(output.P.detach().cpu().numpy())
@@ -177,6 +186,7 @@ def run_fine(model, retrievals, dataloader, args):
         
         cell_ids.append([cell.id for cell in sample['cells']])
         poses_w.append(sample['poses'][0].pose_w)
+    print(f"Ran matching for {len(dataset_topk)} queries in {time.time() - t0:0.2f}.")
 
     assert len(matches) == len(offsets) == len(retrievals)
     cell_ids = np.array(cell_ids)
@@ -282,8 +292,8 @@ if __name__ == '__main__':
         quit()
 
     # Run fine
-    if args.fine_oracle:
-        accuracies = run_fine_oracle(retrievals, dataloader_retrieval, args)
+    if args.fine_oracle or args.fine_random:
+        accuracies = run_fine_oracle(retrievals, dataloader_retrieval, args, random_oracle=args.fine_random)
         print_accuracies(accuracies, "Fine (oracle)")
     else:
         accuracies_mean, accuracies_offsets, accuracies_mean_conf = run_fine(model_matching, retrievals, dataloader_retrieval, args)

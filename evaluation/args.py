@@ -4,7 +4,7 @@ import os
 import os.path as osp
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='PoseRefer models and ablations')
+    parser = argparse.ArgumentParser(description='Text2Pos models and ablations')
 
     parser.add_argument('--purpose', type=str)
 
@@ -32,8 +32,10 @@ def parse_arguments():
 
     # Oracles
     parser.add_argument('--coarse_oracle', action='store_true', help="Use gt-retrievals")
-    parser.add_argument('--fine_oracle', action='store_true', help="Use perfect in-cell locations")
     parser.add_argument('--street_oracle', action='store_true', help="Use street-based coarse semi-oralce")
+    parser.add_argument('--coarse_random', action='store_true', help="Use random coarse retrieval")
+    parser.add_argument('--fine_oracle', action='store_true', help="Use perfect in-cell locations")
+    parser.add_argument("--fine_random", action="store_true", help="Use random in-cell locations")
 
     # Object-encoder / PointNet
     parser.add_argument('--pointnet_numpoints', type=int, default=256)
@@ -51,6 +53,12 @@ def parse_arguments():
     assert osp.isfile(args.path_fine)
     if args.coarse_oracle:
         assert max(args.top_k) == 1, "Coarse oracle can only retrieved one best cell."
+
+    if args.coarse_random:
+        assert not args.coarse_oracle and not args.street_oracle
+
+    if args.fine_random:
+        assert not args.coarse_oracle and not args.fine_oracle
 
     return args
 
