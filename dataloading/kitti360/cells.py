@@ -1,4 +1,4 @@
-from typing import List
+ from typing import List
 
 import os
 import os.path as osp
