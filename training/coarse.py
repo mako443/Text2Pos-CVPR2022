@@ -248,8 +248,10 @@ if __name__ == "__main__":
     print('device:', device, torch.cuda.get_device_name(0))
     torch.autograd.set_detect_anomaly(True)     
 
-    # learning_rates = np.logspace(-2, -4, 5)[args.lr_idx : args.lr_idx + 1]
-    learning_rates = np.logspace(-2.5, -3.5, 3)[args.lr_idx : args.lr_idx + 1]
+    if args.lr_idx is not None:
+        learning_rates = np.logspace(-2.5, -3.5, 3)[args.lr_idx : args.lr_idx + 1]
+    else:
+        learning_rates = [args.learning_rate,]
     dict_loss = {lr: [] for lr in learning_rates}
     dict_acc = {k: {lr: [] for lr in learning_rates} for k in args.top_k}
     dict_acc_val = {k: {lr: [] for lr in learning_rates} for k in args.top_k}    

@@ -18,7 +18,7 @@ def parse_arguments():
     parser.add_argument('--grid_cells', action='store_true')
 
     parser.add_argument('--pose_dist', type=int, default=30)
-    parser.add_argument('--pose_count', type=int, default=1)
+    parser.add_argument('--pose_count', type=int, default=4)
     parser.add_argument('--shift_poses', action='store_true')  
 
     parser.add_argument('--describe_best_cell', action='store_true') 

@@ -237,7 +237,10 @@ if __name__ == "__main__":
     '''
     Start training
     '''
-    learning_rates = np.logspace(-3.0, -4.0 ,3)[args.lr_idx : args.lr_idx + 1] # Larger than -3 throws error (even with warm-up)
+    if args.lr_idx is not None:
+        learning_rates = np.logspace(-3.0, -4.0 ,3)[args.lr_idx : args.lr_idx + 1] # Larger than -3 throws error (even with warm-up)
+    else:
+        learning_rates = [args.learning_rate, ]
 
     train_stats_loss = {lr: [] for lr in learning_rates}
     train_stats_loss_offsets = {lr: [] for lr in learning_rates}

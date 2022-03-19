@@ -8,7 +8,7 @@ def parse_arguments():
     # General
     parser.add_argument('--purpose', type=str, default="")
 
-    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--num_distractors', default='all')
     parser.add_argument('--max_batches', type=int, default=None)
     parser.add_argument('--dataset', type=str, default='K360')
@@ -21,7 +21,8 @@ def parse_arguments():
     parser.add_argument('--use_features', nargs='+', default=['class', 'color', 'position'])
     parser.add_argument('--shuffle', action='store_true')
     parser.add_argument('--variation', type=int, default=0)
-    parser.add_argument('--lr_idx', type=int)
+    parser.add_argument('--lr_idx', default=None, type=int, help="Which learning rate index to use from a given fixed index. Only used to schedule multiple LRs at once, overwrites learning_rate if set.")
+    parser.add_argument('--learning_rate', default=0.001, type=float, help="Learning rate")
 
     parser.add_argument('--continue_path', type=str, help="Set to continue from a previous checkpoint")
     
