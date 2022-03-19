@@ -25,14 +25,18 @@ from dataloading.kitti360.base import Kitti360BaseDataset
 
 
 class Kitti360ObjectsDataset(Kitti360BaseDataset):
-    """Dataset for Kitti360 object classification training.
-    CARE: should be shuffled so that objects aren't ordered by class
-    Objects will often have less than 2k points, T.FixedPoints() will sample w/ replace by default
-    """
-
     def __init__(
         self, base_path, scene_name, transform=T.Compose([T.FixedPoints(1024), T.NormalizeScale()])
     ):
+        """Dataset for Kitti360 object classification training.
+        NOTE: should be shuffled so that objects aren't ordered by class.
+        Objects will often have less than 2k points, T.FixedPoints() will sample w/ replace by default.
+
+        Args:
+            base_path: Data root path
+            scene_name: Scene name
+            transform (optional): PyG transform for object points. Defaults to T.Compose([T.FixedPoints(1024), T.NormalizeScale()]).
+        """
         super().__init__(base_path, scene_name)
         self.transform = transform
 
@@ -68,6 +72,15 @@ class Kitti360ObjectsDatasetMulti(Dataset):
     def __init__(
         self, base_path, scene_names, transform=T.Compose([T.FixedPoints(1024), T.NormalizeScale()])
     ):
+        """Multi-scene version of Kitti360ObjectsDataset.
+        NOTE: should be shuffled so that objects aren't ordered by class.
+        Objects will often have less than 2k points, T.FixedPoints() will sample w/ replace by default.
+
+        Args:
+            base_path: Data root path
+            scene_name: Scene name
+            transform (optional): PyG transform for object points. Defaults to T.Compose([T.FixedPoints(1024), T.NormalizeScale()]).
+        """
         self.scene_names = scene_names
         self.transform = transform
         self.datasets = [

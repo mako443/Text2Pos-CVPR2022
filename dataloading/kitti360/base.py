@@ -27,6 +27,12 @@ from datapreparation.kitti360.drawing import (
 
 class Kitti360BaseDataset(Dataset):
     def __init__(self, base_path, scene_name):
+        """Base dataset for loading Kitti360Pose data.
+
+        Args:
+            base_path: Base path for the Kitti360Pose scenes
+            scene_name: Name of the scene to load
+        """
         self.scene_name = scene_name
         self.cells = pickle.load(
             open(osp.join(base_path, "cells", f"{scene_name}.pkl"), "rb")

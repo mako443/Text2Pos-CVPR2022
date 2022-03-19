@@ -49,6 +49,9 @@ TODO:
 
 class Kitti360FineSyntheticDataset(Dataset):
     def __init__(self, base_path, scene_names, transform, args, length=1024, fixed_seed=False):
+        """Dataset for training the fine module using synthetic cells.
+        NOTE: Deprecated as it did not improve performance over the real data given the current size.
+        """
         # Create an objects dataset to copy the objects from in synthetic cell creation
         # CARE: some classes might be empty because of the train/test split
         objects_dataset = Kitti360ObjectsDatasetMulti(
@@ -102,36 +105,6 @@ class Kitti360FineSyntheticDataset(Dataset):
             obj.xyz[:, 0:2] += np.random.rand(2)  # Shift center to random ∈ [0, 1]
             cell_objects.append(obj)
 
-        # for i in range(self.num_mentioned + num_distractors):
-        #     obj_class = np.random.choice([k for k, v in self.objects_dict.items() if len(v) > 0])
-        #     obj = np.random.choice(self.objects_dict[obj_class])
-        #     obj.id = i # Set incremental IDs here for later matching.
-
-        #     # Note that an object might be partly outside the cell, but that is ok when masking + clustering is skipped
-        #     obj.xyz[:, 0:2] -= np.mean(obj.xyz[:, 0:2], axis=0) # Shift center to [0, 0]
-        #     obj.xyz[:, 0:2] += np.random.rand(2) * 2 - 0.5 # Shift center to random ∈ [-0.5, 1.5]^2
-        #     cell_objects.append(obj)
-
-        # cell_objects = []
-        # for i in range(self.num_mentioned + num_distractors):
-        #     obj_class = np.random.choice([k for k, v in self.objects_dict.items() if len(v) > 0])
-        #     obj = np.random.choice(self.objects_dict[obj_class])
-
-        #     # Shift the object center to a random position ∈ [0, 1] in x-y-plane, z is kept
-        #     # Note that object might be partly outside the cell, but that is ok when masking + clustering is skipped
-        #     obj.xyz[:, 0:2] -= np.mean(obj.xyz[:, 0:2], axis=0)
-        #     obj.xyz[:, 0:2] += np.random.rand(2)
-
-        #     cell_objects.append(obj)
-
-        # Not really needed anymore
-        # Randomly shift an object close to the pose for <on-top>
-        # if False: #np.random.choice((True, False)):
-        #     idx = np.random.randint(len(cell_objects))
-        #     obj = cell_objects[idx]
-        #     obj.xyz[:, 0:2] -= np.mean(obj.xyz[:, 0:2], axis=0)
-        #     obj.xyz[:, 0:2] += np.array(pose[0:2] + np.random.randn(2)*0.075).reshape((1,2))
-
         # Create the pose-cell with all objects
         pose_cell = create_synthetic_cell(np.array([0, 0, 0, 1, 1, 1]), cell_objects)
         assert pose_cell is not None
@@ -177,13 +150,6 @@ class Kitti360FineSyntheticDataset(Dataset):
             cv2.imshow("pose", img0)
             cv2.imshow("best", img1)
             cv2.waitKey()
-
-        # # Create the cell
-        # cell = create_cell(-1, "MOCK", np.array([0,0,0,1,1,1]), cell_objects, is_synthetic=True)
-        # assert cell is not None
-
-        # Create the pose
-        # pose = describe_pose(pose, cell)
 
         return best_cell, pose
 

@@ -45,7 +45,7 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args,
         assert descr.object_label in hint
 
     # Gather offsets
-    # CARE: Currently on trains on best-offsets if available (matched)!
+    # NOTE: Currently trains on best-offsets if available (matched)!
     if args.regressor_cell == "pose" and args.regressor_learn == "closest":
         offsets = np.array([descr.offset_closest for descr in descriptions])[:, 0:2]
     if args.regressor_cell == "pose" and args.regressor_learn == "center":
@@ -77,12 +77,7 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args,
         else:
             offsets_best_center.append(descr.offset_center[0:2])
 
-    # print()
-    # print(offsets.dtype)
-    # print(offsets)
     offsets_valid = np.sum(np.isnan(offsets)) == 0
-
-    # offsets = np.array([descr.offset_center for descr in descriptions])[:, 0:2]
 
     # Gather matched objects
     objects, matches = [], []  # Matches as [(obj_idx, hint_idx)]
@@ -107,21 +102,6 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args,
     assert len(objects) == len(
         cell.objects
     ), f"Not all cell-objects have been gathered! {len(objects)}, {len(cell.objects)}, {cell.id}"
-
-    # # Gather mentioned objects, matches and offsets
-    # objects, matches, offsets = [], [], []
-    # for i_descr, descr in enumerate(descriptions):
-    #     hint_obj = cell_objects_dict[descr.object_id]
-    #     objects.append(hint_obj)
-    #     matches.append((i_descr, i_descr))
-    #     # offsets.append(pose.pose - descr.object_closest_point)
-    #     offsets.append(pose.pose - hint_obj.get_center())
-    # offsets = np.array(offsets)[:, 0:2]
-
-    # # Gather distractors
-    # for obj in cell.objects:
-    #     if obj.id not in mentioned_ids:
-    #         objects.append(obj)
 
     # Pad or cut-off distractors (CARE: the latter would use ground-truth data!)
     if len(objects) > pad_size:
@@ -157,12 +137,6 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args,
     assert np.sum(all_matches[:, 0] == len(objects)) == len(descriptions) - len(
         matched_ids
     )  # Binned hints
-
-    # for i in range(len(objects)):
-    #     if objects[i].id not in mentioned_ids:
-    #         all_matches.append((i, len(descriptions))) # Match all distractors or pads to hints-side-bin
-    # matches, all_matches = np.array(matches), np.array(all_matches)
-    # assert np.sum(all_matches[:, 1] == len(descriptions)) == len(objects) - len(descriptions)
 
     text = " ".join(hints)
 
@@ -202,6 +176,15 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args,
 
 class Kitti360FineDataset(Kitti360BaseDataset):
     def __init__(self, base_path, scene_name, transform, args, flip_pose=False):
+        """Dataset to train the fine module.
+
+        Args:
+            base_path: Data root path
+            scene_name: Scene name
+            transform: PyG transform on object points
+            args: Global training arguments
+            flip_pose (bool, optional): Flip poses to opposite site of the cell (including the hint direction). Defaults to False.
+        """
         super().__init__(base_path, scene_name)
         self.pad_size = args.pad_size
         self.transform = transform
@@ -229,6 +212,15 @@ class Kitti360FineDataset(Kitti360BaseDataset):
 
 class Kitti360FineDatasetMulti(Dataset):
     def __init__(self, base_path, scene_names, transform, args, flip_pose=False):
+        """Multi-scene version of Kitti360FineDataset.
+
+        Args:
+            base_path: Data root path
+            scene_name: Scene name
+            transform: PyG transform on object points
+            args: Global training arguments
+            flip_pose (bool, optional): Flip poses to opposite site of the cell (including the hint direction). Defaults to False.
+        """        
         self.scene_names = scene_names
         self.flip_pose = flip_pose
         self.datasets = [

@@ -53,19 +53,6 @@ def parse_arguments():
     ]
     args.path_out = "_".join([a for a in attribs if a != None])
 
-    # if args.shift_cells:
-    #     cells_text = 'Y'
-    # elif args.grid_cells:
-    #     cells_text = 'G'
-    # else:
-    #     cells_text = 'N'
-
-    # args.path_out = f'{args.path_out}_{args.cell_size}-{args.cell_dist}_sc{cells_text}_pd{args.pose_dist}_pc{args.pose_count}_sp{"Y" if args.shift_poses else "N"}_{args.describe_by}_nm{args.num_mentioned}'
-    # if args.describe_best_cell:
-    #     args.path_out += '_bestCell'
-    # if args.no_ontop:
-    #     args.path_out += '_noOntop'
-
     print(f"Folders: {args.path_in} -> {args.path_out}")
 
     assert args.describe_by in ("closest", "class", "direction", "random", "all")

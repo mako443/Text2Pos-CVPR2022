@@ -32,13 +32,6 @@ from datapreparation.kitti360.drawing import (
 from dataloading.kitti360.base import Kitti360BaseDataset
 from dataloading.kitti360.utils import batch_object_points, flip_pose_in_cell
 
-"""
-Augmentations:
-- hints order (care not to influence matches)
-- pads to random objects and vice-versa
-- flip cell
-"""
-
 
 class Kitti360CoarseDataset(Kitti360BaseDataset):
     def __init__(
@@ -50,6 +43,17 @@ class Kitti360CoarseDataset(Kitti360BaseDataset):
         flip_poses=False,
         sample_close_cell=False,
     ):
+        """Dataset variant for coarse module training.
+        Returns one item per pose.
+
+        Args:
+            base_path: Base path of the Kitti360Poses data
+            scene_name: Scene name
+            transform: PyG transform to apply to object_points
+            shuffle_hints (bool, optional): Shuffle the hints of a description. Defaults to False.
+            flip_poses (bool, optional): Flip the poses inside the cell. NOTE: Might make hints inaccurate. Defaults to False.
+            sample_close_cell (bool, optional): Sample any close-by cell per pose instead of the original one. Defaults to False.
+        """
         super().__init__(base_path, scene_name)
         self.shuffle_hints = shuffle_hints
         self.transform = transform
@@ -61,7 +65,7 @@ class Kitti360CoarseDataset(Kitti360BaseDataset):
     def __getitem__(self, idx):
         pose = self.poses[idx]
 
-        # TODO/CARE: If it doesn't work, check if there is a problem with flipping later on
+        # TODO/NOTE: If it doesn't work, check if there is a problem with flipping later on
         if self.sample_close_cell:
             cell_size = self.cells[0].cell_size
             dists = np.linalg.norm(self.cell_centers - pose.pose_w[0:2], axis=1)
@@ -77,7 +81,7 @@ class Kitti360CoarseDataset(Kitti360BaseDataset):
 
         text = " ".join(hints)
 
-        # CARE: hints are currently not flipped! (Only the text.)
+        # NOTE: hints are currently not flipped! (Only the text.)
         if self.flip_poses:
             if np.random.choice((True, False)):  # Horizontal
                 pose, cell, text = flip_pose_in_cell(pose, cell, text, 1)
@@ -116,6 +120,16 @@ class Kitti360CoarseDatasetMulti(Dataset):
         flip_poses=False,
         sample_close_cell=False,
     ):
+        """Multi-scene variant of Kitti360CoarseDataset.
+
+        Args:
+            base_path: Base path of the Kitti360Poses data
+            scene_names: List of scene names
+            transform: PyG transform to apply to object_points
+            shuffle_hints (bool, optional): Shuffle the hints of a description. Defaults to False.
+            flip_poses (bool, optional): Flip the poses inside the cell. NOTE: Might make hints inaccurate. Defaults to False.
+            sample_close_cell (bool, optional): Sample any close-by cell per pose instead of the original one. Defaults to False.
+        """
         self.scene_names = scene_names
         self.transform = transform
         self.flip_poses = flip_poses
@@ -174,12 +188,10 @@ class Kitti360CoarseDatasetMulti(Dataset):
 
 
 class Kitti360CoarseCellOnlyDataset(Dataset):
-    """Dataset to return only the cells for encoding during evaluation
-    NOTE: The way the cells are read from the Cells-Only-Dataset, they may have been augmented differently during the actual training. Cells-Only does not flip and shuffle!
-    TODO: This ok?
-    """
-
     def __init__(self, cells: List[Cell], transform):
+        """Dataset to return only the cells for encoding during evaluation
+        NOTE: The way the cells are read from the Cells-Only-Dataset, they may have been augmented differently during the actual training. Cells-Only does not flip and shuffle!
+        """        
         super().__init__()
 
         self.cells = cells

@@ -26,6 +26,15 @@ from dataloading.kitti360.base import Kitti360BaseDataset
 
 class Kitti360FineEvalDataset(Dataset):
     def __init__(self, poses: List[Pose], cells: List[Cell], transform, args):
+        """Dataset to evaluate the fine module in isolation.
+        Needed to include recall, precision and offset accuracy metrics.
+
+        Args:
+            poses (List[Pose]): List of poses
+            cells (List[Cell]): List of cells
+            transform: PyG transform to apply to object points
+            args: Global script arguments for evaluation
+        """
         super().__init__()
         self.poses = poses
         self.transform = transform
@@ -107,6 +116,16 @@ class Kitti360FineEvalDataset(Dataset):
 
 class Kitti360TopKDataset(Dataset):
     def __init__(self, poses: List[Pose], cells: List[Cell], retrievals, transform, args):
+        """Dataset to rune the fine module on one query against multiple cells.
+        Return a "batch" of each pose with each of the corresponding top-k retrieved cells.
+
+        Args:
+            poses (List[Pose]): List of poses
+            cells (List[Cell]): List of cells
+            retrievals: List of lists of retrievals: [[cell_id_0, cell_id_1, ...], ...]
+            transform: PyG transform for object points
+            args: Global evaluation arguments
+        """
         super().__init__()
         self.poses = poses
         self.retrievals = retrievals
