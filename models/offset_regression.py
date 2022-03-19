@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from models.modules import LanguageEncoder
 from models.superglue_matcher import get_mlp_offset
 
+
 class OffsetRegressor(torch.nn.Module):
     def __init__(self, known_words, args):
         super(OffsetRegressor, self).__init__()
@@ -16,12 +17,14 @@ class OffsetRegressor(torch.nn.Module):
 
         self.language_encoder = LanguageEncoder(known_words, args.regressor_dim, bi_dir=True)
         self.mlp_offsets = get_mlp_offset([args.regressor_dim, args.regressor_dim // 2, 2])
-        print('CARE: NORMALIZING DIRECTIONS')
+        print("CARE: NORMALIZING DIRECTIONS")
 
     def forward(self, hints):
-        hint_encodings = torch.stack([self.language_encoder(hint_sample) for hint_sample in hints]) # [B, num_hints, DIM]
+        hint_encodings = torch.stack(
+            [self.language_encoder(hint_sample) for hint_sample in hints]
+        )  # [B, num_hints, DIM]
         # hint_encodings = F.normalize(hint_encodings, dim=-1) #Norming those too
 
-        offsets = self.mlp_offsets(hint_encodings) # [B, num_hints, 2]
+        offsets = self.mlp_offsets(hint_encodings)  # [B, num_hints, 2]
         return F.normalize(offsets, dim=-1)
         return offsets

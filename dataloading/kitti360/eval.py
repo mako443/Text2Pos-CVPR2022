@@ -11,12 +11,18 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from easydict import EasyDict
 
-import torch_geometric.transforms as T 
+import torch_geometric.transforms as T
 
 from datapreparation.kitti360.imports import Object3d, Cell, Pose
-from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell, plot_pose_in_best_cell
+from datapreparation.kitti360.drawing import (
+    show_pptk,
+    show_objects,
+    plot_cell,
+    plot_pose_in_best_cell,
+)
 from dataloading.kitti360.poses import batch_object_points
 from dataloading.kitti360.base import Kitti360BaseDataset
+
 
 class Kitti360FineEvalDataset(Dataset):
     def __init__(self, poses: List[Pose], cells: List[Cell], transform, args):
@@ -27,7 +33,9 @@ class Kitti360FineEvalDataset(Dataset):
 
         self.cells_dict = {cell.id: cell for cell in cells}
 
-        print(f'Kitti360FineEvalDataset: {len(self)} poses, {len(cells)} cells, pad {args.pad_size}')
+        print(
+            f"Kitti360FineEvalDataset: {len(self)} poses, {len(cells)} cells, pad {args.pad_size}"
+        )
 
     def load_pose_and_cell(self, pose: Pose, cell: Cell):
         assert pose.cell_id == cell.id
@@ -50,7 +58,7 @@ class Kitti360FineEvalDataset(Dataset):
                 oracle_offsets.append(pose_in_cell - obj.get_center()[0:2])
             else:
                 oracle_offsets.append(descr.offset_center)
-        
+
         # Gather the objects and matches
         objects = []
         matches = []
@@ -69,16 +77,16 @@ class Kitti360FineEvalDataset(Dataset):
         assert len(objects) == self.args.pad_size
 
         matches = np.array(matches)
-        assert len(matches) <= len(matched_ids) # Some matched objects can be cut-off
+        assert len(matches) <= len(matched_ids)  # Some matched objects can be cut-off
 
         return {
-            'poses': pose,
-            'cells': cell,
-            'objects': objects,
-            'object_points': batch_object_points(objects, self.transform),
-            'matches': matches,
-            'hint_descriptions': Kitti360BaseDataset.create_hint_description(pose, None),
-            'offsets_best_center': np.array(oracle_offsets)
+            "poses": pose,
+            "cells": cell,
+            "objects": objects,
+            "object_points": batch_object_points(objects, self.transform),
+            "matches": matches,
+            "hint_descriptions": Kitti360BaseDataset.create_hint_description(pose, None),
+            "offsets_best_center": np.array(oracle_offsets),
         }
 
     def __getitem__(self, idx: int):
@@ -96,6 +104,7 @@ class Kitti360FineEvalDataset(Dataset):
             batch[key] = [data[i][key] for i in range(len(data))]
         return batch
 
+
 class Kitti360TopKDataset(Dataset):
     def __init__(self, poses: List[Pose], cells: List[Cell], retrievals, transform, args):
         super().__init__()
@@ -104,14 +113,16 @@ class Kitti360TopKDataset(Dataset):
         assert len(poses) == len(retrievals)
         assert len(retrievals[0]) == max(args.top_k), "Retrievals where not trimmed to max(top_k)"
         assert len(poses) != len(cells)
-        
+
         self.cells_dict = {cell.id: cell for cell in cells}
         assert len(self.cells_dict) == len(cells), "Cell-IDs are not unique"
 
         self.transform = transform
         self.args = args
 
-        print(f'Kitti360TopKDataset: {len(self.poses)} poses, {len(cells)} cells, pad {args.pad_size}')
+        print(
+            f"Kitti360TopKDataset: {len(self.poses)} poses, {len(cells)} cells, pad {args.pad_size}"
+        )
 
     def load_pose_and_cell(self, pose: Pose, cell: Cell):
         cell = deepcopy(cell)
@@ -132,22 +143,21 @@ class Kitti360TopKDataset(Dataset):
         hint_descriptions = Kitti360BaseDataset.create_hint_description(pose, None)
 
         return {
-            'poses': pose,
-            'objects': objects,
-            'object_points': object_points,
-            'hint_descriptions': hint_descriptions,
-            'cells': cell
+            "poses": pose,
+            "objects": objects,
+            "object_points": object_points,
+            "hint_descriptions": hint_descriptions,
+            "cells": cell,
         }
 
     def __getitem__(self, idx):
-        """Return a "batch" of the pose at idx with each of the corresponding top-k retrieved cells
-        """
+        """Return a "batch" of the pose at idx with each of the corresponding top-k retrieved cells"""
         pose = self.poses[idx]
         retrievals = self.retrievals[idx]
 
-        return Kitti360TopKDataset.collate_append([
-            self.load_pose_and_cell(pose, self.cells_dict[cell_id]) for cell_id in retrievals
-        ])
+        return Kitti360TopKDataset.collate_append(
+            [self.load_pose_and_cell(pose, self.cells_dict[cell_id]) for cell_id in retrievals]
+        )
 
     # NOTE: returns the number of poses, each item has max(top_k) samples!
     def __len__(self):
@@ -157,7 +167,7 @@ class Kitti360TopKDataset(Dataset):
         batch = {}
         for key in data[0].keys():
             batch[key] = [data[i][key] for i in range(len(data))]
-        return batch    
+        return batch
 
     # def collate_extend(data):
     #     batch = {}
@@ -168,22 +178,33 @@ class Kitti360TopKDataset(Dataset):
     #             batch[key].extend(data[i][key])
     #     return batch
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     from dataloading.kitti360.cells import Kitti360CoarseDatasetMulti
 
-    base_path = './data/k360_cs30_cd15_scY_pd10_pc1_spY_closest'
-    folder_name = '2013_05_28_drive_0003_sync'    
+    base_path = "./data/k360_cs30_cd15_scY_pd10_pc1_spY_closest"
+    folder_name = "2013_05_28_drive_0003_sync"
 
     args = EasyDict(pad_size=16, top_k=(1, 3, 5))
 
     transform = T.FixedPoints(256)
-    dataset_coarse = Kitti360CoarseDatasetMulti(base_path, [folder_name, ], transform, shuffle_hints=False, flip_poses=False)    
+    dataset_coarse = Kitti360CoarseDatasetMulti(
+        base_path,
+        [
+            folder_name,
+        ],
+        transform,
+        shuffle_hints=False,
+        flip_poses=False,
+    )
 
     retrievals = []
     for i in range(len(dataset_coarse.all_poses)):
         retrievals.append([dataset_coarse.all_cells[k].id for k in range(max(args.top_k))])
 
-    dataset = Kitti360TopKDataset(dataset_coarse.all_poses, dataset_coarse.all_cells, retrievals, transform, args)
+    dataset = Kitti360TopKDataset(
+        dataset_coarse.all_poses, dataset_coarse.all_cells, retrievals, transform, args
+    )
     data = dataset[0]
 
     loader = DataLoader(dataset, batch_size=2, collate_fn=Kitti360TopKDataset.collate_append)

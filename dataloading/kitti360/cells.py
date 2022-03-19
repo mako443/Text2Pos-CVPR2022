@@ -10,28 +10,51 @@ from copy import deepcopy
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-import torch_geometric.transforms as T 
+import torch_geometric.transforms as T
 
-from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, SCENE_NAMES, SCENE_NAMES_TEST, SCENE_NAMES_TRAIN, SCENE_NAMES_VAL
+from datapreparation.kitti360.utils import (
+    CLASS_TO_LABEL,
+    LABEL_TO_CLASS,
+    CLASS_TO_MINPOINTS,
+    SCENE_NAMES,
+    SCENE_NAMES_TEST,
+    SCENE_NAMES_TRAIN,
+    SCENE_NAMES_VAL,
+)
 from datapreparation.kitti360.utils import CLASS_TO_INDEX, COLOR_NAMES
 from datapreparation.kitti360.imports import Object3d, Cell, Pose
-from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell, plot_pose_in_best_cell
+from datapreparation.kitti360.drawing import (
+    show_pptk,
+    show_objects,
+    plot_cell,
+    plot_pose_in_best_cell,
+)
 from dataloading.kitti360.base import Kitti360BaseDataset
 from dataloading.kitti360.utils import batch_object_points, flip_pose_in_cell
 
-'''
+"""
 Augmentations:
 - hints order (care not to influence matches)
 - pads to random objects and vice-versa
 - flip cell
-'''
+"""
+
+
 class Kitti360CoarseDataset(Kitti360BaseDataset):
-    def __init__(self, base_path, scene_name, transform, shuffle_hints=False, flip_poses=False, sample_close_cell=False):
+    def __init__(
+        self,
+        base_path,
+        scene_name,
+        transform,
+        shuffle_hints=False,
+        flip_poses=False,
+        sample_close_cell=False,
+    ):
         super().__init__(base_path, scene_name)
         self.shuffle_hints = shuffle_hints
         self.transform = transform
         self.flip_poses = flip_poses
-        
+
         self.sample_close_cell = sample_close_cell
         self.cell_centers = np.array([cell.get_center()[0:2] for cell in self.cells])
 
@@ -48,53 +71,69 @@ class Kitti360CoarseDataset(Kitti360BaseDataset):
         else:
             cell = self.cells_dict[pose.cell_id]
         hints = self.hint_descriptions[idx]
-        
+
         if self.shuffle_hints:
             hints = np.random.choice(hints, size=len(hints), replace=False)
 
-        text = ' '.join(hints)
+        text = " ".join(hints)
 
         # CARE: hints are currently not flipped! (Only the text.)
         if self.flip_poses:
-            if np.random.choice((True, False)): # Horizontal
+            if np.random.choice((True, False)):  # Horizontal
                 pose, cell, text = flip_pose_in_cell(pose, cell, text, 1)
-            if np.random.choice((True, False)): # Vertical
-                pose, cell, text = flip_pose_in_cell(pose, cell, text, -1)                
+            if np.random.choice((True, False)):  # Vertical
+                pose, cell, text = flip_pose_in_cell(pose, cell, text, -1)
 
         object_points = batch_object_points(cell.objects, self.transform)
 
         object_class_indices = [CLASS_TO_INDEX[obj.label] for obj in cell.objects]
-        object_color_indices = [COLOR_NAMES.index(obj.get_color_text()) for obj in cell.objects]           
+        object_color_indices = [COLOR_NAMES.index(obj.get_color_text()) for obj in cell.objects]
 
         return {
-            'poses': pose,
-            'cells': cell,
-            'objects': cell.objects,
-            'object_points': object_points,
-            'texts': text,
-            'cell_ids': pose.cell_id,
-            'scene_names': self.scene_name,
-            'object_class_indices': object_class_indices,
-            'object_color_indices': object_color_indices,
-            'debug_hint_descriptions': hints # Care: Not shuffled etc! 
-        } 
+            "poses": pose,
+            "cells": cell,
+            "objects": cell.objects,
+            "object_points": object_points,
+            "texts": text,
+            "cell_ids": pose.cell_id,
+            "scene_names": self.scene_name,
+            "object_class_indices": object_class_indices,
+            "object_color_indices": object_color_indices,
+            "debug_hint_descriptions": hints,  # Care: Not shuffled etc!
+        }
 
     def __len__(self):
         return len(self.poses)
-    
+
+
 class Kitti360CoarseDatasetMulti(Dataset):
-    def __init__(self, base_path, scene_names, transform, shuffle_hints=False, flip_poses=False, sample_close_cell=False):
+    def __init__(
+        self,
+        base_path,
+        scene_names,
+        transform,
+        shuffle_hints=False,
+        flip_poses=False,
+        sample_close_cell=False,
+    ):
         self.scene_names = scene_names
         self.transform = transform
         self.flip_poses = flip_poses
         self.sample_close_cell = sample_close_cell
-        self.datasets = [Kitti360CoarseDataset(base_path, scene_name, transform, shuffle_hints, flip_poses, sample_close_cell) for scene_name in scene_names]
-        
-        self.all_cells = [cell for dataset in self.datasets for cell in dataset.cells] # For cell-only dataset
-        self.all_poses = [pose for dataset in self.datasets for pose in dataset.poses] # For eval
-        
+        self.datasets = [
+            Kitti360CoarseDataset(
+                base_path, scene_name, transform, shuffle_hints, flip_poses, sample_close_cell
+            )
+            for scene_name in scene_names
+        ]
+
+        self.all_cells = [
+            cell for dataset in self.datasets for cell in dataset.cells
+        ]  # For cell-only dataset
+        self.all_poses = [pose for dataset in self.datasets for pose in dataset.poses]  # For eval
+
         cell_ids = [cell.id for cell in self.all_cells]
-        assert len(np.unique(cell_ids)) == len(self.all_cells) # IDs should not repeat
+        assert len(np.unique(cell_ids)) == len(self.all_cells)  # IDs should not repeat
 
         print(str(self))
 
@@ -113,8 +152,10 @@ class Kitti360CoarseDatasetMulti(Dataset):
 
     def __repr__(self):
         poses = np.array([pose.pose_w for pose in self.all_poses])
-        num_poses = len(np.unique(poses, axis=0)) # CARE: Might be possible that is is slightly inaccurate if there are actually overlaps
-        return f'Kitti360CellDatasetMulti: {len(self.scene_names)} scenes, {len(self)} descriptions for {num_poses} unique poses, {len(self.all_cells)} cells, flip {self.flip_poses}, close-cell {self.sample_close_cell}'
+        num_poses = len(
+            np.unique(poses, axis=0)
+        )  # CARE: Might be possible that is is slightly inaccurate if there are actually overlaps
+        return f"Kitti360CellDatasetMulti: {len(self.scene_names)} scenes, {len(self)} descriptions for {num_poses} unique poses, {len(self.all_cells)} cells, flip {self.flip_poses}, close-cell {self.sample_close_cell}"
 
     def get_known_words(self):
         known_words = []
@@ -130,6 +171,7 @@ class Kitti360CoarseDatasetMulti(Dataset):
 
     def get_cell_dataset(self):
         return Kitti360CoarseCellOnlyDataset(self.all_cells, self.transform)
+
 
 class Kitti360CoarseCellOnlyDataset(Dataset):
     """Dataset to return only the cells for encoding during evaluation
@@ -149,22 +191,25 @@ class Kitti360CoarseCellOnlyDataset(Dataset):
         object_points = batch_object_points(cell.objects, self.transform)
 
         return {
-            'cells': cell,
-            'cell_ids': cell.id,
-            'objects': cell.objects,
-            'object_points': object_points
+            "cells": cell,
+            "cell_ids": cell.id,
+            "objects": cell.objects,
+            "object_points": object_points,
         }
 
     def __len__(self):
-        return len(self.cells)        
+        return len(self.cells)
 
-if __name__ == '__main__':
-    base_path = './data/k360_30-10_scG_pd10_pc8_spY_all_nm6/'
+
+if __name__ == "__main__":
+    base_path = "./data/k360_30-10_scG_pd10_pc8_spY_all_nm6/"
 
     transform = T.FixedPoints(256)
 
     for scene_names in (SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_VAL, SCENE_NAMES_TEST):
-        dataset = Kitti360CoarseDatasetMulti(base_path, scene_names, transform, shuffle_hints=False, flip_poses=False)
+        dataset = Kitti360CoarseDatasetMulti(
+            base_path, scene_names, transform, shuffle_hints=False, flip_poses=False
+        )
         # data = dataset[0]
         # pose, cell, text = data['poses'], data['cells'], data['texts']
         # offsets = np.array([descr.offset_closest for descr in pose.descriptions])
@@ -174,11 +219,15 @@ if __name__ == '__main__':
         # Gather information about duplicate descriptions
         descriptors = []
         for pose in dataset.all_poses:
-            mentioned = sorted([f'{d.object_label}_{d.object_color_text}_{d.direction}' for d in pose.descriptions])
+            mentioned = sorted(
+                [f"{d.object_label}_{d.object_color_text}_{d.direction}" for d in pose.descriptions]
+            )
             descriptors.append(mentioned)
 
         unique, counts = np.unique(descriptors, return_counts=True)
         # for d in descriptors[0:10]:
         #     print('\t',d)
-        print(f'{len(descriptors)} poses, {len(unique)} uniques, {np.max(counts)} max duplicates, {np.mean(counts):0.2f} mean duplicates')    
-        print('---- \n\n')
+        print(
+            f"{len(descriptors)} poses, {len(unique)} uniques, {np.max(counts)} max duplicates, {np.mean(counts):0.2f} mean duplicates"
+        )
+        print("---- \n\n")

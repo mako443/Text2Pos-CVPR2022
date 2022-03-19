@@ -47,13 +47,12 @@ from torch import nn
 
 
 def MLP(channels: list, do_bn=True):
-    """ Multi-layer perceptron """
+    """Multi-layer perceptron"""
     n = len(channels)
     layers = []
     for i in range(1, n):
-        layers.append(
-            nn.Conv1d(channels[i - 1], channels[i], kernel_size=1, bias=True))
-        if i < (n-1):
+        layers.append(nn.Conv1d(channels[i - 1], channels[i], kernel_size=1, bias=True))
+        if i < (n - 1):
             if do_bn:
                 layers.append(nn.BatchNorm1d(channels[i]))
                 # layers.append(nn.InstanceNorm1d(channels[i]))
@@ -62,16 +61,18 @@ def MLP(channels: list, do_bn=True):
 
 
 def normalize_keypoints(kpts, image_shape):
-    """ Normalize keypoints locations based on image image_shape"""
+    """Normalize keypoints locations based on image image_shape"""
     _, _, height, width = image_shape
     one = kpts.new_tensor(1)
-    size = torch.stack([one*width, one*height])[None]
+    size = torch.stack([one * width, one * height])[None]
     center = size / 2
     scaling = size.max(1, keepdim=True).values * 0.7
     return (kpts - center[:, None, :]) / scaling[:, None, :]
 
+
 class KeypointEncoder(nn.Module):
-    """ Joint encoding of visual appearance and location using MLPs"""
+    """Joint encoding of visual appearance and location using MLPs"""
+
     def __init__(self, feature_dim, layers):
         super().__init__()
         self.encoder = MLP([3] + layers + [feature_dim])
@@ -84,13 +85,14 @@ class KeypointEncoder(nn.Module):
 
 def attention(query, key, value):
     dim = query.shape[1]
-    scores = torch.einsum('bdhn,bdhm->bhnm', query, key) / dim**.5
+    scores = torch.einsum("bdhn,bdhm->bhnm", query, key) / dim**0.5
     prob = torch.nn.functional.softmax(scores, dim=-1)
-    return torch.einsum('bhnm,bdhm->bdhn', prob, value), prob
+    return torch.einsum("bhnm,bdhm->bdhn", prob, value), prob
 
 
 class MultiHeadedAttention(nn.Module):
-    """ Multi-head attention to increase model expressivitiy """
+    """Multi-head attention to increase model expressivitiy"""
+
     def __init__(self, num_heads: int, d_model: int):
         super().__init__()
         assert d_model % num_heads == 0
@@ -101,17 +103,19 @@ class MultiHeadedAttention(nn.Module):
 
     def forward(self, query, key, value):
         batch_dim = query.size(0)
-        query, key, value = [l(x).view(batch_dim, self.dim, self.num_heads, -1)
-                             for l, x in zip(self.proj, (query, key, value))]
+        query, key, value = [
+            l(x).view(batch_dim, self.dim, self.num_heads, -1)
+            for l, x in zip(self.proj, (query, key, value))
+        ]
         x, _ = attention(query, key, value)
-        return self.merge(x.contiguous().view(batch_dim, self.dim*self.num_heads, -1))
+        return self.merge(x.contiguous().view(batch_dim, self.dim * self.num_heads, -1))
 
 
 class AttentionalPropagation(nn.Module):
     def __init__(self, feature_dim: int, num_heads: int):
         super().__init__()
         self.attn = MultiHeadedAttention(num_heads, feature_dim)
-        self.mlp = MLP([feature_dim*2, feature_dim*2, feature_dim])
+        self.mlp = MLP([feature_dim * 2, feature_dim * 2, feature_dim])
         nn.init.constant_(self.mlp[-1].bias, 0.0)
 
     def forward(self, x, source):
@@ -122,14 +126,14 @@ class AttentionalPropagation(nn.Module):
 class AttentionalGNN(nn.Module):
     def __init__(self, feature_dim: int, layer_names: list):
         super().__init__()
-        self.layers = nn.ModuleList([
-            AttentionalPropagation(feature_dim, 4)
-            for _ in range(len(layer_names))])
+        self.layers = nn.ModuleList(
+            [AttentionalPropagation(feature_dim, 4) for _ in range(len(layer_names))]
+        )
         self.names = layer_names
 
     def forward(self, desc0, desc1):
         for layer, name in zip(self.layers, self.names):
-            if name == 'cross':
+            if name == "cross":
                 src0, src1 = desc1, desc0
             else:  # if name == 'self':
                 src0, src1 = desc0, desc1
@@ -139,7 +143,7 @@ class AttentionalGNN(nn.Module):
 
 
 def log_sinkhorn_iterations(Z, log_mu, log_nu, iters: int):
-    """ Perform Sinkhorn Normalization in Log-space for stability"""
+    """Perform Sinkhorn Normalization in Log-space for stability"""
     u, v = torch.zeros_like(log_mu), torch.zeros_like(log_nu)
     for _ in range(iters):
         u = log_mu - torch.logsumexp(Z + v.unsqueeze(1), dim=2)
@@ -148,19 +152,18 @@ def log_sinkhorn_iterations(Z, log_mu, log_nu, iters: int):
 
 
 def log_optimal_transport(scores, alpha, iters: int):
-    """ Perform Differentiable Optimal Transport in Log-space for stability"""
+    """Perform Differentiable Optimal Transport in Log-space for stability"""
     b, m, n = scores.shape
     one = scores.new_tensor(1)
-    ms, ns = (m*one).to(scores), (n*one).to(scores)
+    ms, ns = (m * one).to(scores), (n * one).to(scores)
 
     bins0 = alpha.expand(b, m, 1)
     bins1 = alpha.expand(b, 1, n)
     alpha = alpha.expand(b, 1, 1)
 
-    couplings = torch.cat([torch.cat([scores, bins0], -1),
-                           torch.cat([bins1, alpha], -1)], 1)
+    couplings = torch.cat([torch.cat([scores, bins0], -1), torch.cat([bins1, alpha], -1)], 1)
 
-    norm = - (ms + ns).log()
+    norm = -(ms + ns).log()
     log_mu = torch.cat([norm.expand(m), ns.log()[None] + norm])
     log_nu = torch.cat([norm.expand(n), ms.log()[None] + norm])
     log_mu, log_nu = log_mu[None].expand(b, -1), log_nu[None].expand(b, -1)
@@ -192,13 +195,14 @@ class SuperGlue(nn.Module):
     Networks. In CVPR, 2020. https://arxiv.org/abs/1911.11763
 
     """
+
     default_config = {
-        'descriptor_dim': 256,
-        'weights': 'indoor',
-        'keypoint_encoder': [32, 64, 128, 256],
-        'GNN_layers': ['self', 'cross'] * 9,
-        'sinkhorn_iterations': 100,
-        'match_threshold': 0.2,
+        "descriptor_dim": 256,
+        "weights": "indoor",
+        "keypoint_encoder": [32, 64, 128, 256],
+        "GNN_layers": ["self", "cross"] * 9,
+        "sinkhorn_iterations": 100,
+        "match_threshold": 0.2,
     }
 
     def __init__(self, config):
@@ -206,20 +210,19 @@ class SuperGlue(nn.Module):
         self.config = {**self.default_config, **config}
         print(config)
 
-        self.kenc = KeypointEncoder(
-            self.config['descriptor_dim'], self.config['keypoint_encoder'])
+        self.kenc = KeypointEncoder(self.config["descriptor_dim"], self.config["keypoint_encoder"])
 
-        if len(self.config['GNN_layers']) > 0:
-            self.gnn = AttentionalGNN( self.config['descriptor_dim'], self.config['GNN_layers'])
+        if len(self.config["GNN_layers"]) > 0:
+            self.gnn = AttentionalGNN(self.config["descriptor_dim"], self.config["GNN_layers"])
         else:
             self.gnn = None
 
         self.final_proj = nn.Conv1d(
-            self.config['descriptor_dim'], self.config['descriptor_dim'],
-            kernel_size=1, bias=True)
+            self.config["descriptor_dim"], self.config["descriptor_dim"], kernel_size=1, bias=True
+        )
 
-        bin_score = torch.nn.Parameter(torch.tensor(1.))
-        self.register_parameter('bin_score', bin_score)
+        bin_score = torch.nn.Parameter(torch.tensor(1.0))
+        self.register_parameter("bin_score", bin_score)
 
         # print('Not loading weights!')
         # assert self.config['weights'] in ['indoor', 'outdoor']
@@ -229,12 +232,16 @@ class SuperGlue(nn.Module):
         # print('Loaded SuperGlue model (\"{}\" weights)'.format(
         #     self.config['weights']))
 
-    def forward(self, desc0, desc1):    
+    def forward(self, desc0, desc1):
         """Run SuperGlue on a pair of keypoints and descriptors"""
         # desc0, desc1 = data['descriptors0'], data['descriptors1']
         # kpts0, kpts1 = data['keypoints0'], data['keypoints1']
 
-        batch_size, M, N = desc0.shape[0], desc0.shape[2], desc1.shape[2] # Descriptors: [B, DIM, M/N]
+        batch_size, M, N = (
+            desc0.shape[0],
+            desc0.shape[2],
+            desc1.shape[2],
+        )  # Descriptors: [B, DIM, M/N]
         # data['scores0'] = 1.0*torch.ones(1,M).float().to(desc0)
         # data['scores1'] = 1.0*torch.ones(1,N).float().to(desc0)
         # data['keypoints0'] = data['keypoints0'].transpose(1,2) # Keypoints should be: [B, 2, M/N]
@@ -269,31 +276,33 @@ class SuperGlue(nn.Module):
         mdesc0, mdesc1 = self.final_proj(desc0), self.final_proj(desc1)
 
         # Compute matching descriptor distance.
-        scores = torch.einsum('bdn,bdm->bnm', mdesc0, mdesc1)
-        scores = scores / self.config['descriptor_dim']**.5
+        scores = torch.einsum("bdn,bdm->bnm", mdesc0, mdesc1)
+        scores = scores / self.config["descriptor_dim"] ** 0.5
 
-        #TODO: better with L2?
+        # TODO: better with L2?
         if torch.any(torch.isnan(scores)).item():
-            print('NAN-0!')        
+            print("NAN-0!")
             print(scores)
             print(desc0, desc1)
 
         # Run the optimal transport.
         scores = log_optimal_transport(
-            scores, self.bin_score,
-            iters=self.config['sinkhorn_iterations'])
+            scores, self.bin_score, iters=self.config["sinkhorn_iterations"]
+        )
 
         if torch.any(torch.isnan(scores)).item():
-            print('NAN-1!')        
+            print("NAN-1!")
             print(scores)
-            print(desc0, desc1)            
-        
-        P = torch.exp(scores) #Scores including dustbins, exp() to inverse the log-space optimal transport
+            print(desc0, desc1)
+
+        P = torch.exp(
+            scores
+        )  # Scores including dustbins, exp() to inverse the log-space optimal transport
 
         if torch.any(torch.isnan(P)).item():
-            print('NAN-0!')        
+            print("NAN-0!")
             print(scores)
-            print(desc0, desc1)        
+            print(desc0, desc1)
 
         # Get the matches with score above "match_threshold".
         max0, max1 = scores[:, :-1, :-1].max(2), scores[:, :-1, :-1].max(1)
@@ -303,15 +312,15 @@ class SuperGlue(nn.Module):
         zero = scores.new_tensor(0)
         mscores0 = torch.where(mutual0, max0.values.exp(), zero)
         mscores1 = torch.where(mutual1, mscores0.gather(1, indices1), zero)
-        valid0 = mutual0 & (mscores0 > self.config['match_threshold'])
+        valid0 = mutual0 & (mscores0 > self.config["match_threshold"])
         valid1 = mutual1 & valid0.gather(1, indices1)
         indices0 = torch.where(valid0, indices0, indices0.new_tensor(-1))
         indices1 = torch.where(valid1, indices1, indices1.new_tensor(-1))
 
         return {
-            'matches0': indices0, # use -1 for invalid match
-            'matches1': indices1, # use -1 for invalid match
-            'matching_scores0': mscores0,
-            'matching_scores1': mscores1,
-            'P': P
+            "matches0": indices0,  # use -1 for invalid match
+            "matches1": indices1,  # use -1 for invalid match
+            "matching_scores0": mscores0,
+            "matching_scores1": mscores1,
+            "P": P,
         }

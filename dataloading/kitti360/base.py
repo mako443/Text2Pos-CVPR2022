@@ -9,27 +9,44 @@ import cv2
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, SCENE_NAMES, CLASS_TO_INDEX
+from datapreparation.kitti360.utils import (
+    CLASS_TO_LABEL,
+    LABEL_TO_CLASS,
+    CLASS_TO_MINPOINTS,
+    SCENE_NAMES,
+    CLASS_TO_INDEX,
+)
 from datapreparation.kitti360.imports import Object3d, Cell, Pose
-from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell, plot_pose_in_best_cell
+from datapreparation.kitti360.drawing import (
+    show_pptk,
+    show_objects,
+    plot_cell,
+    plot_pose_in_best_cell,
+)
+
 
 class Kitti360BaseDataset(Dataset):
     def __init__(self, base_path, scene_name):
         self.scene_name = scene_name
-        self.cells = pickle.load(open(osp.join(base_path, 'cells', f'{scene_name}.pkl'), 'rb')) # Also use objects from here for classification
+        self.cells = pickle.load(
+            open(osp.join(base_path, "cells", f"{scene_name}.pkl"), "rb")
+        )  # Also use objects from here for classification
         self.cells_dict = {cell.id: cell for cell in self.cells}
-        
+
         cell_ids = [cell.id for cell in self.cells]
         assert len(np.unique(cell_ids)) == len(cell_ids)
 
-        self.poses = pickle.load(open(osp.join(base_path, 'poses', f'{scene_name}.pkl'), 'rb'))
+        self.poses = pickle.load(open(osp.join(base_path, "poses", f"{scene_name}.pkl"), "rb"))
 
         self.class_to_index = CLASS_TO_INDEX
 
-        self.hint_descriptions = [Kitti360BaseDataset.create_hint_description(pose, self.cells_dict[pose.cell_id]) for pose in self.poses]
+        self.hint_descriptions = [
+            Kitti360BaseDataset.create_hint_description(pose, self.cells_dict[pose.cell_id])
+            for pose in self.poses
+        ]
 
     def __getitem__(self, idx):
-        raise Exception('Not implemented: abstract class.')
+        raise Exception("Not implemented: abstract class.")
 
     def create_hint_description(pose: Pose, cell: Cell):
         hints = []
@@ -37,7 +54,9 @@ class Kitti360BaseDataset(Dataset):
         for descr in pose.descriptions:
             # obj = cell_objects_dict[descr.object_id]
             # hints.append(f'The pose is {descr.direction} of a {obj.get_color_text()} {obj.label}.')
-            hints.append(f'The pose is {descr.direction} of a {descr.object_color_text} {descr.object_label}.')
+            hints.append(
+                f"The pose is {descr.direction} of a {descr.object_color_text} {descr.object_label}."
+            )
         return hints
 
     def get_known_classes(self):
@@ -47,11 +66,11 @@ class Kitti360BaseDataset(Dataset):
         words = []
         for hints in self.hint_descriptions:
             for hint in hints:
-                words.extend(hint.replace('.','').replace(',','').lower().split())
-        return list(np.unique(words))        
+                words.extend(hint.replace(".", "").replace(",", "").lower().split())
+        return list(np.unique(words))
 
     def __len__(self):
-        raise Exception('Not implemented: abstract class.')
+        raise Exception("Not implemented: abstract class.")
 
     def collate_fn(data):
         batch = {}
@@ -59,10 +78,9 @@ class Kitti360BaseDataset(Dataset):
             batch[key] = [data[i][key] for i in range(len(data))]
         return batch
 
-if __name__ == '__main__':
-    base_path = './data/k360_decouple'
-    folder_name = '2013_05_28_drive_0003_sync'    
-    
+
+if __name__ == "__main__":
+    base_path = "./data/k360_decouple"
+    folder_name = "2013_05_28_drive_0003_sync"
+
     dataset = Kitti360BaseDataset(base_path, folder_name)
-
-

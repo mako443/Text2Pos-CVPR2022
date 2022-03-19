@@ -10,12 +10,13 @@ import torch_geometric.transforms as T
 from torch_geometric.nn import GCNConv
 from torch_geometric.utils import train_test_split_edges
 
-dataset = 'Cora'
-path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', dataset)
+dataset = "Cora"
+path = osp.join(osp.dirname(osp.realpath(__file__)), "..", "data", dataset)
 dataset = Planetoid(path, dataset, transform=T.NormalizeFeatures())
 data = dataset[0]
 data.train_mask = data.val_mask = data.test_mask = data.y = None
 data = train_test_split_edges(data)
+
 
 class Net(torch.nn.Module):
     def __init__(self):
@@ -34,9 +35,10 @@ class Net(torch.nn.Module):
         return logits
 
     def decode_all(self, z):
-        logits = z@z.t()
+        logits = z @ z.t()
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model, data = Net().to(device), data.to(device)
 optimizer = torch.optim.Adam(params=model.parameters(), lr=0.01)
 
@@ -46,14 +48,18 @@ quit()
 def get_link_labels(pos_edge_index, neg_edge_index):
     E = pos_edge_index.size(1) + neg_edge_index.size(1)
     link_labels = torch.zeros(E, dtype=torch.float, device=device)
-    link_labels[:pos_edge_index.size(1)] = 1.
+    link_labels[: pos_edge_index.size(1)] = 1.0
     return link_labels
 
 
 def train():
     model.train()
 
-    neg_edge_index = negative_sampling(edge_index=data.train_pos_edge_index, num_nodes=data.num_nodes, num_neg_samples=data.train_pos_edge_index.size(1))
+    neg_edge_index = negative_sampling(
+        edge_index=data.train_pos_edge_index,
+        num_nodes=data.num_nodes,
+        num_neg_samples=data.train_pos_edge_index.size(1),
+    )
 
     optimizer.zero_grad()
     z = model.encode()
@@ -71,8 +77,8 @@ def test():
     model.eval()
     perfs = []
     for prefix in ["val", "test"]:
-        pos_edge_index = data[f'{prefix}_pos_edge_index']
-        neg_edge_index = data[f'{prefix}_neg_edge_index']
+        pos_edge_index = data[f"{prefix}_pos_edge_index"]
+        neg_edge_index = data[f"{prefix}_neg_edge_index"]
 
         z = model.encode()
         link_logits = model.decode(z, pos_edge_index, neg_edge_index)
@@ -89,7 +95,7 @@ for epoch in range(1, 101):
     if val_perf > best_val_perf:
         best_val_perf = val_perf
         test_perf = tmp_test_perf
-    log = 'Epoch: {:03d}, Loss: {:.4f}, Val: {:.4f}, Test: {:.4f}'
+    log = "Epoch: {:03d}, Loss: {:.4f}, Val: {:.4f}, Test: {:.4f}"
     print(log.format(epoch, train_loss, best_val_perf, test_perf))
 
 z = model.encode()

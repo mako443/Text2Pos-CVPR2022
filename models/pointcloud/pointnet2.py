@@ -24,8 +24,9 @@ from easydict import EasyDict
 #         return nn.Sequential(*[
 #             nn.Sequential(nn.Linear(channels[i - 1], channels[i]), nn.ReLU())
 #             for i in range(1, len(channels))
-#         ])        
-      
+#         ])
+
+
 class SetAbstractionLayer(nn.Module):
     def __init__(self, ratio, radius, mlp):
         super(SetAbstractionLayer, self).__init__()
@@ -36,12 +37,17 @@ class SetAbstractionLayer(nn.Module):
     def forward(self, x, pos, batch):
         subset_indices = gnn.fps(pos, batch, self.ratio)
 
-        sparse_indices, dense_indices = gnn.radius(pos, pos[subset_indices], self.radius, batch_x=batch, batch_y=batch[subset_indices])
-        edge_index = torch.stack((dense_indices, sparse_indices), dim=0) #TODO/CARE: Indices are propagated internally? Care edge direction: a->b <=> a is in N(b)
+        sparse_indices, dense_indices = gnn.radius(
+            pos, pos[subset_indices], self.radius, batch_x=batch, batch_y=batch[subset_indices]
+        )
+        edge_index = torch.stack(
+            (dense_indices, sparse_indices), dim=0
+        )  # TODO/CARE: Indices are propagated internally? Care edge direction: a->b <=> a is in N(b)
 
         x = self.point_conv(x, (pos, pos[subset_indices]), edge_index)
 
         return x, pos[subset_indices], batch[subset_indices]
+
 
 class GlobalAbstractionLayer(nn.Module):
     def __init__(self, mlp):
@@ -54,34 +60,35 @@ class GlobalAbstractionLayer(nn.Module):
         x = gnn.global_max_pool(x, batch)
         return x
 
+
 class PointNet2(nn.Module):
     def __init__(self, num_classes, num_colors, args):
         super(PointNet2, self).__init__()
         assert args.pointnet_layers == 3 and args.pointnet_variation == 0
-       
+
         self.sa1 = SetAbstractionLayer(0.5, 0.2, get_mlp([3 + 3, 32, 64]))
         self.sa2 = SetAbstractionLayer(0.5, 0.3, get_mlp([64 + 3, 128, 128]))
-        self.sa3 = SetAbstractionLayer(0.5, 0.4, get_mlp([128 + 3, 256, 256]))   
+        self.sa3 = SetAbstractionLayer(0.5, 0.4, get_mlp([128 + 3, 256, 256]))
         self.ga = GlobalAbstractionLayer(get_mlp([256 + 3, 512, 1024]))
 
         self.lin1 = nn.Linear(1024, 512)
         self.lin2 = nn.Linear(512, 256)
-        self.class_classifier = nn.Linear(256, num_classes)   
-        self.color_classifier = nn.Linear(256, num_colors)      
+        self.class_classifier = nn.Linear(256, num_classes)
+        self.color_classifier = nn.Linear(256, num_colors)
 
         self.dim0 = 1024
         self.dim1 = 512
-        self.dim2 = 256            
-        
+        self.dim2 = 256
+
         # Slightly better but larger:
-            # self.sa1 = SetAbstractionLayer(0.5, 0.2, get_mlp([3 + 3, 32, 64], add_batchnorm=True))
-            # self.sa2 = SetAbstractionLayer(0.5, 0.3, get_mlp([64 + 3, 128, 256], add_batchnorm=True))
-            # self.sa3 = SetAbstractionLayer(0.5, 0.4, get_mlp([256 + 3, 512, 512], add_batchnorm=True))   
-            # self.ga = GlobalAbstractionLayer(get_mlp([512 + 3, 1024, 2048], add_batchnorm=True))
-            # self.lin1 = nn.Linear(2048, 1024)
-            # self.lin2 = nn.Linear(1024, 512)
-            # self.lin3 = nn.Linear(512, num_classes)            
-            
+        # self.sa1 = SetAbstractionLayer(0.5, 0.2, get_mlp([3 + 3, 32, 64], add_batchnorm=True))
+        # self.sa2 = SetAbstractionLayer(0.5, 0.3, get_mlp([64 + 3, 128, 256], add_batchnorm=True))
+        # self.sa3 = SetAbstractionLayer(0.5, 0.4, get_mlp([256 + 3, 512, 512], add_batchnorm=True))
+        # self.ga = GlobalAbstractionLayer(get_mlp([512 + 3, 1024, 2048], add_batchnorm=True))
+        # self.lin1 = nn.Linear(2048, 1024)
+        # self.lin2 = nn.Linear(1024, 512)
+        # self.lin3 = nn.Linear(512, num_classes)
+
     def forward(self, data):
         data.to(self.device)
 
@@ -91,16 +98,23 @@ class PointNet2(nn.Module):
         features0 = self.ga(x, pos, batch)
 
         # Dropout did not seem helpful
-        features1 = F.relu(self.lin1(features0))           
+        features1 = F.relu(self.lin1(features0))
         features2 = F.relu(self.lin2(features1))
         class_pred = self.class_classifier(features2)
         color_pred = self.color_classifier(features2)
 
-        return EasyDict(features0=features0, features1=features1, features2=features2, class_pred=class_pred, color_pred=color_pred)
+        return EasyDict(
+            features0=features0,
+            features1=features1,
+            features2=features2,
+            class_pred=class_pred,
+            color_pred=color_pred,
+        )
 
     @property
     def device(self):
         return next(self.lin1.parameters()).device
+
 
 if __name__ == "__main__":
     transform = T.Compose([T.NormalizeScale(), T.RandomRotate(180, axis=2)])

@@ -12,13 +12,22 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 from torch_geometric.data import Data, Batch
-import torch_geometric.transforms as T 
+import torch_geometric.transforms as T
 
-from datapreparation.kitti360.utils import CLASS_TO_LABEL, LABEL_TO_CLASS, CLASS_TO_MINPOINTS, CLASS_TO_INDEX, COLORS, COLOR_NAMES, SCENE_NAMES
+from datapreparation.kitti360.utils import (
+    CLASS_TO_LABEL,
+    LABEL_TO_CLASS,
+    CLASS_TO_MINPOINTS,
+    CLASS_TO_INDEX,
+    COLORS,
+    COLOR_NAMES,
+    SCENE_NAMES,
+)
 from datapreparation.kitti360.imports import Object3d, Cell, Pose
 from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
 from dataloading.kitti360.base import Kitti360BaseDataset
 from dataloading.kitti360.utils import batch_object_points, flip_pose_in_cell
+
 
 def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args, flip_pose=False):
     assert pose.cell_id == cell.id
@@ -37,23 +46,23 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args,
 
     # Gather offsets
     # CARE: Currently on trains on best-offsets if available (matched)!
-    if args.regressor_cell == 'pose' and args.regressor_learn == 'closest':
+    if args.regressor_cell == "pose" and args.regressor_learn == "closest":
         offsets = np.array([descr.offset_closest for descr in descriptions])[:, 0:2]
-    if args.regressor_cell == 'pose' and args.regressor_learn == 'center':
-        offsets = np.array([descr.offset_center for descr in descriptions])[:, 0:2]            
-    if args.regressor_cell == 'best' and args.regressor_learn == 'closest':
+    if args.regressor_cell == "pose" and args.regressor_learn == "center":
+        offsets = np.array([descr.offset_center for descr in descriptions])[:, 0:2]
+    if args.regressor_cell == "best" and args.regressor_learn == "closest":
         # offsets = np.array([descr.best_offset_closest for descr in descriptions])[:, 0:2]
         offsets = []
         for i_descr, descr in enumerate(descriptions):
-            if descr.is_matched: 
+            if descr.is_matched:
                 offsets.append(descr.best_offset_closest[0:2])
             else:
                 offsets.append(descr.offset_closest[0:2])
-    if args.regressor_cell == 'best' and args.regressor_learn == 'center':
-        # offsets = np.array([descr.best_offset_center for descr in descriptions])[:, 0:2]                
+    if args.regressor_cell == "best" and args.regressor_learn == "center":
+        # offsets = np.array([descr.best_offset_center for descr in descriptions])[:, 0:2]
         offsets = []
         for i_descr, descr in enumerate(descriptions):
-            if descr.is_matched: 
+            if descr.is_matched:
                 offsets.append(descr.best_offset_center[0:2])
             else:
                 offsets.append(descr.offset_center[0:2])
@@ -68,26 +77,25 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args,
         else:
             offsets_best_center.append(descr.offset_center[0:2])
 
-
     # print()
     # print(offsets.dtype)
     # print(offsets)
     offsets_valid = np.sum(np.isnan(offsets)) == 0
 
-    # offsets = np.array([descr.offset_center for descr in descriptions])[:, 0:2]  
+    # offsets = np.array([descr.offset_center for descr in descriptions])[:, 0:2]
 
     # Gather matched objects
-    objects, matches = [], [] # Matches as [(obj_idx, hint_idx)]
+    objects, matches = [], []  # Matches as [(obj_idx, hint_idx)]
     for i_descr, descr in enumerate(descriptions):
         if descr.is_matched:
             hint_obj = cell_objects_dict[descr.object_id]
             assert hint_obj.instance_id == descr.object_instance_id
             objects.append(hint_obj)
-            
+
             obj_idx = len(objects) - 1
             hint_idx = i_descr
             matches.append((obj_idx, hint_idx))
-            
+
     # Gather distractors, i.e. remaining objects
     for obj in cell.objects:
         if obj.id not in matched_ids:
@@ -96,7 +104,9 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args,
         print([obj.id for obj in objects])
         print([obj.id for obj in cell.objects])
         print(matched_ids)
-    assert len(objects) == len(cell.objects), f"Not all cell-objects have been gathered! {len(objects)}, {len(cell.objects)}, {cell.id}"
+    assert len(objects) == len(
+        cell.objects
+    ), f"Not all cell-objects have been gathered! {len(objects)}, {len(cell.objects)}, {cell.id}"
 
     # # Gather mentioned objects, matches and offsets
     # objects, matches, offsets = [], [], []
@@ -115,7 +125,7 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args,
 
     # Pad or cut-off distractors (CARE: the latter would use ground-truth data!)
     if len(objects) > pad_size:
-        objects = objects[0 : pad_size]
+        objects = objects[0:pad_size]
 
     while len(objects) < pad_size:
         obj = Object3d.create_padding()
@@ -128,21 +138,25 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args,
     # Add unmatched hints
     for i_descr, descr in enumerate(descriptions):
         if not descr.is_matched:
-            obj_idx = len(objects) # Match to objects-side bin
+            obj_idx = len(objects)  # Match to objects-side bin
             hint_idx = i_descr
             all_matches.append((obj_idx, hint_idx))
 
     # Add unmatched objects
     for obj_idx, obj in enumerate(objects):
         if obj.id not in matched_ids:
-            hint_idx = len(descriptions) # Match to hints-side bin
+            hint_idx = len(descriptions)  # Match to hints-side bin
             all_matches.append((obj_idx, hint_idx))
 
     matches, all_matches = np.array(matches), np.array(all_matches)
     assert len(matches) == len(matched_ids)
     assert len(all_matches) == len(objects) + len(descriptions) - len(matches)
-    assert np.sum(all_matches[:, 1] == len(descriptions)) == len(objects) - len(matched_ids) # Binned objects
-    assert np.sum(all_matches[:, 0] == len(objects)) == len(descriptions) - len(matched_ids) # Binned hints
+    assert np.sum(all_matches[:, 1] == len(descriptions)) == len(objects) - len(
+        matched_ids
+    )  # Binned objects
+    assert np.sum(all_matches[:, 0] == len(objects)) == len(descriptions) - len(
+        matched_ids
+    )  # Binned hints
 
     # for i in range(len(objects)):
     #     if objects[i].id not in mentioned_ids:
@@ -150,36 +164,41 @@ def load_pose_and_cell(pose: Pose, cell: Cell, hints, pad_size, transform, args,
     # matches, all_matches = np.array(matches), np.array(all_matches)
     # assert np.sum(all_matches[:, 1] == len(descriptions)) == len(objects) - len(descriptions)
 
-    text = ' '.join(hints)
+    text = " ".join(hints)
 
     # TODO: flip here. This does not affect the the order and matches.
     # Flip objects, hint_descriptions, object_points, offsets, pose
     if flip_pose:
-        if np.random.choice((True,False)):
-            pose, cell, text, hints, offsets = flip_pose_in_cell(pose, cell, text, 1, hints, offsets) # Horizontal
-        if np.random.choice((True,False)):
-            pose, cell, text, hints, offsets = flip_pose_in_cell(pose, cell, text, -1, hints, offsets) # Vertical
+        if np.random.choice((True, False)):
+            pose, cell, text, hints, offsets = flip_pose_in_cell(
+                pose, cell, text, 1, hints, offsets
+            )  # Horizontal
+        if np.random.choice((True, False)):
+            pose, cell, text, hints, offsets = flip_pose_in_cell(
+                pose, cell, text, -1, hints, offsets
+            )  # Vertical
 
     object_points = batch_object_points(objects, transform)
 
     object_class_indices = [CLASS_TO_INDEX[obj.label] for obj in objects]
-    object_color_indices = [COLOR_NAMES.index(obj.get_color_text()) for obj in objects]        
+    object_color_indices = [COLOR_NAMES.index(obj.get_color_text()) for obj in objects]
 
     return {
-        'poses': pose,
-        'cells': cell,
-        'objects': objects,
-        'object_points': object_points,
-        'hint_descriptions': hints,
-        'texts': text,
-        'matches': matches,
-        'all_matches': all_matches,
-        'offsets': np.array(offsets),
-        'offsets_best_center': np.array(offsets_best_center),
+        "poses": pose,
+        "cells": cell,
+        "objects": objects,
+        "object_points": object_points,
+        "hint_descriptions": hints,
+        "texts": text,
+        "matches": matches,
+        "all_matches": all_matches,
+        "offsets": np.array(offsets),
+        "offsets_best_center": np.array(offsets_best_center),
         # 'offsets_valid': offsets_valid,
-        'object_class_indices': object_class_indices,
-        'object_color_indices': object_color_indices
-    }            
+        "object_class_indices": object_class_indices,
+        "object_color_indices": object_color_indices,
+    }
+
 
 class Kitti360FineDataset(Kitti360BaseDataset):
     def __init__(self, base_path, scene_name, transform, args, flip_pose=False):
@@ -193,8 +212,10 @@ class Kitti360FineDataset(Kitti360BaseDataset):
         pose = self.poses[idx]
         cell = self.cells_dict[pose.cell_id]
         hints = self.hint_descriptions[idx]
-        
-        return load_pose_and_cell(pose, cell, hints, self.pad_size, self.transform, self.args, flip_pose=self.flip_pose)
+
+        return load_pose_and_cell(
+            pose, cell, hints, self.pad_size, self.transform, self.args, flip_pose=self.flip_pose
+        )
 
     def __len__(self):
         return len(self.poses)
@@ -203,16 +224,22 @@ class Kitti360FineDataset(Kitti360BaseDataset):
         batch = {}
         for key in data[0].keys():
             batch[key] = [data[i][key] for i in range(len(data))]
-        return batch         
+        return batch
+
 
 class Kitti360FineDatasetMulti(Dataset):
     def __init__(self, base_path, scene_names, transform, args, flip_pose=False):
         self.scene_names = scene_names
         self.flip_pose = flip_pose
-        self.datasets = [Kitti360FineDataset(base_path, scene_name, transform, args, flip_pose) for scene_name in scene_names]
-        
-        self.all_poses = [pose for dataset in self.datasets for pose in dataset.poses] # For stats
-        self.all_cells = [cell for dataset in self.datasets for cell in dataset.cells] # For eval stats
+        self.datasets = [
+            Kitti360FineDataset(base_path, scene_name, transform, args, flip_pose)
+            for scene_name in scene_names
+        ]
+
+        self.all_poses = [pose for dataset in self.datasets for pose in dataset.poses]  # For stats
+        self.all_cells = [
+            cell for dataset in self.datasets for cell in dataset.cells
+        ]  # For eval stats
 
         print(str(self))
 
@@ -228,8 +255,10 @@ class Kitti360FineDatasetMulti(Dataset):
 
     def __repr__(self):
         poses = np.array([pose.pose_w for pose in self.all_poses])
-        num_poses = len(np.unique(poses, axis=0)) # CARE: Might be possible that is is slightly inaccurate if there are actually overlaps        
-        return f'Kitti360FineDatasetMulti: {len(self)} descriptions for {num_poses} unique poses from {len(self.datasets)} scenes, {len(self.all_cells)} cells, flip: {self.flip_pose}.'
+        num_poses = len(
+            np.unique(poses, axis=0)
+        )  # CARE: Might be possible that is is slightly inaccurate if there are actually overlaps
+        return f"Kitti360FineDatasetMulti: {len(self)} descriptions for {num_poses} unique poses from {len(self.datasets)} scenes, {len(self.all_cells)} cells, flip: {self.flip_pose}."
 
     def __len__(self):
         return np.sum([len(ds) for ds in self.datasets])
@@ -244,14 +273,22 @@ class Kitti360FineDatasetMulti(Dataset):
         known_classes = []
         for ds in self.datasets:
             known_classes.extend(ds.get_known_classes())
-        return list(np.unique(known_classes))          
-        
-if __name__ == '__main__':
-    base_path = './data/k360_cs30_cd30_pd30_shTrue'
-    folder_name = '2013_05_28_drive_0003_sync'    
-    
-    args = EasyDict(pad_size=8, num_mentioned=6)    
+        return list(np.unique(known_classes))
+
+
+if __name__ == "__main__":
+    base_path = "./data/k360_cs30_cd30_pd30_shTrue"
+    folder_name = "2013_05_28_drive_0003_sync"
+
+    args = EasyDict(pad_size=8, num_mentioned=6)
     transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale()])
 
-    dataset = Kitti360FineDatasetMulti(base_path, [folder_name, ], transform, args)
+    dataset = Kitti360FineDatasetMulti(
+        base_path,
+        [
+            folder_name,
+        ],
+        transform,
+        args,
+    )
     data = dataset[0]

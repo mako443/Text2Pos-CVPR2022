@@ -24,8 +24,7 @@ class SAModule(torch.nn.Module):
 
     def forward(self, x, pos, batch):
         idx = fps(pos, batch, ratio=self.ratio)
-        row, col = radius(pos, pos[idx], self.r, batch, batch[idx],
-                          max_num_neighbors=64)
+        row, col = radius(pos, pos[idx], self.r, batch, batch[idx], max_num_neighbors=64)
         edge_index = torch.stack([col, row], dim=0)
         x = self.conv(x, (pos, pos[idx]), edge_index)
         pos, batch = pos[idx], batch[idx]
@@ -46,10 +45,12 @@ class GlobalSAModule(torch.nn.Module):
 
 
 def MLP(channels, batch_norm=True):
-    return Seq(*[
-        Seq(Lin(channels[i - 1], channels[i]), ReLU(), BN(channels[i]))
-        for i in range(1, len(channels))
-    ])
+    return Seq(
+        *[
+            Seq(Lin(channels[i - 1], channels[i]), ReLU(), BN(channels[i]))
+            for i in range(1, len(channels))
+        ]
+    )
 
 
 class Net(torch.nn.Module):
@@ -107,40 +108,35 @@ def test(loader):
     return correct / len(loader.dataset)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # path = osp.join(
     #     osp.dirname(osp.realpath(__file__)), '..', 'data/ModelNet10')
     # pre_transform, transform = T.NormalizeScale(), T.SamplePoints(1024)
     # train_dataset = ModelNet(path, '10', True, transform, pre_transform)
     # test_dataset = ModelNet(path, '10', False, transform, pre_transform)
 
-    train_dataset = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d')
-    test_dataset = Semantic3dObjectDataset('./data/numpy_merged/', './data/semantic3d')
+    train_dataset = Semantic3dObjectDataset("./data/numpy_merged/", "./data/semantic3d")
+    test_dataset = Semantic3dObjectDataset("./data/numpy_merged/", "./data/semantic3d")
 
-    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True,
-                              num_workers=2)
-    test_loader = DataLoader(test_dataset, batch_size=8, shuffle=False,
-                             num_workers=2)
+    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=2)
+    test_loader = DataLoader(test_dataset, batch_size=8, shuffle=False, num_workers=2)
 
     learning_reates = np.logspace(-2.5, -3.5, 4)
-    dict_loss = {lr: [] for lr in learning_reates}    
+    dict_loss = {lr: [] for lr in learning_reates}
     dict_acc = {lr: [] for lr in learning_reates}
 
     for lr in learning_reates:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = Net().to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
         for epoch in range(0, 3):
             loss = train(epoch)
             acc = test(test_loader)
-            print(f'Epoch {epoch} loss {loss:0.2f} acc {acc: 0.2f}')
+            print(f"Epoch {epoch} loss {loss:0.2f} acc {acc: 0.2f}")
             dict_loss[lr].append(loss)
             dict_acc[lr].append(acc)
 
-    plot_name = f'PN2_verify.png'
-    metrics = {
-        'train-loss': dict_loss,
-        'train-acc': dict_acc        
-    }
-    plot_metrics(metrics, './plots/'+plot_name)         
+    plot_name = f"PN2_verify.png"
+    metrics = {"train-loss": dict_loss, "train-acc": dict_acc}
+    plot_metrics(metrics, "./plots/" + plot_name)

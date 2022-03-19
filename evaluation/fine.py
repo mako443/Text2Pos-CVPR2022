@@ -6,7 +6,7 @@ import time
 
 import torch
 from torch.utils.data import DataLoader
-import torch_geometric.transforms as T 
+import torch_geometric.transforms as T
 
 from evaluation.args import parse_arguments
 from evaluation.utils import calc_sample_accuracies, print_accuracies
@@ -14,6 +14,7 @@ from evaluation.utils import calc_sample_accuracies, print_accuracies
 from dataloading.kitti360.poses import Kitti360FineDataset, Kitti360FineDatasetMulti
 from dataloading.kitti360.eval import Kitti360FineEvalDataset
 from datapreparation.kitti360.utils import SCENE_NAMES_TEST, SCENE_NAMES_VAL
+
 # from training.fine import eval_epoch as eval_epoch_fine
 from training.losses import calc_pose_error
 from training.losses import calc_recall_precision
@@ -23,79 +24,134 @@ from training.utils import plot_matches
 @torch.no_grad()
 def run_fine(model, dataloader):
     stats = EasyDict(
-        recall = [],
-        precision = [],
-        mid = [],
-        mean = [],
-        offsets = [],
-        matching_oracle = [],
-        offset_oracle = [],
-        both_oracle = []
+        recall=[],
+        precision=[],
+        mid=[],
+        mean=[],
+        offsets=[],
+        matching_oracle=[],
+        offset_oracle=[],
+        both_oracle=[],
     )
     stats_thresh = {
-        'mid': {t: [] for t in args.threshs},
-        'mean': {t: [] for t in args.threshs},
-        'offsets': {t: [] for t in args.threshs},
-        'matching_oracle': {t: [] for t in args.threshs},
-        'offset_oracle': {t: [] for t in args.threshs},
-        'both_oracle': {t: [] for t in args.threshs},
+        "mid": {t: [] for t in args.threshs},
+        "mean": {t: [] for t in args.threshs},
+        "offsets": {t: [] for t in args.threshs},
+        "matching_oracle": {t: [] for t in args.threshs},
+        "offset_oracle": {t: [] for t in args.threshs},
+        "both_oracle": {t: [] for t in args.threshs},
     }
 
     pred_matches = []
     for i_batch, batch in enumerate(dataloader):
-        output = model(batch['objects'], batch['hint_descriptions'], batch['object_points'])
+        output = model(batch["objects"], batch["hint_descriptions"], batch["object_points"])
         # for i in range(len(batch['objects'])):
-            # print(f"Running pose {batch['poses'][i].pose_w} vs {batch['cells'][i].id}")
+        # print(f"Running pose {batch['poses'][i].pose_w} vs {batch['cells'][i].id}")
 
         print(f"Running pose {batch['poses'][0].pose_w} vs {batch['cells'][0].id}")
         print(output.matches0[0])
         print(output.offsets[0])
-        print(batch['objects'][0])
+        print(batch["objects"][0])
         print()
         quit()
-        
+
         for key in output:
             output[key] = output[key].cpu().detach().numpy()
 
         for matches in output.matches0:
             pred_matches.append(matches)
 
-        recall, precision = calc_recall_precision(batch['matches'], output.matches0, output.matches1)
+        recall, precision = calc_recall_precision(
+            batch["matches"], output.matches0, output.matches1
+        )
         stats.recall.append(recall)
         stats.precision.append(precision)
 
-        stats.mid.append(calc_pose_error(batch['objects'], output.matches0, batch['poses'], output.offsets, use_mid_pred=True))
-        stats.mean.append(calc_pose_error(batch['objects'], output.matches0, batch['poses'], np.zeros_like(output.offsets)))
-        stats.offsets.append(calc_pose_error(batch['objects'], output.matches0, batch['poses'], output.offsets))
+        stats.mid.append(
+            calc_pose_error(
+                batch["objects"], output.matches0, batch["poses"], output.offsets, use_mid_pred=True
+            )
+        )
+        stats.mean.append(
+            calc_pose_error(
+                batch["objects"], output.matches0, batch["poses"], np.zeros_like(output.offsets)
+            )
+        )
+        stats.offsets.append(
+            calc_pose_error(batch["objects"], output.matches0, batch["poses"], output.offsets)
+        )
 
         # Build gt-matches
-        gt_matches = np.ones_like(output.matches0) * -1 # -1 to put all as negative
-        for i_sample, sample_matches in enumerate(batch['matches']):
+        gt_matches = np.ones_like(output.matches0) * -1  # -1 to put all as negative
+        for i_sample, sample_matches in enumerate(batch["matches"]):
             for (obj_idx, hint_idx) in sample_matches:
                 gt_matches[i_sample][obj_idx] = hint_idx
-        stats.matching_oracle.append(calc_pose_error(batch['objects'], gt_matches, batch['poses'], output.offsets))
+        stats.matching_oracle.append(
+            calc_pose_error(batch["objects"], gt_matches, batch["poses"], output.offsets)
+        )
 
         # Use gt-offsets
-        stats.offset_oracle.append(calc_pose_error(batch['objects'], output.matches0, batch['poses'], batch['offsets_best_center'])) # Now using best_center
+        stats.offset_oracle.append(
+            calc_pose_error(
+                batch["objects"], output.matches0, batch["poses"], batch["offsets_best_center"]
+            )
+        )  # Now using best_center
 
-        stats.both_oracle.append(calc_pose_error(batch['objects'], gt_matches, batch['poses'], batch['offsets_best_center'])) # # Now using best_center
+        stats.both_oracle.append(
+            calc_pose_error(
+                batch["objects"], gt_matches, batch["poses"], batch["offsets_best_center"]
+            )
+        )  # # Now using best_center
 
         batch_errors = EasyDict(
-            mid = calc_pose_error(batch['objects'], output.matches0, batch['poses'], output.offsets, use_mid_pred=True, return_samples=True),
-            mean = calc_pose_error(batch['objects'], output.matches0, batch['poses'], np.zeros_like(output.offsets), return_samples=True),
-            offsets = calc_pose_error(batch['objects'], output.matches0, batch['poses'], output.offsets, return_samples=True),
-            matching_oracle = calc_pose_error(batch['objects'], gt_matches, batch['poses'], output.offsets, return_samples=True),
-            offset_oracle = calc_pose_error(batch['objects'], output.matches0, batch['poses'], batch['offsets_best_center'], return_samples=True),
-            both_oracle = calc_pose_error(batch['objects'], gt_matches, batch['poses'], batch['offsets_best_center'], return_samples=True),
+            mid=calc_pose_error(
+                batch["objects"],
+                output.matches0,
+                batch["poses"],
+                output.offsets,
+                use_mid_pred=True,
+                return_samples=True,
+            ),
+            mean=calc_pose_error(
+                batch["objects"],
+                output.matches0,
+                batch["poses"],
+                np.zeros_like(output.offsets),
+                return_samples=True,
+            ),
+            offsets=calc_pose_error(
+                batch["objects"],
+                output.matches0,
+                batch["poses"],
+                output.offsets,
+                return_samples=True,
+            ),
+            matching_oracle=calc_pose_error(
+                batch["objects"], gt_matches, batch["poses"], output.offsets, return_samples=True
+            ),
+            offset_oracle=calc_pose_error(
+                batch["objects"],
+                output.matches0,
+                batch["poses"],
+                batch["offsets_best_center"],
+                return_samples=True,
+            ),
+            both_oracle=calc_pose_error(
+                batch["objects"],
+                gt_matches,
+                batch["poses"],
+                batch["offsets_best_center"],
+                return_samples=True,
+            ),
         )
-        cell_size = batch['cells'][0].cell_size
+        cell_size = batch["cells"][0].cell_size
         for stat_name, errors in batch_errors.items():
             for t in args.threshs:
-                stats_thresh[stat_name][t].extend([err*cell_size <= t for err in errors])
+                stats_thresh[stat_name][t].extend([err * cell_size <= t for err in errors])
 
     if args.plot_matches:
         plot_matches(pred_matches, dataloader.dataset)
-    
+
     for key in stats:
         stats[key] = np.mean(stats[key])
 
@@ -105,24 +161,32 @@ def run_fine(model, dataloader):
     return stats, stats_thresh
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = parse_arguments()
-    print(str(args).replace(',','\n'), '\n')
+    print(str(args).replace(",", "\n"), "\n")
 
     if args.no_pc_augment:
         transform = T.FixedPoints(args.pointnet_numpoints)
     else:
-        transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])  
+        transform = T.Compose([T.FixedPoints(args.pointnet_numpoints), T.NormalizeScale()])
 
     # Load original dataset to load the poses and cells
     if args.use_test_set:
-        dataset_fine = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_TEST, transform, args, flip_pose=False)
+        dataset_fine = Kitti360FineDatasetMulti(
+            args.base_path, SCENE_NAMES_TEST, transform, args, flip_pose=False
+        )
     else:
-        dataset_fine = Kitti360FineDatasetMulti(args.base_path, SCENE_NAMES_VAL, transform, args, flip_pose=False)
+        dataset_fine = Kitti360FineDatasetMulti(
+            args.base_path, SCENE_NAMES_VAL, transform, args, flip_pose=False
+        )
 
     # Load the eval dataset
-    dataset_eval = Kitti360FineEvalDataset(dataset_fine.all_poses, dataset_fine.all_cells, transform, args)
-    dataloader_eval = DataLoader(dataset_eval, batch_size=args.batch_size, collate_fn=Kitti360FineEvalDataset.collate_fn)
+    dataset_eval = Kitti360FineEvalDataset(
+        dataset_fine.all_poses, dataset_fine.all_cells, transform, args
+    )
+    dataloader_eval = DataLoader(
+        dataset_eval, batch_size=args.batch_size, collate_fn=Kitti360FineEvalDataset.collate_fn
+    )
     # dataset_fine = Kitti360FineDatasetMulti(args.base_path, ['2013_05_28_drive_0003_sync', ], transform, args, flip_pose=False)
     # dataloader_fine = DataLoader(dataset_fine, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn)
 
@@ -131,12 +195,12 @@ if __name__ == '__main__':
     # stats, stats_thresh = run_fine(model_matching, dataloader_fine)
     stats, stats_thresh = run_fine(model_matching, dataloader_eval)
     for key in stats:
-        print(f'{key}: {stats[key]:0.3}')
+        print(f"{key}: {stats[key]:0.3}")
     print()
     for key in stats_thresh:
-        print(f'{key}:')
-        print('/'.join([str(t) for t in args.threshs]) + ': ')
-        print('/'.join([f'{stats_thresh[key][t]:0.2f}' for t in args.threshs]))
+        print(f"{key}:")
+        print("/".join([str(t) for t in args.threshs]) + ": ")
+        print("/".join([f"{stats_thresh[key][t]:0.2f}" for t in args.threshs]))
         print()
 
 # @torch.no_grad()
@@ -157,7 +221,7 @@ if __name__ == '__main__':
 #     offsets = []
 #     for i_batch, batch in enumerate(dataloader):
 #         output = model(batch['objects'], batch['hint_descriptions'], batch['object_points'])
-        
+
 #         matches.append(output.matches0.cpu().detach().numpy())
 #         offsets.append(output.offsets.detach().cpu().numpy())
 #         recall, precision = calc_recall_precision(batch['matches'], output.matches0.cpu().detach().numpy(), output.matches1.cpu().detach().numpy())
@@ -193,7 +257,7 @@ if __name__ == '__main__':
 #             if obj_idx < len(matches[i_sample]):
 #                 gt_matches[obj_idx] = hint_idx
 #         pos_matching_oracle = get_pos_in_cell(cell_objects, gt_matches, offsets[i_sample])
-    
+
 #         # Build offset oracle
 #         pos_offsets_oracle = get_pos_in_cell(cell_objects, matches[i_sample], data['offsets'])
 
