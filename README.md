@@ -14,6 +14,7 @@ sklearn
 matplotlib
 cv2
 open3d
+plyfile
 torch
 torch_geometric
 ```

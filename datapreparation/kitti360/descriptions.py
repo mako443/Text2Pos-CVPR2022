@@ -1,3 +1,4 @@
+from multiprocessing.sharedctypes import Value
 from typing import List
 import numpy as np
 from sklearn.cluster import DBSCAN
@@ -82,15 +83,30 @@ def create_synthetic_cell(
 
 
 def create_cell(
-    cell_idx,
-    scene_name,
-    bbox_w,
+    cell_idx: int,
+    scene_name: str,
+    bbox_w: np.ndarray,
     scene_objects: List[Object3d],
     num_mentioned=6,
     inside_fraction=1 / 3,
     stuff_min=250,
     all_cells=False,
-):  # Before: 500
+) -> Cell:
+    """Create the cell instance for a given bounding box.
+
+    Args:
+        cell_idx (int): Global running index
+        scene_name (str): Scene name
+        bbox_w (np.ndarray): BBox as [xmin, ymin, zmin, xmax, ymax, zmax]
+        scene_objects (List[Object3d]): All objects of the scene
+        num_mentioned (int, optional): How many objects to mention as hints, returns None if cell has less objects. Defaults to 6.
+        inside_fraction (float, optional): How many points of an instance object have to be inside the BBox. Defaults to 1/3.
+        stuff_min (int, optional): How many points of a stuff object have to remain inside the cell after clustering. Defaults to 250.
+        all_cells (bool, optional): Keep cells even if have less than num_mentioned objects. Defaults to False.
+
+    Returns:
+        Cell: _description_
+    """
     cell_objects = []
     for obj in scene_objects:
         assert obj.id < 1e7
@@ -134,8 +150,21 @@ def create_cell(
 
 
 def describe_pose_in_pose_cell(
-    pose_w, cell: Cell, select_by, num_mentioned, max_dist=0.5, no_ontop=False
+    pose_w: np.ndarray, cell: Cell, select_by, num_mentioned, max_dist=0.5, no_ontop=False
 ) -> List[DescriptionPoseCell]:
+    """Describes a pose in a given cell.
+
+    Args:
+        pose_w (np.ndarray): Pose in world coordinates
+        cell (Cell): Cell object
+        select_by (str): How to select the objects to use for hints.
+        num_mentioned (int): How many objects to mention.
+        max_dist (float, optional): How far an object can be from the pose relative to the cell-size. Defaults to 0.5.
+        no_ontop (bool, optional): Do not use the "on-top" direction. Defaults to False.
+
+    Returns:
+        List[DescriptionPoseCell]: List of DescriptionPoseCell structs. Can be used to create the actual text.
+    """
     # Assert pose is close to cell_center
     # assert np.allclose(pose_w, cell.get_center())
     assert (
@@ -160,6 +189,8 @@ def describe_pose_in_pose_cell(
         selected_objects = select_objects_class(candidates, pose, num_mentioned)
     elif select_by == "random":
         selected_objects = select_objects_random(candidates, pose, num_mentioned)
+    else:
+        raise ValueError(f"Invalid selection method: {select_by}.")
 
     descriptions = []
     for obj in selected_objects:
@@ -185,6 +216,23 @@ def ground_pose_to_best_cell(
     cell: Cell,
     all_cells=False,
 ) -> List[DescriptionBestCell]:
+    """Ground a pose to the best-fitting cell in the dataset for performance evaluation.
+    There are two types of cells: A "Pose Cell" is created around the pose with the pose in its center
+    to form the original description, "Pose Cells" are not part of the actual dataset. 
+    A "Best Cell" however is the cell of the actual dataset that is closest to the pose. 
+    It is located without regarding the location of the poses. 
+    For some evaluations, it is needed to view the pose in the context of the best cell.
+
+    Args:
+        pose_w (np.ndarray): Pose in world coordinates
+        pose_cell_descriptions (List[DescriptionPoseCell]): Output of describe_pose_in_pose_cell
+        cell (Cell): Best cell
+        all_cells (bool, optional): The dataset was created using the all_cells option in describe_pose_in_pose_cell. Defaults to False.
+
+    Returns:
+        List[DescriptionBestCell]: List of DescriptionBestCell instances
+    """
+
     # Assert cell is valid for this pose
     assert np.all(pose_w >= cell.bbox_w[0:3]) and np.all(
         pose_w <= cell.bbox_w[3:6]

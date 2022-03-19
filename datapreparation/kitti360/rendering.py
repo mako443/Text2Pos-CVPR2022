@@ -1,3 +1,6 @@
+"""Module for rendering a scene for debugging and investigation.
+"""
+
 import numpy as np
 import pickle
 import os

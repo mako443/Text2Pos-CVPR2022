@@ -1,3 +1,6 @@
+"""Utilities for data preparation.
+"""
+
 import numpy as np
 
 SCENE_NAMES = [
@@ -180,29 +183,6 @@ STUFF_CLASSES = [
 ]
 
 LABEL_TO_CLASS = {v: k for k, v in CLASS_TO_LABEL.items()}
-
-# COLORS = np.array([
-#     [0, 0, 0],
-#     [128, 128, 128],
-#     [255, 255, 255],
-#     [255, 0, 0],
-#     [0, 255, 0],
-#     [0, 0, 255],
-#     [255, 255, 0],
-#     [255, 0, 255],
-#     [0, 255, 255]
-# ])
-# COLOR_NAMES = [
-#     'black',
-#     'grey',
-#     'white',
-#     'red',
-#     'green',
-#     'blue',
-#     'yellow',
-#     'purple',
-#     'turquoise'
-# ]
 
 COLORS = (
     np.array(

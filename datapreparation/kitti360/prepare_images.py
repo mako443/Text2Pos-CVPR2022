@@ -1,3 +1,6 @@
+"""Module to extract original (real-world, non-point-cloud) images and corresponding poses out of Kitti360
+"""
+
 from typing import List
 
 import os
@@ -10,14 +13,6 @@ import time
 from shutil import copyfile
 
 from scipy.spatial.distance import cdist
-
-"""
-TODO
-- Split into DB / Query right away for cleanup, add to dataset-name
-    - dataset/real-rendered/db-query
-    - db-dist, query-dist, step only every 4th or something
-- Interpolate orientations based on *all* poses    
-"""
 
 
 def sample_poses(path_poses, pose_distance):
@@ -120,21 +115,3 @@ if __name__ == "__main__":
     os.makedirs(path_out)
 
     create_poses_and_images(path_poses, path_images, path_out, db_dist, query_dist)
-
-    # poses, orientations, image_names = sample_poses(path_poses, pose_dist)
-    # print(f'Num poses: {len(poses)}')
-
-    # # Save / copy data
-    # os.mkdir(path_out)
-
-    # with open(osp.join(path_out, 'poses.pkl'), 'wb') as f:
-    #     pickle.dump(poses, f)
-    # with open(osp.join(path_out, 'orientations.pkl'), 'wb') as f:
-    #     pickle.dump(orientations, f)
-
-    # os.mkdir(osp.join(path_out, 'image_00'))
-    # for target_name, image_name in enumerate(image_names):
-    #     path_src = osp.join(path_images, 'image_00', 'data_rect', f'{image_name:010.0f}.png')
-    #     path_dst = osp.join(path_out, 'image_00', f'{target_name:04.0f}.png')
-    #     copyfile(path_src, path_dst)
-    # print('DONE.')

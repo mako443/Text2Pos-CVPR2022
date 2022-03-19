@@ -1,3 +1,6 @@
+"""Module to prepare the original Kitti360 into Kitti360Pose
+"""
+
 from typing import List
 
 import cv2
@@ -40,18 +43,6 @@ from datapreparation.kitti360.descriptions import (
     ground_pose_to_best_cell,
 )
 from datapreparation.args import parse_arguments
-
-"""
-DONE:
-- Use closest point instead of center for description and plot?? Say 'on-top' if small distance => Seems good ✓
-
-TODO:
-- Say "inside" or something for buildings (instead of "on-top")
-- Set some color names -.-
-- How to handle multiple identical objects in matching? Remove from cell?
-- Use "smarter" colors? E.g. top 1 or 2 histogram-buckets
-"""
-
 
 def show(img_or_name, img=None):
     if img is not None:
@@ -113,6 +104,8 @@ def extract_objects(xyz, rgb, lbl, iid):
 
 
 def gather_objects(path_input, folder_name):
+    """Gather the objects of a scene
+    """
     print(f"Loading objects for {folder_name}")
 
     path = osp.join(path_input, "data_3d_semantics", folder_name, "static")
@@ -157,23 +150,17 @@ def gather_objects(path_input, folder_name):
     print(thresh_counts)
 
     return objects_threshed
-    # return list(scene_objects.values())
 
-
-# TODO: just sample on a grid ;)
 def get_close_locations(
     locations: List[np.ndarray], scene_objects: List[Object3d], cell_size, location_objects=None
 ):
     """Retains all locations that are at most cell_size / 2 distant from an instance-object.
 
     Args:
-        locations (List[np.ndarray]): [description]
-        scene_objects (List[Object3d]): [description]
-        cell_size ([type]): [description]
-        location_objects ([type], optional): [description]. Defaults to None.
-
-    Returns:
-        [type]: [description]
+        locations (List[np.ndarray]): Pose locations
+        scene_objects (List[Object3d]): All objects in the scene
+        cell_size ([type]): Size of a cell
+        location_objects (optional): Location objects to plot for debugging. Defaults to None.
     """
     instance_objects = [obj for obj in scene_objects if obj.label not in STUFF_CLASSES]
     close_locations, close_location_objects = [], []
@@ -199,6 +186,8 @@ def get_close_locations(
 
 
 def create_locations(path_input, folder_name, location_distance, return_location_objects=False):
+    """Sample locations along the original trajectories with at least location_distance between any two locations.
+    """
     path = osp.join(path_input, "data_poses", folder_name, "poses.txt")
     poses = np.loadtxt(path)
     poses = poses[:, 1:].reshape((-1, 3, 4))  # Convert to 3x4 matrices
@@ -225,6 +214,8 @@ def create_locations(path_input, folder_name, location_distance, return_location
 
 
 def create_cells(objects, locations, scene_name, cell_size, args) -> List[Cell]:
+    """Create the cells of the scene.
+    """
     print("Creating cells...")
     cells = []
     none_indices = []
@@ -316,20 +307,15 @@ def create_cells(objects, locations, scene_name, cell_size, args) -> List[Cell]:
     else:
         return True, cells
 
-
-# TODO: Simpler formulation with deleting objects? How would I gather the objects for describing?
 def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) -> List[Pose]:
-    """[summary]
+    """Create the poses of a scene.
     Create cells -> sample pose location -> describe with pose-cell -> convert description to best-cell for training
 
     Args:
-        objects (List[Object3d]): [description]
-        locations ([type]): [description]
-        cells (List[Cell]): [description]
-        scene_name ([type]): [description]
-
-    Returns:
-        [type]: [description]
+        objects (List[Object3d]): Objects of the scene, needed to verify enough objects a close to a given pose.
+        locations: Locations of the original trajectory around which to sample the poses.
+        cells (List[Cell]): List of cells
+        scene_name: Name of the scene
     """
     print("Creating poses...")
     poses = []
@@ -492,7 +478,6 @@ if __name__ == "__main__":
 
     t_close_locations = time.time()
 
-    # [45:46]
     t0 = time.time()
     res, cells = create_cells(objects, cell_locations, args.scene_name, args.cell_size, args)
     assert res is True, "Too many cell nones, quitting."
@@ -501,26 +486,8 @@ if __name__ == "__main__":
 
     t_cells_created = time.time()
 
-    # [65:66]
     res, poses = create_poses(objects, pose_locations, cells, args)
     assert res is True, "Too many pose nones, quitting."
-
-    """
-    # Debug
-    cells_dict = {cell.id: cell for cell in cells}
-    pose = poses[0]
-    best_cell = cells_dict[pose.cell_id]
-    img_best = plot_pose_in_best_cell(best_cell, pose)
-
-    pose_cell_bbox = np.hstack((pose.pose_w - args.cell_size/2, pose.pose_w + args.cell_size/2))
-    pose_cell = create_cell(-1, "pose", pose_cell_bbox, objects)   
-    descriptions = describe_pose_in_pose_cell(pose.pose_w, pose_cell, args.describe_by, args.num_mentioned) 
-    descriptions, pose_in_cell, num_unmatched = ground_pose_to_best_cell(pose.pose_w, descriptions, pose_cell)
-    pose_pose = Pose(pose_in_cell, pose.pose_w, best_cell.id, best_cell.scene_name, descriptions)
-    img_pose = plot_pose_in_best_cell(pose_cell, pose_pose)
-
-    quit()
-    """
 
     t_poses_created = time.time()
 

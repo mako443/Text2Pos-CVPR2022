@@ -1,3 +1,6 @@
+"""Various functions for plotting or interactively showing cells, poses and scenes.
+"""
+
 from typing import List
 import numpy as np
 import cv2

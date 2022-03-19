@@ -7,9 +7,18 @@ from datapreparation.kitti360.utils import COLORS, COLOR_NAMES
 
 class Object3d:
     # NOTE: use cell-id and scene-names to unique identify objects if needed
-    def __init__(self, id, instance_id, xyz, rgb, label):
-        self.id = id  # Object ID, unique only inside a single cell. Multiple ids can belong to the same instance ID.
-        self.instance_id = instance_id  # Original instance ID, can repeat across cells and in the same cell due to clustering of stuff objects.
+    def __init__(self, id: int, instance_id: int, xyz: np.ndarray, rgb: np.ndarray, label: str):
+        """Representation of a 3D object in the scene
+
+        Args:
+            id (int): Object ID, unique only inside a single cell. Multiple ids can belong to the same instance ID.
+            instance_id (int): Original instance ID, can repeat across cells and in the same cell due to clustering of stuff objects.
+            xyz (np.ndarray): XYZ coordinates of the object's points
+            rgb (np.ndarray): RGB color coordinates of the object's points
+            label (str): Class label
+        """
+        self.id = id
+        self.instance_id = instance_id
         self.xyz = xyz
         self.rgb = rgb
         self.label = label
@@ -44,9 +53,6 @@ class Object3d:
         # return Object3d(self.xyz[mask], self.rgb[mask], self.label, self.id)
         return Object3d(self.id, self.instance_id, self.xyz[mask], self.rgb[mask], self.label)
 
-    # def center(self):
-    #     return 1/2 * (np.min(self.xyz, axis=0) + np.max(self.xyz, axis=0))
-
     def get_closest_point(self, anchor):
         dists = np.linalg.norm(self.xyz - anchor, axis=1)
         # self.closest_point = self.xyz[np.argmin(dists)]
@@ -67,15 +73,27 @@ class Object3d:
 
     @classmethod
     def create_padding(cls):
-        # obj = Object3d(np.random.rand(8,3) * 0.001, np.zeros((8,3)), 'pad', -1) # Creating too few points or zero positios throws nans in PyG
+        """Create a padding object.
+
+        Returns:
+            Object3d: Padding object
+        """
         obj = Object3d(-1, -1, np.random.rand(8, 3) * 0.001, np.zeros((8, 3)), "pad")
         obj.get_closest_point([-1, -1, -1])
         return obj
 
 
 class DescriptionPoseCell:
-    # def __init__(self, object_id, object_instance_id, object_label, object_color_rgb, object_color_text, direction, offset_center, offset_closest, closest_point):
-    def __init__(self, object: Object3d, direction, offset_center, offset_closest, closest_point):
+    def __init__(self, object: Object3d, direction: str, offset_center: np.ndarray, offset_closest: np.ndarray, closest_point: np.ndarray):
+        """Struct for a single description of a pose using an object in context of the "Pose Cell".
+
+        Args:
+            object (Object3d): Object used for description
+            direction (str): Direction string
+            offset_center (np.ndarray): Direction vector from the center of the object to the pose
+            offset_closest (np.ndarray): Direction vector from the point of the object that is closest to the pose to the pose
+            closest_point (np.ndarray): Coordinates of the object's point that is closest to the pose.
+        """
         self.object_id = object.id
         self.object_instance_id = object.instance_id
         self.object_label = object.label
@@ -92,7 +110,9 @@ class DescriptionPoseCell:
 
 # TODO/CARE: Match on offset_closest (less likely to change) but train on offset_center (relevant in evaluation)
 class DescriptionBestCell:
-    """
+    """Struct for a single description of a pose using an object in context of the "Best Cell".
+    The "Best Cell" is that cell of the dataset that is closest to the pose.
+
     Current offset policy: all taken from pose_cell and passed through. Training on center_offsets
     """
 
@@ -151,13 +171,23 @@ class DescriptionBestCell:
 class Pose:
     def __init__(
         self,
-        pose_in_cell,
-        pose_w,
-        cell_id,
-        scene_name,
+        pose_in_cell: np.ndarray,
+        pose_w: np.ndarray,
+        cell_id: int,
+        scene_name: str,
         descriptions: List[DescriptionBestCell],
         described_by: str = None,
     ):
+        """Struct of a single query pose.
+
+        Args:
+            pose_in_cell (np.ndarray): Pose coordinates normed inside the "Best Cell" ∈ [0, 1]
+            pose_w (np.ndarray): Pose world coordinates
+            cell_id (int): ID of the Best Cell
+            scene_name (str): Scene name
+            descriptions (List[DescriptionBestCell]): Description of the pose in context of the Best Cell
+            described_by (str, optional): Defaults to None.
+        """
         assert isinstance(descriptions[0], DescriptionBestCell)
         self.pose = (
             pose_in_cell  # The pose in the best cell (specified by cell_id), normed to ∈ [0, 1]
@@ -183,7 +213,8 @@ class Pose:
 
 class Cell:
     def __init__(self, idx, scene_name, objects: List[Object3d], cell_size, bbox_w):
-        """
+        """Instance of a single cell.
+
         Args:
             IDs should be unique across entire dataset
             Objects include distractors and mentioned, already cropped and normalized in cell
@@ -207,50 +238,3 @@ class Cell:
 
     def get_center(self):
         return 1 / 2 * (self.bbox_w[0:3] + self.bbox_w[3:6])
-
-
-class DeprDescription:
-    def __init__(
-        self,
-        object_id,
-        object_instance_id,
-        direction,
-        offset,
-        object_label,
-        object_color_text,
-        object_color_rgb,
-        object_closest_point,
-    ):
-        assert (
-            (object_id is None)
-            == (object_instance_id is None)
-            == (object_closest_point is None)
-            == (offset is None)
-        )
-        self.object_id = object_id  # None if unmatched
-        self.object_instance_id = object_instance_id  # None if unmatched
-        self.direction = direction  # Direction from pose_cell
-        self.offset = offset  # Offset from pose_cell or best_cell
-        self.object_label = object_label
-        self.object_color_rgb = object_color_rgb  # Color from pose_cell
-        self.object_color_text = object_color_text  # Color from pose_cell
-        self.object_closest_point = (
-            object_closest_point  # Closest point from pose_cell or best_cell, none if unmatched
-        )
-        assert object_color_text is not None and object_color_rgb is not None
-
-        self.is_matched = None  # Set when described in best-cell
-
-    def match_to_object(self):
-        pass
-
-    def set_unmatched(self):
-        pass
-
-    def __repr__(self):
-        return f"Pose is {self.direction} of a {self.object_color_text} {self.object_label}"
-
-    def is_unmatched(self):
-        """Returns whether the description is unmatched in the best-cell"""
-        assert (self.object_id is None) == (self.object_instance_id is None)
-        return self.object_id is None
