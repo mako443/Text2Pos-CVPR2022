@@ -9,15 +9,15 @@ import cv2
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from datapreparation.kitti360.utils import (
+from datapreparation.kitti360pose.utils import (
     CLASS_TO_LABEL,
     LABEL_TO_CLASS,
     CLASS_TO_MINPOINTS,
     SCENE_NAMES,
     CLASS_TO_INDEX,
 )
-from datapreparation.kitti360.imports import Object3d, Cell, Pose
-from datapreparation.kitti360.drawing import (
+from datapreparation.kitti360pose.imports import Object3d, Cell, Pose
+from datapreparation.kitti360pose.drawing import (
     show_pptk,
     show_objects,
     plot_cell,

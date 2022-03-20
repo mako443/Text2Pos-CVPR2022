@@ -18,9 +18,9 @@ import os.path as osp
 
 from models.cell_retrieval import CellRetrievalNetwork
 
-from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_VAL
-from datapreparation.kitti360.utils import COLOR_NAMES as COLOR_NAMES_K360
-from dataloading.kitti360.cells import Kitti360CoarseDatasetMulti, Kitti360CoarseDataset
+from datapreparation.kitti360pose.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_VAL
+from datapreparation.kitti360pose.utils import COLOR_NAMES as COLOR_NAMES_K360
+from dataloading.kitti360pose.cells import Kitti360CoarseDatasetMulti, Kitti360CoarseDataset
 
 from training.args import parse_arguments
 from training.plots import plot_metrics

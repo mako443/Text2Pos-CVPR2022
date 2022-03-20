@@ -9,8 +9,8 @@ import numpy as np
 from models.modules import get_mlp
 from models.pointcloud.pointnet2 import PointNet2
 
-from datapreparation.kitti360.imports import Object3d
-from datapreparation.kitti360.utils import COLOR_NAMES
+from datapreparation.kitti360pose.imports import Object3d
+from datapreparation.kitti360pose.utils import COLOR_NAMES
 
 
 class ObjectEncoder(torch.nn.Module):

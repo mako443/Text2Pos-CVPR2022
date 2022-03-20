@@ -21,23 +21,23 @@ except:
     print("pptk not found")
 from plyfile import PlyData, PlyElement
 
-from datapreparation.kitti360.drawing import (
+from datapreparation.kitti360pose.drawing import (
     show_pptk,
     show_objects,
     plot_cell,
     plot_pose_in_best_cell,
     plot_cells_and_poses,
 )
-from datapreparation.kitti360.utils import (
+from datapreparation.kitti360pose.utils import (
     CLASS_TO_LABEL,
     LABEL_TO_CLASS,
     COLORS,
     COLOR_NAMES,
     SCENE_NAMES,
 )
-from datapreparation.kitti360.utils import CLASS_TO_MINPOINTS, CLASS_TO_VOXELSIZE, STUFF_CLASSES
-from datapreparation.kitti360.imports import Object3d, Cell, Pose
-from datapreparation.kitti360.descriptions import (
+from datapreparation.kitti360pose.utils import CLASS_TO_MINPOINTS, CLASS_TO_VOXELSIZE, STUFF_CLASSES
+from datapreparation.kitti360pose.imports import Object3d, Cell, Pose
+from datapreparation.kitti360pose.descriptions import (
     create_cell,
     describe_pose_in_pose_cell,
     ground_pose_to_best_cell,

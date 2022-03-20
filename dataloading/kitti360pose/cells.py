@@ -12,7 +12,7 @@ from torch.utils.data import Dataset, DataLoader
 
 import torch_geometric.transforms as T
 
-from datapreparation.kitti360.utils import (
+from datapreparation.kitti360pose.utils import (
     CLASS_TO_LABEL,
     LABEL_TO_CLASS,
     CLASS_TO_MINPOINTS,
@@ -21,16 +21,16 @@ from datapreparation.kitti360.utils import (
     SCENE_NAMES_TRAIN,
     SCENE_NAMES_VAL,
 )
-from datapreparation.kitti360.utils import CLASS_TO_INDEX, COLOR_NAMES
-from datapreparation.kitti360.imports import Object3d, Cell, Pose
-from datapreparation.kitti360.drawing import (
+from datapreparation.kitti360pose.utils import CLASS_TO_INDEX, COLOR_NAMES
+from datapreparation.kitti360pose.imports import Object3d, Cell, Pose
+from datapreparation.kitti360pose.drawing import (
     show_pptk,
     show_objects,
     plot_cell,
     plot_pose_in_best_cell,
 )
-from dataloading.kitti360.base import Kitti360BaseDataset
-from dataloading.kitti360.utils import batch_object_points, flip_pose_in_cell
+from dataloading.kitti360pose.base import Kitti360BaseDataset
+from dataloading.kitti360pose.utils import batch_object_points, flip_pose_in_cell
 
 
 class Kitti360CoarseDataset(Kitti360BaseDataset):

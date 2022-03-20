@@ -1,4 +1,4 @@
-from datapreparation.kitti360.imports import Object3d
+from datapreparation.kitti360pose.imports import Object3d
 from models.superglue_matcher import get_pos_in_cell
 import numpy as np
 from easydict import EasyDict
@@ -11,9 +11,9 @@ import torch_geometric.transforms as T
 from evaluation.args import parse_arguments
 from evaluation.utils import calc_sample_accuracies, print_accuracies
 
-from dataloading.kitti360.poses import Kitti360FineDataset, Kitti360FineDatasetMulti
-from dataloading.kitti360.eval import Kitti360FineEvalDataset
-from datapreparation.kitti360.utils import SCENE_NAMES_TEST, SCENE_NAMES_VAL
+from dataloading.kitti360pose.poses import Kitti360FineDataset, Kitti360FineDatasetMulti
+from dataloading.kitti360pose.eval import Kitti360FineEvalDataset
+from datapreparation.kitti360pose.utils import SCENE_NAMES_TEST, SCENE_NAMES_VAL
 
 # from training.fine import eval_epoch as eval_epoch_fine
 from training.losses import calc_pose_error

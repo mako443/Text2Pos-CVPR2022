@@ -13,15 +13,15 @@ from easydict import EasyDict
 
 import torch_geometric.transforms as T
 
-from datapreparation.kitti360.imports import Object3d, Cell, Pose
-from datapreparation.kitti360.drawing import (
+from datapreparation.kitti360pose.imports import Object3d, Cell, Pose
+from datapreparation.kitti360pose.drawing import (
     show_pptk,
     show_objects,
     plot_cell,
     plot_pose_in_best_cell,
 )
-from dataloading.kitti360.poses import batch_object_points
-from dataloading.kitti360.base import Kitti360BaseDataset
+from dataloading.kitti360pose.poses import batch_object_points
+from dataloading.kitti360pose.base import Kitti360BaseDataset
 
 
 class Kitti360FineEvalDataset(Dataset):
@@ -199,7 +199,7 @@ class Kitti360TopKDataset(Dataset):
 
 
 if __name__ == "__main__":
-    from dataloading.kitti360.cells import Kitti360CoarseDatasetMulti
+    from dataloading.kitti360pose.cells import Kitti360CoarseDatasetMulti
 
     base_path = "./data/k360_cs30_cd15_scY_pd10_pc1_spY_closest"
     folder_name = "2013_05_28_drive_0003_sync"

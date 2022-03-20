@@ -4,14 +4,14 @@
 from typing import List
 import numpy as np
 import cv2
-from datapreparation.kitti360.imports import (
+from datapreparation.kitti360pose.imports import (
     Object3d,
     Cell,
     Pose,
     DescriptionPoseCell,
     DescriptionBestCell,
 )
-from datapreparation.kitti360.utils import CLASS_TO_COLOR
+from datapreparation.kitti360pose.utils import CLASS_TO_COLOR
 
 try:
     import pptk

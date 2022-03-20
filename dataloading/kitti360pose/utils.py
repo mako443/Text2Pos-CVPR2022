@@ -1,6 +1,6 @@
 from typing import List
 import numpy as np
-from datapreparation.kitti360.imports import Object3d, Cell, Pose
+from datapreparation.kitti360pose.imports import Object3d, Cell, Pose
 from copy import deepcopy
 
 import torch

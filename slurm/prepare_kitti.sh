@@ -10,4 +10,4 @@
 
 source /usr/stud/kolmet/venv/torch/bin/activate
 module load cuda/10.2
-srun python3 -m datapreparation.kitti360.prepare "$@"
+srun python3 -m datapreparation.kitti360pose.prepare "$@"

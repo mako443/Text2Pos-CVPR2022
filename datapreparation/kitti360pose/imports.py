@@ -2,7 +2,7 @@ from typing import List, Union
 import numpy as np
 import cv2
 
-from datapreparation.kitti360.utils import COLORS, COLOR_NAMES
+from datapreparation.kitti360pose.utils import COLORS, COLOR_NAMES
 
 
 class Object3d:

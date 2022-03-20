@@ -29,7 +29,7 @@ Our baseline version of KITTI360Pose can be accessed here LINK.
 ## Create KITTI360Pose with custom parameters
 After accessing the original KITTI360 and saving it under `./data/kitti360`, our KITTI360Pose baseline for a specific scene can be created using
 ```
-python -m datapreparation.kitti360.prepare --scene_name 2013_05_28_drive_0000_sync --cell_size 30 --cell_dist 10 --pose_dist 10 --pose_count 4 --shift_poses --grid_cells
+python -m datapreparation.kitti360pose.prepare --scene_name 2013_05_28_drive_0000_sync --cell_size 30 --cell_dist 10 --pose_dist 10 --pose_count 4 --shift_poses --grid_cells
 ```
 These parameters can be varied to create other setups of the dataset, as used in our ablation studies.
 

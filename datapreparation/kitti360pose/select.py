@@ -5,7 +5,7 @@ from typing import List
 
 import numpy as np
 import random
-from datapreparation.kitti360.imports import Object3d
+from datapreparation.kitti360pose.imports import Object3d
 
 # TODO: after debug, activate shuffling in direction and class
 

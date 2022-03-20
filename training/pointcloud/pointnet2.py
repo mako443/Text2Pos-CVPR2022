@@ -13,9 +13,9 @@ from dataloading.semantic3d.semantic3d_pointcloud import (
     Semantic3dObjectDataset,
     Semantic3dObjectDatasetMulti,
 )
-from dataloading.kitti360.objects import Kitti360ObjectsDataset, Kitti360ObjectsDatasetMulti
-from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_VAL, SCENE_NAMES_TRAIN
-from datapreparation.kitti360.utils import COLOR_NAMES as COLOR_NAMES_K360
+from dataloading.kitti360pose.objects import Kitti360ObjectsDataset, Kitti360ObjectsDatasetMulti
+from datapreparation.kitti360pose.utils import SCENE_NAMES, SCENE_NAMES_VAL, SCENE_NAMES_TRAIN
+from datapreparation.kitti360pose.utils import COLOR_NAMES as COLOR_NAMES_K360
 
 from training.args import parse_arguments
 from training.plots import plot_metrics

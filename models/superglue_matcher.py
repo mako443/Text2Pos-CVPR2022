@@ -23,7 +23,7 @@ from models.object_encoder import ObjectEncoder
 from dataloading.semantic3d.semantic3d import Semantic3dObjectReferenceDataset
 from dataloading.semantic3d.semantic3d import Semantic3dPoseReferenceMockDataset
 
-from datapreparation.kitti360.imports import Object3d as Object3d_K360
+from datapreparation.kitti360pose.imports import Object3d as Object3d_K360
 
 
 def get_mlp_offset(dims: List[int], add_batchnorm=False) -> nn.Sequential:

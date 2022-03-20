@@ -3,15 +3,15 @@ from typing import List
 import numpy as np
 from sklearn.cluster import DBSCAN
 
-from datapreparation.kitti360.imports import (
+from datapreparation.kitti360pose.imports import (
     Object3d,
     Cell,
     Pose,
     DescriptionPoseCell,
     DescriptionBestCell,
 )
-from datapreparation.kitti360.utils import STUFF_CLASSES
-from datapreparation.kitti360.select import (
+from datapreparation.kitti360pose.utils import STUFF_CLASSES
+from datapreparation.kitti360pose.select import (
     get_direction,
     get_direction_noOntop,
     select_objects_closest,

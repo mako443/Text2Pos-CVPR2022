@@ -17,16 +17,16 @@ import os.path as osp
 
 from models.superglue_matcher import SuperGlueMatch
 
-from dataloading.kitti360.poses import Kitti360FineDataset, Kitti360FineDatasetMulti
+from dataloading.kitti360pose.poses import Kitti360FineDataset, Kitti360FineDatasetMulti
 
 
 from datapreparation.semantic3d.imports import COLORS as COLORS_S3D, COLOR_NAMES as COLOR_NAMES_S3D
-from datapreparation.kitti360.utils import (
+from datapreparation.kitti360pose.utils import (
     COLORS as COLORS_K360,
     COLOR_NAMES as COLOR_NAMES_K360,
     SCENE_NAMES_TEST,
 )
-from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_VAL
+from datapreparation.kitti360pose.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE_NAMES_VAL
 
 from training.args import parse_arguments
 from training.plots import plot_metrics

@@ -2,8 +2,8 @@ import numpy as np
 import cv2
 from easydict import EasyDict
 from numpy.lib.arraysetops import isin
-from dataloading.kitti360.base import Kitti360BaseDataset
-from datapreparation.kitti360.drawing import plot_cell, plot_matches_in_best_cell
+from dataloading.kitti360pose.base import Kitti360BaseDataset
+from datapreparation.kitti360pose.drawing import plot_cell, plot_matches_in_best_cell
 
 import torch_geometric.transforms as T
 

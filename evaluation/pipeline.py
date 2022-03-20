@@ -1,4 +1,4 @@
-from datapreparation.kitti360.imports import Object3d
+from datapreparation.kitti360pose.imports import Object3d
 import numpy as np
 import os
 import os.path as osp
@@ -17,10 +17,10 @@ from scipy.spatial.distance import cdist
 from evaluation.args import parse_arguments
 from evaluation.utils import calc_sample_accuracies, print_accuracies
 
-from dataloading.kitti360.cells import Kitti360CoarseDataset, Kitti360CoarseDatasetMulti
-from dataloading.kitti360.eval import Kitti360TopKDataset
+from dataloading.kitti360pose.cells import Kitti360CoarseDataset, Kitti360CoarseDatasetMulti
+from dataloading.kitti360pose.eval import Kitti360TopKDataset
 
-from datapreparation.kitti360.utils import SCENE_NAMES_TEST, SCENE_NAMES_VAL
+from datapreparation.kitti360pose.utils import SCENE_NAMES_TEST, SCENE_NAMES_VAL
 
 from training.coarse import eval_epoch as eval_epoch_retrieval
 from training.utils import plot_retrievals

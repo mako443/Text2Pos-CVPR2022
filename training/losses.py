@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from easydict import EasyDict
 
-from datapreparation.kitti360.imports import Object3d, Pose, Cell
+from datapreparation.kitti360pose.imports import Object3d, Pose, Cell
 
 from models.superglue_matcher import get_pos_in_cell, get_pos_in_cell_intersect
 

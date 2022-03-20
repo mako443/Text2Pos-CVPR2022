@@ -1,6 +1,6 @@
 import numpy as np
 
-from datapreparation.kitti360.drawing import plot_matches_in_best_cell
+from datapreparation.kitti360pose.drawing import plot_matches_in_best_cell
 
 
 def plot_matches(all_matches, dataset, count=10):

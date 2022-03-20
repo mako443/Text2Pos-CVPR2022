@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 import torch_geometric.transforms as T
 from torch_geometric.data import Data, DataLoader
 
-from datapreparation.kitti360.utils import (
+from datapreparation.kitti360pose.utils import (
     CLASS_TO_LABEL,
     LABEL_TO_CLASS,
     CLASS_TO_MINPOINTS,
@@ -19,9 +19,9 @@ from datapreparation.kitti360.utils import (
     COLORS,
     COLOR_NAMES,
 )
-from datapreparation.kitti360.imports import Object3d, Cell
-from datapreparation.kitti360.drawing import show_pptk, show_objects, plot_cell
-from dataloading.kitti360.base import Kitti360BaseDataset
+from datapreparation.kitti360pose.imports import Object3d, Cell
+from datapreparation.kitti360pose.drawing import show_pptk, show_objects, plot_cell
+from dataloading.kitti360pose.base import Kitti360BaseDataset
 
 
 class Kitti360ObjectsDataset(Kitti360BaseDataset):

@@ -15,29 +15,29 @@ from torch.utils.data import Dataset, DataLoader
 from torch_geometric.data import Data, Batch
 import torch_geometric.transforms as T
 
-from datapreparation.kitti360.utils import (
+from datapreparation.kitti360pose.utils import (
     CLASS_TO_LABEL,
     LABEL_TO_CLASS,
     CLASS_TO_MINPOINTS,
     CLASS_TO_INDEX,
 )
-from datapreparation.kitti360.utils import COLORS, COLOR_NAMES, SCENE_NAMES_TRAIN
-from datapreparation.kitti360.descriptions import (
+from datapreparation.kitti360pose.utils import COLORS, COLOR_NAMES, SCENE_NAMES_TRAIN
+from datapreparation.kitti360pose.descriptions import (
     create_synthetic_cell,
     describe_pose_in_pose_cell,
     ground_pose_to_best_cell,
 )
-from datapreparation.kitti360.imports import Object3d, Cell, Pose
-from datapreparation.kitti360.drawing import (
+from datapreparation.kitti360pose.imports import Object3d, Cell, Pose
+from datapreparation.kitti360pose.drawing import (
     show_pptk,
     show_objects,
     plot_objects,
     plot_cell,
     plot_pose_in_best_cell,
 )
-from dataloading.kitti360.base import Kitti360BaseDataset
-from dataloading.kitti360.objects import Kitti360ObjectsDatasetMulti
-from dataloading.kitti360.poses import load_pose_and_cell
+from dataloading.kitti360pose.base import Kitti360BaseDataset
+from dataloading.kitti360pose.objects import Kitti360ObjectsDatasetMulti
+from dataloading.kitti360pose.poses import load_pose_and_cell
 
 
 """

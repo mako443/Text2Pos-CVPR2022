@@ -8,7 +8,7 @@ import os.path as osp
 
 from scipy.spatial.transform import Rotation
 
-from datapreparation.kitti360.imports import Object3d, Cell, Pose
+from datapreparation.kitti360pose.imports import Object3d, Cell, Pose
 
 import pptk
 import cv2
