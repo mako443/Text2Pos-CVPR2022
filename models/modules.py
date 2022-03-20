@@ -1,3 +1,5 @@
+from typing import List
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -5,20 +7,17 @@ import torch.nn.functional as F
 
 import numpy as np
 
-# def get_mlp(dims, add_batchnorm=False):
-#     if len(dims)<3:
-#         print('get_mlp(): less than 2 layers!')
-#     mlp = []
-#     for i in range(len(dims)-1):
-#         mlp.append(nn.Linear(dims[i], dims[i+1]))
-#         if i<len(dims)-2:
-#             mlp.append(nn.ReLU())
-#             if add_batchnorm:
-#                 mlp.append(nn.BatchNorm1d(dims[i+1]))
-#     return nn.Sequential(*mlp)
-
 # CARE: This has a trailing ReLU!!
-def get_mlp(channels, add_batchnorm=True):
+def get_mlp(channels: List[int], add_batchnorm: bool = True) -> nn.Sequential:
+    """Construct and MLP for use in other models.
+
+    Args:
+        channels (List[int]): List of number of channels in each layer.
+        add_batchnorm (bool, optional): Whether to add BatchNorm after each layer. Defaults to True.
+
+    Returns:
+        nn.Sequential: Output MLP
+    """
     if add_batchnorm:
         return nn.Sequential(
             *[
@@ -39,6 +38,7 @@ def get_mlp(channels, add_batchnorm=True):
 
 class LanguageEncoder(torch.nn.Module):
     def __init__(self, known_words, embedding_dim, bi_dir, num_layers=1):
+        """Language encoder to encode a set of hints"""
         super(LanguageEncoder, self).__init__()
 
         self.known_words = {c: (i + 1) for i, c in enumerate(known_words)}

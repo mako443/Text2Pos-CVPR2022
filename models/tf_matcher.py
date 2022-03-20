@@ -1,3 +1,7 @@
+"""Module to perform hints-to-objects matching through a Transformer followed by Sinkhorn iterations.
+Unlike SuperGlue, this did not show promising results, only kept for the sake of completion.
+"""
+
 import torch
 import torch.nn as nn
 import torch.optim as optim

@@ -25,17 +25,17 @@ from dataloading.semantic3d.semantic3d import Semantic3dPoseReferenceMockDataset
 
 from datapreparation.kitti360.imports import Object3d as Object3d_K360
 
-"""
-TODO:
-- are L2-based distances better?
-- put ObjectEncoder in modules
 
-NOTES:
-- BatchNorm yes/no/where? -> Doesn't seem to make much difference
-"""
+def get_mlp_offset(dims: List[int], add_batchnorm=False) -> nn.Sequential:
+    """Return an MLP without trailing ReLU or BatchNorm for Offset/Translation regression.
 
-# MLP without trailing ReLU or BatchNorm
-def get_mlp_offset(dims, add_batchnorm=False):
+    Args:
+        dims (List[int]): List of dimension sizes
+        add_batchnorm (bool, optional): Whether to add a BatchNorm. Defaults to False.
+
+    Returns:
+        nn.Sequential: Result MLP
+    """
     if len(dims) < 3:
         print("get_mlp(): less than 2 layers!")
     mlp = []
@@ -49,7 +49,18 @@ def get_mlp_offset(dims, add_batchnorm=False):
 
 
 class SuperGlueMatch(torch.nn.Module):
-    def __init__(self, known_classes, known_colors, known_words, args):
+    def __init__(
+        self, known_classes: List[str], known_colors: List[str], known_words: List[str], args
+    ):
+        """Fine hints-to-objects matching module.
+        Consists of object-encoder, language-encoder and SuperGlue-based matching module.
+
+        Args:
+            known_classes (List[str]): List of known classes (only used for embedding ablation)
+            known_colors (List[str]): List of known colors (only used for embedding ablation)
+            known_words (List[str]): List of known words (only used for embedding ablation)
+            args: Global training args
+        """
         super(SuperGlueMatch, self).__init__()
         self.embed_dim = args.embed_dim
         self.num_layers = args.num_layers
@@ -58,27 +69,6 @@ class SuperGlueMatch(torch.nn.Module):
         self.args = args
 
         self.object_encoder = ObjectEncoder(args.embed_dim, known_classes, known_colors, args)
-
-        # self.pointnet = PointNet2(len(known_classes), len(known_colors), args) # The known classes are all the same now, at least for K360
-        # self.pointnet.load_state_dict(torch.load(args.pointnet_path))
-        # self.pointnet.lin3 = nn.Identity() # Remove the last layer
-        # self.pointnet_dim = self.pointnet.lin2.weight.size(0)
-
-        # self.mlp_object_merge = get_mlp([self.pointnet_dim + self.embed_dim,
-        #                                  max(self.pointnet_dim, self.embed_dim),
-        #                                  self.embed_dim]) # TODO: other variation?
-
-        # self.mlp_class = get_mlp([self.pointnet_dim, self.pointnet_dim//2, len(known_classes)])
-        # self.mlp_color = get_mlp([self.pointnet_dim, self.pointnet_dim//2, len(known_colors)])
-
-        # Set idx=0 for padding
-        # self.known_classes = {c: (i+1) for i,c in enumerate(known_classes)}
-        # self.known_classes['<unk>'] = 0
-        # self.class_embedding = nn.Embedding(len(self.known_classes), self.embed_dim, padding_idx=0)
-
-        # self.pos_embedding = get_mlp([3, 64, self.embed_dim], add_batchnorm=True) #OPTION: pos_embedding layers
-        # self.color_embedding = get_mlp([3, 64, self.embed_dim], add_batchnorm=True) #OPTION: color_embedding layers
-        # self.mlp_merge = get_mlp([len(self.use_features)*self.embed_dim, self.embed_dim], add_batchnorm=True)
 
         self.language_encoder = LanguageEncoder(known_words, self.embed_dim, bi_dir=True)
         self.mlp_offsets = get_mlp_offset([self.embed_dim, self.embed_dim // 2, 2])
@@ -106,63 +96,11 @@ class SuperGlueMatch(torch.nn.Module):
         hint_encodings = F.normalize(hint_encodings, dim=-1)  # Norming those too
 
         """
-        Get PN++ object features
-        """
-        # object_features = [self.pointnet(pyg_batch.to(self.get_device())).features2 for pyg_batch in object_points] # [B, pad_size, PN_size]
-        # object_features = torch.stack(object_features) # [B, pad_size, PN_size]
-        # object_features = object_features.reshape((batch_size * num_objects, -1))  # [B * pad_size, PN_size]
-        # object_features = F.normalize(object_features, dim=-1) # [B * pad_size, PN_size]
-
-        # positions = [obj.closest_point for objects_sample in objects for obj in objects_sample]
-        # pos_embedding = self.pos_embedding(torch.tensor(positions, dtype=torch.float, device=self.get_device()))
-        # pos_embedding = F.normalize(pos_embedding, dim=-1) # [B * pad_size, DIM]
-
-        # # Merge and norm
-        # object_encodings = self.mlp_object_merge(torch.cat((object_features, pos_embedding), dim=-1)) # [B * pad_size, DIM]
-        # object_encodings = object_encodings.reshape((batch_size, num_objects, self.embed_dim)) # [B, pad_size, DIM]
-        # object_encodings = F.normalize(object_encodings, dim=-1)
-
-        # # Auxiliary predictions
-        # object_class_preds = self.mlp_class(object_features) # [B * pad_size, num_classes]
-        # object_color_preds = self.mlp_color(object_features) # [B * pad_size, num_colors]
-
-        """
         Object encoder
         """
         object_encodings = self.object_encoder(objects, object_points)
         object_encodings = object_encodings.reshape((batch_size, num_objects, self.embed_dim))
         object_encodings = F.normalize(object_encodings, dim=-1)
-
-        """
-        Encode the objects, first flattened for correct batch-norms, then re-shape
-        """
-        # num_objects = len(objects[0])
-        # class_indices = torch.zeros((batch_size, num_objects), dtype=torch.long, device=self.device)
-        # for i in range(batch_size):
-        #     for j in range(num_objects):
-        #         class_indices[i, j] = self.known_classes.get(objects[i][j].label, 0)
-
-        # embeddings = []
-        # if 'class' in self.use_features:
-        #     class_embedding = self.class_embedding(torch.tensor(class_indices, dtype=torch.long, device=self.device)).reshape((-1, self.embed_dim))
-        #     embeddings.append(F.normalize(class_embedding, dim=-1))
-
-        # if 'color' in self.use_features:
-        #     colors = [obj.get_color_rgb() for objects_sample in objects for obj in objects_sample]
-        #     color_embedding = self.color_embedding(torch.tensor(colors, dtype=torch.float, device=self.device))
-        #     embeddings.append(F.normalize(color_embedding, dim=-1))
-
-        # if 'position' in self.use_features:
-        #     positions = [obj.closest_point for objects_sample in objects for obj in objects_sample]
-        #     pos_embedding = self.pos_embedding(torch.tensor(positions, dtype=torch.float, device=self.device))
-        #     embeddings.append(F.normalize(pos_embedding, dim=-1))
-
-        # if len(embeddings) > 1:
-        #     object_encodings = self.mlp_merge(torch.cat(embeddings, dim=-1))
-        # else:
-        #     object_encodings = embeddings[0]
-
-        # object_encodings = object_encodings.reshape((batch_size, num_objects, self.embed_dim))
 
         """
         Match object-encodings to hint-encodings
@@ -186,10 +124,6 @@ class SuperGlueMatch(torch.nn.Module):
 
         outputs.matching_scores0 = matcher_output["matching_scores0"]
         outputs.matching_scores1 = matcher_output["matching_scores1"]
-        # outputs.class_preds = object_class_preds
-        # outputs.color_preds = object_color_preds
-
-        # print("P", outputs.P.shape)
 
         return outputs
 

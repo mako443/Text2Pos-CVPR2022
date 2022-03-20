@@ -12,13 +12,17 @@ from models.pointcloud.pointnet2 import PointNet2
 from datapreparation.kitti360.imports import Object3d
 from datapreparation.kitti360.utils import COLOR_NAMES
 
-"""
-TODO: remove color encoding
-"""
-
 
 class ObjectEncoder(torch.nn.Module):
-    def __init__(self, embed_dim, known_classes, known_colors, args):
+    def __init__(self, embed_dim: int, known_classes: List[str], known_colors: List[str], args):
+        """Module to encode a set of objects
+
+        Args:
+            embed_dim (int): Embedding dimension
+            known_classes (List[str]): List of known classes, only used for embedding ablation
+            known_colors (List[str]): List of known colors, only used for embedding ablation
+            args: Global training arguments
+        """
         super(ObjectEncoder, self).__init__()
 
         self.embed_dim = embed_dim
@@ -90,21 +94,8 @@ class ObjectEncoder(torch.nn.Module):
                 for pyg_batch in object_points
             ]  # [B, obj_counts, PN_dim]
 
-            # if self.args.pointnet_features == 0:
-            #     object_features = [self.pointnet(pyg_batch.to(self.device)).features0 for pyg_batch in object_points] # [B, obj_counts, PN_dim]
-            # elif self.args.pointnet_features == 1:
-            #     object_features = [self.pointnet(pyg_batch.to(self.device)).features1 for pyg_batch in object_points] # [B, obj_counts, PN_dim]
-            # elif self.args.pointnet_features == 2:
-            #     object_features = [self.pointnet(pyg_batch.to(self.device)).features2 for pyg_batch in object_points] # [B, obj_counts, PN_dim]
-
-            # object_features = [self.pointnet(pyg_batch.to(self.device)).features for pyg_batch in object_points] # [B, obj_counts, PN_dim]
             object_features = torch.cat(object_features, dim=0)  # [total_objects, PN_dim]
             object_features = self.mlp_pointnet(object_features)
-
-            # For select
-            # object_class_indices = [self.pointnet(pyg_batch.to(self.device)).class_pred for pyg_batch in object_points] # [B, obj_counts]
-            # object_class_indices = torch.cat(object_class_indices, dim=0)
-            # object_class_indices = torch.argmax(object_class_indices, dim=-1)
 
         embeddings = []
         if "class" in self.args.use_features:
@@ -119,9 +110,7 @@ class ObjectEncoder(torch.nn.Module):
                 embeddings.append(
                     F.normalize(object_features, dim=-1)
                 )  # Use features from PointNet
-                # For select
-                # class_embedding = self.class_embedding(object_class_indices)
-                # embeddings.append(F.normalize(class_embedding, dim=-1))
+
         if "color" in self.args.use_features:
             if "color_embed" in self.args and self.args.color_embed:
                 color_embedding = self.color_embedding(
@@ -139,10 +128,6 @@ class ObjectEncoder(torch.nn.Module):
         if "position" in self.args.use_features:
             positions = []
             for objects_sample in objects:
-                # if self.args.pointnet_center:
-                #     positions.extend([obj.get_center() for obj in objects_sample])
-                # else:
-                #     positions.extend([obj.closest_point for obj in objects_sample])
                 positions.extend([obj.get_center() for obj in objects_sample])
             pos_embedding = self.pos_encoder(
                 torch.tensor(positions, dtype=torch.float, device=self.get_device())

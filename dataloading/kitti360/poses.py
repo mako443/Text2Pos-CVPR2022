@@ -220,7 +220,7 @@ class Kitti360FineDatasetMulti(Dataset):
             transform: PyG transform on object points
             args: Global training arguments
             flip_pose (bool, optional): Flip poses to opposite site of the cell (including the hint direction). Defaults to False.
-        """        
+        """
         self.scene_names = scene_names
         self.flip_pose = flip_pose
         self.datasets = [

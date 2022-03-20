@@ -1,3 +1,6 @@
+"""Module for training the fine matching module
+"""
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -16,7 +19,6 @@ from models.superglue_matcher import SuperGlueMatch
 
 from dataloading.kitti360.poses import Kitti360FineDataset, Kitti360FineDatasetMulti
 
-# from dataloading.kitti360.synthetic import Kitti360FineSyntheticDataset
 
 from datapreparation.semantic3d.imports import COLORS as COLORS_S3D, COLOR_NAMES as COLOR_NAMES_S3D
 from datapreparation.kitti360.utils import (
@@ -29,36 +31,6 @@ from datapreparation.kitti360.utils import SCENE_NAMES, SCENE_NAMES_TRAIN, SCENE
 from training.args import parse_arguments
 from training.plots import plot_metrics
 from training.losses import MatchingLoss, calc_recall_precision, calc_pose_error
-
-"""
-RESULTS:
-- train-offset always at 0.2, 0.15 before center-offset?
-- val-offset and val-mean always at 0.2, 0.1 before center-offset?
-- train recall + precision > 0.8
-- val recall + precision 0.6 - 0.7
-- best-cell: cell-shift is same, maybe even a little better
-- pose-cell w/o shift: recall + precision slightly lower, accuracies ~ same
-- pose-cell w/  shift: recall, precision and accs back at best+shift, 0.6-0.7
-- See if improves on smaller threshold -> Yes!
-- compare mean/offset accuracies with closest/center in offset-pred and pos_in_cell -> Not much difference in any case, all 0.11 with perfect matching
-
-TODO:
-- Try regress and match only direction (do not say "on-top", learn on centers)
-
-- Handle or discuss objects gt-selection / overflow. 32 would be enough for most
-- Merge differently / variations?
-
-- feature ablation
-- regress offsets: is error more in direction or magnitude? optimize?
-- Pad at (0.5,0.5) for less harmfull miss-matches?
-
-NOTES:
-- Pre-train helpful? -> Apparently safer
-- 512 points ok? -> 1024 maye slightly better but seems ok. Possibly re-check w/ aux-loss
-- Prevent opposite-direction matches! -> Done with offset_closest comparison
-- Random number of pads/distractors: acc. improved ✓
-- Keep PN frozen? -> Bad
-"""
 
 
 def train_epoch(model, dataloader, args):
@@ -85,12 +57,10 @@ def train_epoch(model, dataloader, args):
         loss_offsets = criterion_offsets(
             output.offsets, torch.tensor(batch["offsets"], dtype=torch.float, device=DEVICE)
         )
-        # loss_classes = 0.5 * criterion_class(output.class_preds, torch.tensor(batch['object_class_indices'], dtype=torch.long, device=DEVICE).flatten())
-        # loss_colors = 0.5 * criterion_color(output.color_preds, torch.tensor(batch['object_color_indices'], dtype=torch.long, device=DEVICE).flatten())
 
         loss = (
             loss_matching + 5 * loss_offsets
-        )  # + loss_classes + loss_colors # Currently fixed alpha seems enough, cell normed ∈ [0, 1]
+        )  # Currently fixed alpha seems enough, cell normed ∈ [0, 1]
         if not printed:
             print(f"Losses: {loss_matching.item():0.3f} {loss_offsets.item():0.3f}")
             printed = True
@@ -148,7 +118,7 @@ def train_epoch(model, dataloader, args):
 
 @torch.no_grad()
 def eval_epoch(model, dataloader, args):
-    # model.eval() #TODO/CARE: set eval() or not?
+    # model.eval() #TODO/NOTE: set eval() or not?
 
     stats = EasyDict(
         recall=[],
@@ -157,13 +127,9 @@ def eval_epoch(model, dataloader, args):
         pose_mean=[],
         pose_offsets=[],
     )
-    # offset_vectors = []
-    # matches0_vectors = []
 
     for i_batch, batch in enumerate(dataloader):
         output = model(batch["objects"], batch["hint_descriptions"], batch["object_points"])
-        # offset_vectors.append(output.offsets.detach().cpu().numpy())
-        # matches0_vectors.append(output.matches0.detach().cpu().numpy())
 
         recall, precision = calc_recall_precision(
             batch["matches"],
@@ -202,20 +168,6 @@ def eval_epoch(model, dataloader, args):
     for key in stats.keys():
         stats[key] = np.mean(stats[key])
     return stats
-
-
-def get_conf1(P):
-    return np.sum(P[:, 0:-1, 0:-1])
-
-
-def get_conf2(output):
-    matches = output.matches0
-    matching_scores = output.matching_scores0
-    return matching_scores[matches >= 0].sum().item()
-    # if len(matching_scores) == 0:
-    #     return 0.0
-    # else:
-    #     return matching_scores.sum().item()
 
 
 @torch.no_grad()
@@ -301,13 +253,8 @@ if __name__ == "__main__":
             dataset_val, batch_size=args.batch_size, collate_fn=Kitti360FineDataset.collate_fn
         )
 
-    # print(sorted(dataset_train.get_known_classes()))
-    # print(sorted(dataset_val.get_known_classes()))
     print(sorted(dataset_train.get_known_words()))
     print(sorted(dataset_val.get_known_words()))
-    # train_words = dataset_train.get_known_words()
-    # for w in dataset_val.get_known_words():
-    #     assert w in train_words
     assert sorted(dataset_train.get_known_classes()) == sorted(dataset_val.get_known_classes())
 
     # TODO: turn back on for multi
@@ -375,7 +322,6 @@ if __name__ == "__main__":
                 optimizer = optim.Adam(model.parameters(), lr=lr)
                 scheduler = optim.lr_scheduler.ExponentialLR(optimizer, args.lr_gamma)
 
-            # loss, train_recall, train_precision, epoch_time = train_epoch(model, dataloader_train, args)
             train_out = train_epoch(model, dataloader_train, args)
 
             train_stats_loss[lr].append(train_out.loss)

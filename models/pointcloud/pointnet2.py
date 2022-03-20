@@ -1,3 +1,6 @@
+"""PyG implementation of PointNet++ adapted from https://github.com/pyg-team/pytorch_geometric/blob/master/examples/pointnet2_classification.py
+"""
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -10,21 +13,6 @@ from models.modules import get_mlp
 
 import numpy as np
 from easydict import EasyDict
-
-# from models.modules import get_mlp
-
-# This one proved best (with BN and before ReLU), but not too much difference
-# def get_mlp(channels, add_batchnorm=True):
-#     if add_batchnorm:
-#         return nn.Sequential(*[
-#             nn.Sequential(nn.Linear(channels[i - 1], channels[i]), nn.BatchNorm1d(channels[i]), nn.ReLU())
-#             for i in range(1, len(channels))
-#         ])
-#     else:
-#         return nn.Sequential(*[
-#             nn.Sequential(nn.Linear(channels[i - 1], channels[i]), nn.ReLU())
-#             for i in range(1, len(channels))
-#         ])
 
 
 class SetAbstractionLayer(nn.Module):

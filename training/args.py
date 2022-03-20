@@ -4,7 +4,7 @@ import os.path as osp
 
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description="Text2Pos models and ablations")
+    parser = argparse.ArgumentParser(description="Text2Pos models and ablations training")
 
     # General
     parser.add_argument("--purpose", type=str, default="")
@@ -12,9 +12,8 @@ def parse_arguments():
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--num_distractors", default="all")
     parser.add_argument("--max_batches", type=int, default=None)
-    parser.add_argument("--dataset", type=str, default="K360")
-    parser.add_argument("--base_path", type=str)  # default='./data/k360_decouple'
-    # parser.add_argument('--data_split', type=int, default=0)
+    parser.add_argument("--dataset", type=str, default="K360", help="Currently only K360")
+    parser.add_argument("--base_path", type=str, help="Root path of Kitti360Pose")
 
     # Model
     parser.add_argument("--embed_dim", type=int, default=300)
@@ -61,9 +60,15 @@ def parse_arguments():
     parser.add_argument("--class_embed", action="store_true")
     parser.add_argument("--color_embed", action="store_true")
 
-    # Offset regressor
-    parser.add_argument("--regressor_dim", type=int, default=128)
-    # Standard was pose-center-center
+    # Arguments for translation regressor training.
+    parser.add_argument(
+        "--regressor_dim",
+        type=int,
+        default=128,
+        help="Embedding dimension of language encode before regressing offsets.",
+    )
+    # Variations which tranlations are fed into the network for training/evaluation.
+    # NOTE: These variations did not make much difference.
     parser.add_argument("--regressor_cell", type=str, default="pose")  # Pose or best
     parser.add_argument("--regressor_learn", type=str, default="center")  # Center or closest
     parser.add_argument("--regressor_eval", type=str, default="center")  # Center or closest

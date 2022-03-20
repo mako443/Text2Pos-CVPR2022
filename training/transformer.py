@@ -1,3 +1,8 @@
+"""Module to train Transformer-based matching networks.
+NOTE: Unlike SuperGlue-based approaches, this did not show promising results and is
+only kept here for completion.
+"""
+
 import torch
 import torch.nn as nn
 import torch.optim as optim

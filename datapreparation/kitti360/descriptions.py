@@ -218,9 +218,9 @@ def ground_pose_to_best_cell(
 ) -> List[DescriptionBestCell]:
     """Ground a pose to the best-fitting cell in the dataset for performance evaluation.
     There are two types of cells: A "Pose Cell" is created around the pose with the pose in its center
-    to form the original description, "Pose Cells" are not part of the actual dataset. 
-    A "Best Cell" however is the cell of the actual dataset that is closest to the pose. 
-    It is located without regarding the location of the poses. 
+    to form the original description, "Pose Cells" are not part of the actual dataset.
+    A "Best Cell" however is the cell of the actual dataset that is closest to the pose.
+    It is located without regarding the location of the poses.
     For some evaluations, it is needed to view the pose in the context of the best cell.
 
     Args:

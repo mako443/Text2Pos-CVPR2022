@@ -41,16 +41,14 @@ def get_direction_noOntop(obj, pose):
 
 
 def select_objects_closest(objects: List[Object3d], pose, num_mentioned):
-    """Simply pick the closest-by objects
-    """
+    """Simply pick the closest-by objects"""
     distances = np.linalg.norm([obj.get_closest_point(pose) - pose for obj in objects], axis=1)
     indices = np.argsort(distances)[0:num_mentioned]
     return [objects[i] for i in indices]
 
 
 def select_objects_direction(objects: List[Object3d], pose, num_mentioned):
-    """Try to pick objects equally distributed among the possible directions.
-    """
+    """Try to pick objects equally distributed among the possible directions."""
     directions = [get_direction(obj, pose) for obj in objects]
     direction_indices = {d: [] for d in directions}
     for idx, d in enumerate(directions):
@@ -72,8 +70,7 @@ def select_objects_direction(objects: List[Object3d], pose, num_mentioned):
 
 
 def select_objects_class(objects: List[Object3d], pose, num_mentioned):
-    """Try to describe as many classes as possible.
-    """
+    """Try to describe as many classes as possible."""
     class_indices = {obj.label: [] for obj in objects}
     for idx, obj in enumerate(objects):
         class_indices[obj.label].append(idx)
@@ -94,6 +91,5 @@ def select_objects_class(objects: List[Object3d], pose, num_mentioned):
 
 
 def select_objects_random(objects: List[Object3d], pose, num_mentioned):
-    """Simply pick random objects
-    """
+    """Simply pick random objects"""
     return list(np.random.choice(objects, size=num_mentioned, replace=False))

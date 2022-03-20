@@ -12,6 +12,7 @@ from models.superglue_matcher import get_pos_in_cell, get_pos_in_cell_intersect
 
 class MatchingLoss(nn.Module):
     def __init__(self):
+        """Matching loss for SuperGlue-based matching training"""
         super(MatchingLoss, self).__init__()
         self.eps = 1e-3
 
@@ -77,7 +78,6 @@ def calc_pose_error_intersect(objects, matches0, poses: List[Pose], directions):
     return np.mean(errors)
 
 
-# Verified against old function ✓
 def calc_pose_error(
     objects, matches0, poses: List[Pose], offsets=None, use_mid_pred=False, return_samples=False
 ):
@@ -123,56 +123,16 @@ def calc_pose_error(
         return np.mean(errors)
 
 
-def deprecated_calc_pose_error(objects, matches0, poses, args, offsets=None, use_mid_pred=False):
-    """Calculates the mean error by adding offset ("obj-to-pose") to every corresponding, matched object
-    Uses simple matched-objects-average if offsets not given
-    CARE: error only in x-y-plane
-
-    Args:
-        objects
-        matches0: matches0[i] = [j] <-> object[i] matches hint/offset[j]]
-        poses
-        offsets (optional): Predicted offsets. Defaults to None.
-        use_mid_pred (optional): Use cell-mid (0.5,0.5) as prediction, discarding objects and matches (for debugging).
-
-    Returns:
-        [float]: mean error
-    """
-    assert len(objects) == len(matches0) == len(poses)
-    batch_size, pad_size = matches0.shape
-    poses = np.array(poses)[:, 0:2]
-
-    if offsets is not None:
-        assert len(objects) == len(offsets)
-    else:
-        offsets = np.zeros(
-            (batch_size, pad_size, 2)
-        )  # Set zero offsets to just predict the mean of matched-objects' centers
-
-    errors = []
-    for i_sample in range(batch_size):
-        preds = []
-        for obj_idx, hint_idx in enumerate(matches0[i_sample]):
-            if hint_idx == -1:
-                continue
-            if args.dataset == "S3D":
-                preds.append(objects[i_sample][obj_idx].center[0:2] + offsets[i_sample][hint_idx])
-            else:
-                preds.append(
-                    objects[i_sample][obj_idx].closest_point[0:2] + offsets[i_sample][hint_idx]
-                )
-        if use_mid_pred:
-            pose_prediction = np.array((0.5, 0.5))
-        else:
-            pose_prediction = (
-                np.mean(preds, axis=0) if len(preds) > 0 else np.array((0.5, 0.5))
-            )  # Guess the middle if no matches
-        errors.append(np.linalg.norm(poses[i_sample] - pose_prediction))
-    return np.mean(errors)
-
-
 class PairwiseRankingLoss(torch.nn.Module):
     def __init__(self, margin=1.0):
+        """Pairwise Ranking loss for retrieval training.
+        Implementation taken from a public GitHub, original paper:
+        "Unifying Visual-Semantic Embeddings with Multimodal Neural Language Models"
+        (Kiros, Salakhutdinov, Zemel. 2014)
+
+        Args:
+            margin (float, optional): _description_. Defaults to 1.0.
+        """
         super(PairwiseRankingLoss, self).__init__()
         self.margin = margin
 
@@ -204,7 +164,6 @@ class PairwiseRankingLoss(torch.nn.Module):
         return (cost_s.sum() + cost_im.sum()) / len(im)  # Take mean for batch-size stability
 
 
-# My implementation, sanity check done ✓
 class HardestRankingLoss(torch.nn.Module):
     def __init__(self, margin=1.0):
         super(HardestRankingLoss, self).__init__()

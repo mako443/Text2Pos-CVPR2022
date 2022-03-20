@@ -20,17 +20,6 @@ from datapreparation.kitti360.utils import COLOR_NAMES as COLOR_NAMES_K360
 from training.args import parse_arguments
 from training.plots import plot_metrics
 
-"""
-TODO:
-- train w/ color-pred or not?
-- why shuffle bad?
-
-
-NOTES:
-- more points not helpful, but might be if better sampling earlier in pipeline
-- Only normalize along largest dim -> Already how NormalizeScale works ✓
-"""
-
 
 def train_epoch(model, dataloader, args):
     model.train()
@@ -45,7 +34,6 @@ def train_epoch(model, dataloader, args):
         optimizer.zero_grad()
         output = model(batch)
 
-        # loss = 1/2 * (criterion(output.class_pred, batch.y) + criterion(output.color_pred, batch.y_color))
         loss = criterion(output.class_pred, batch.y)
         loss.backward()
         optimizer.step()
@@ -56,7 +44,6 @@ def train_epoch(model, dataloader, args):
         )
         epoch_accs.append(acc)
 
-        # acc_color = torch.sum(torch.argmax(output.color_pred, dim=-1) == batch.y_color).item() / len(output.color_pred)
         epoch_accs_color.append(-1)
 
     return np.mean(epoch_losses), np.mean(epoch_accs), np.mean(epoch_accs_color)
@@ -75,7 +62,6 @@ def val_epoch(model, dataloader, args):
         )
         epoch_accs.append(acc)
 
-        # acc_color = torch.sum(torch.argmax(output.color_pred, dim=1) == batch.y_color).item() / len(output.color_pred)
         epoch_accs_color.append(-1)
 
     return np.mean(epoch_accs), np.mean(epoch_accs_color)

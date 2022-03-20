@@ -1,3 +1,7 @@
+"""Implementation of SuperGlue from "SuperGlue: Learning Feature Matching with Graph Neural Networks"
+Code adapted from https://github.com/HeatherJiaZG/SuperGlue-pytorch/blob/master/models/superglue.py
+"""
+
 # %BANNER_BEGIN%
 # ---------------------------------------------------------------------
 # %COPYRIGHT_BEGIN%

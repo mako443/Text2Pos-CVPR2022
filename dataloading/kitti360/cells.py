@@ -191,7 +191,7 @@ class Kitti360CoarseCellOnlyDataset(Dataset):
     def __init__(self, cells: List[Cell], transform):
         """Dataset to return only the cells for encoding during evaluation
         NOTE: The way the cells are read from the Cells-Only-Dataset, they may have been augmented differently during the actual training. Cells-Only does not flip and shuffle!
-        """        
+        """
         super().__init__()
 
         self.cells = cells

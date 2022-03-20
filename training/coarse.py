@@ -1,3 +1,6 @@
+"""Module for training the coarse cell-retrieval module
+"""
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -23,56 +26,6 @@ from training.args import parse_arguments
 from training.plots import plot_metrics
 from training.losses import MatchingLoss, PairwiseRankingLoss, HardestRankingLoss
 from training.utils import plot_retrievals
-
-"""
-RESULTS:
--
-
-TODO:
-- Train w/ near-enough cells (also flip or no flip)
-- Eval vs. closest cells -> Values worse?!?!
-
-- Remove identical negative? (If necessary, just remove one of the samples -.-)
-
-- Variate cell-sizes (Care: possibly re-train PN++)
-- Variate closest / mid / pose-cell / best-cell
-- Check note in eval_epoch
-- Encode bbox in object_encoder
-
-- Re-train PN on final dataset
-
-- synthetic cells -> Ok (0.25), gap smaller
-- flip the training cells (pose, objects, direction words) -> Good, 0.42 now
-- failure cases
-
-- Generalization gap exists: (Transform ✓, shuffle ✓, ask)
-- mlp_merge variations?
-- Vary LR and margin
-
-- Augmentations -> w/o hint-shuffle very bad, cell-fip: helped
-- Syn-Fixed: Train 1.0, Val 0.25
-- Syn-Rand:  Train 0.2 Val 0.25, more capacity?
-
-- Remove separate color encoding
-- max-dist for descriptions?
-
-NOTE:
-- Embed still much stronger: try perfect PN++ (trained on val) -> Still a gap
-- Re-train PN++ on decouple -> Done, might have helped
-- margin 0.35 better? -> Taken for now
-- Use PN fully -> performance lower but ok (0.8 -> 0.6), generalization gap!
-- Use lower features -> ok but not helping
-- Use for select (if acc. still lower) -> Not better
-- Use PN: Add encoder but re-train w/ embedding ✓ 0.8 acc verified all scenes ✓
-- Learning rates? -> Apparently need lower here
-- Look at val-fails -> Not much to see
-- More Kitti-Cells helped ✓
-- Mock: train-acc high if same data every epoch, model still does not generalize. Mock valid??
-- failures in specific scenes? -> No, not at this point
-- Removing one feature not too bad, but noticable in validation; colors should be ok then
-- (Performances can fluctuate from run to run)
-- stronger language model? (More layers) -> Doesn't change much 
-"""
 
 
 def train_epoch(model, dataloader, args):
@@ -275,10 +228,6 @@ if __name__ == "__main__":
             collate_fn=Kitti360CoarseDataset.collate_fn,
             shuffle=False,
         )
-
-    # train_words = dataset_train.get_known_words()
-    # for word in dataset_val.get_known_words():
-    #     assert word in train_words
 
     print(
         "Words-diff:",

@@ -84,7 +84,14 @@ class Object3d:
 
 
 class DescriptionPoseCell:
-    def __init__(self, object: Object3d, direction: str, offset_center: np.ndarray, offset_closest: np.ndarray, closest_point: np.ndarray):
+    def __init__(
+        self,
+        object: Object3d,
+        direction: str,
+        offset_center: np.ndarray,
+        offset_closest: np.ndarray,
+        closest_point: np.ndarray,
+    ):
         """Struct for a single description of a pose using an object in context of the "Pose Cell".
 
         Args:

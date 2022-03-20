@@ -11,7 +11,13 @@ from models.superglue_matcher import get_mlp_offset
 
 
 class OffsetRegressor(torch.nn.Module):
-    def __init__(self, known_words, args):
+    def __init__(self, known_words: List[str], args):
+        """Module to translation vectors for each hint.
+
+        Args:
+            known_words (List[str]): Dictionary of known words
+            args: Global training args
+        """
         super(OffsetRegressor, self).__init__()
         self.args = args
 
@@ -27,4 +33,3 @@ class OffsetRegressor(torch.nn.Module):
 
         offsets = self.mlp_offsets(hint_encodings)  # [B, num_hints, 2]
         return F.normalize(offsets, dim=-1)
-        return offsets

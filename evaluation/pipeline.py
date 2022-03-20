@@ -191,10 +191,8 @@ def run_fine(model, retrievals, dataloader, args):
         output = model(sample["objects"], sample["hint_descriptions"], sample["object_points"])
         matches.append(output.matches0.detach().cpu().numpy())
         offsets.append(output.offsets.detach().cpu().numpy())
-        # confs = get_confidences(output.P.detach().cpu().numpy())
         assert len(output.matches0.shape) == 2
         out_matches = output.matches0.detach().cpu().numpy()
-        # out_match_confs = output.matching_scores0.detach().cpu().numpy()
         confs = np.sum(out_matches >= 0, axis=1)  # * 10 + np.sum(out_match_confs[out_ma])
         assert len(confs) == num_samples
         confidences.append(confs)

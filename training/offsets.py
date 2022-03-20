@@ -1,3 +1,6 @@
+"""Module to train the offset regressor in isolation.
+"""
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -20,13 +23,6 @@ from dataloading.kitti360.poses import Kitti360FineDatasetMulti, Kitti360FineDat
 from training.args import parse_arguments
 from training.plots import plot_metrics
 from training.losses import calc_pose_error, calc_pose_error_intersect
-
-"""
-TODO:
-- Train + eval all 8 of pose/best, learn closest/center, eval closest/center -> Not better than pose-center-center (0.11)
-- Flip or not?
-- Use in Fine model
-"""
 
 
 def train_epoch(model, dataloader, args):

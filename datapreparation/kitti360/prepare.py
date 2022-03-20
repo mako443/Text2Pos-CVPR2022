@@ -44,6 +44,7 @@ from datapreparation.kitti360.descriptions import (
 )
 from datapreparation.args import parse_arguments
 
+
 def show(img_or_name, img=None):
     if img is not None:
         cv2.imshow(img_or_name, img)
@@ -104,8 +105,7 @@ def extract_objects(xyz, rgb, lbl, iid):
 
 
 def gather_objects(path_input, folder_name):
-    """Gather the objects of a scene
-    """
+    """Gather the objects of a scene"""
     print(f"Loading objects for {folder_name}")
 
     path = osp.join(path_input, "data_3d_semantics", folder_name, "static")
@@ -151,6 +151,7 @@ def gather_objects(path_input, folder_name):
 
     return objects_threshed
 
+
 def get_close_locations(
     locations: List[np.ndarray], scene_objects: List[Object3d], cell_size, location_objects=None
 ):
@@ -186,8 +187,7 @@ def get_close_locations(
 
 
 def create_locations(path_input, folder_name, location_distance, return_location_objects=False):
-    """Sample locations along the original trajectories with at least location_distance between any two locations.
-    """
+    """Sample locations along the original trajectories with at least location_distance between any two locations."""
     path = osp.join(path_input, "data_poses", folder_name, "poses.txt")
     poses = np.loadtxt(path)
     poses = poses[:, 1:].reshape((-1, 3, 4))  # Convert to 3x4 matrices
@@ -214,8 +214,7 @@ def create_locations(path_input, folder_name, location_distance, return_location
 
 
 def create_cells(objects, locations, scene_name, cell_size, args) -> List[Cell]:
-    """Create the cells of the scene.
-    """
+    """Create the cells of the scene."""
     print("Creating cells...")
     cells = []
     none_indices = []
@@ -306,6 +305,7 @@ def create_cells(objects, locations, scene_name, cell_size, args) -> List[Cell]:
         return False, none_indices
     else:
         return True, cells
+
 
 def create_poses(objects: List[Object3d], locations, cells: List[Cell], args) -> List[Pose]:
     """Create the poses of a scene.
