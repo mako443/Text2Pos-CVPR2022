@@ -269,10 +269,10 @@ class Kitti360FineDatasetMulti(Dataset):
 
 
 if __name__ == "__main__":
-    base_path = "./data/k360_cs30_cd30_pd30_shTrue"
+    base_path = "./data/k360_30-10_scG_pd10_pc4_spY_all"
     folder_name = "2013_05_28_drive_0003_sync"
 
-    args = EasyDict(pad_size=8, num_mentioned=6)
+    args = EasyDict(pad_size=8, num_mentioned=6, ranking_loss="pairwise", regressor_cell="pose", regressor_learn="center", regressor_eval="center")
     transform = T.Compose([T.FixedPoints(1024), T.NormalizeScale()])
 
     dataset = Kitti360FineDatasetMulti(

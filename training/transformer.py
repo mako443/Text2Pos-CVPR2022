@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
 
 from models.transformer import TransformerMatch1
-from dataloading.semantic3d import Semantic3dObjectReferanceDataset
 
 from training.args import parse_arguments
 from training.plots import plot_metrics
