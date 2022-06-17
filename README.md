@@ -26,6 +26,9 @@ We create KITTI360Pose from the [KITTI360](http://www.cvlibs.net/datasets/kitti-
 In particular, we sample 14,934 positions and generate up to three descriptions for each, totaling in 43,381 position-query pairs. We use five scenes (districts) for training (covering in total 11.59 km^2), one for model validation, and three for testing (covering in total 2.14 km^2). An average district covers an area of 1.78 km^2. 
 Our baseline version of KITTI360Pose can be accessed [HERE](https://vision.in.tum.de/webshare/g/text2pose/)
 
+## Download the KITTI360Pose baseline
+The baseline version can be found as a gzip file under our [download link](https://vision.in.tum.de/webshare/g/text2pose/).
+
 ## Create KITTI360Pose with custom parameters
 After accessing the original KITTI360 and saving it under `./data/kitti360`, our KITTI360Pose baseline for a specific scene can be created using
 ```
